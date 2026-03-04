@@ -14,10 +14,14 @@ export default async function AppShell({
 
   return (
     <div className="min-h-screen bg-background">
-      <Sidebar />
-      <div className="lg:pl-64">
-        <Header session={session} />
-        <main className="p-6">{children}</main>
+      <div className="print:hidden">
+        <Sidebar />
+      </div>
+      <div className="lg:pl-64 print:pl-0">
+        <div className="print:hidden">
+          <Header session={session} />
+        </div>
+        <main className="p-6 print:p-0">{children}</main>
       </div>
     </div>
   );

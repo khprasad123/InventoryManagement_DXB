@@ -18,15 +18,32 @@ const pathToTitle: Record<string, string> = {
   "/suppliers": "Suppliers",
   "/clients": "Clients",
   "/purchases": "Purchases",
+  "/purchases/grn": "Goods Received Notes",
+  "/purchases/grn/add": "Create GRN",
+  "/purchases/add": "Create Purchase Invoice",
   "/sales": "Sales",
+  "/sales/quotations": "Quotations",
+  "/sales/quotations/add": "Create Quotation",
+  "/sales/add": "Create Sales Invoice",
   "/expenses": "Expenses",
+  "/expenses/categories": "Expense Categories",
+  "/expenses/categories/add": "Add Category",
+  "/expenses/add": "Add Expense",
   "/reports": "Reports",
   "/settings": "Settings",
 };
 
 function getTitle(pathname: string): string {
+  if (pathToTitle[pathname]) return pathToTitle[pathname];
+  if (pathname.startsWith("/purchases/grn/")) return "GRN";
+  if (pathname.startsWith("/purchases/")) return "Purchase";
+  if (pathname.startsWith("/sales/quotations/")) return "Quotation";
+  if (pathname.startsWith("/sales/")) return "Sales";
+  if (pathname.startsWith("/expenses/categories/")) return "Expense Category";
+  if (pathname.startsWith("/expenses/")) return "Expenses";
   return pathToTitle[pathname] ?? "Dashboard";
 }
+
 
 interface HeaderProps {
   session: Session | null;

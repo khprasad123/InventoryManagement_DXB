@@ -24,6 +24,11 @@ enum PaymentStatus {
   UNPAID
 }
 
+enum QuotationStatus {
+  DRAFT
+  APPROVED
+}
+
 // =============================================================================
 // CORE: ORGANIZATION (TENANT) & AUTH
 // =============================================================================
@@ -43,7 +48,9 @@ model Organization {
   suppliers          Supplier[]
   clients            Client[]
   stockMovements     StockMovement[]
+  grns               Grn[]
   purchaseInvoices   PurchaseInvoice[]
+  quotations         Quotation[]
   salesInvoices      SalesInvoice[]
   expenseCategories  ExpenseCategory[]
   expenses           Expense[]
@@ -131,6 +138,8 @@ model Item {
   stockMovements    StockMovement[]
   purchaseItems     PurchaseInvoiceItem[]
   salesItems        SalesInvoiceItem[]
+  grnItems          GrnItem[]
+  quotationItems    QuotationItem[]
 
   @@unique([organizationId, sku])
   @@index([organizationId])
@@ -186,6 +195,7 @@ model Supplier {
 
   organization     Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   purchaseInvoices PurchaseInvoice[]
+  grns             Grn[]
 
   @@index([organizationId])
   @@index([name])
@@ -194,20 +204,63 @@ model Supplier {
   @@map("suppliers")
 }
 
-model Client {
+model Grn {
   id             String   @id @default(cuid())
   organizationId String   @map("organization_id")
-  name           String
-  contactName    String?  @map("contact_name")
-  email          String?
-  phone          String?
-  address        String?
-  taxNumber      String?  @map("tax_number")
+  supplierId     String   @map("supplier_id")
+  grnNo          String   @map("grn_no")
+  receivedDate   DateTime @map("received_date")
+  notes          String?
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
   deletedAt      DateTime? @map("deleted_at")
 
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  supplier          Supplier           @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  items             GrnItem[]
+  purchaseInvoices  PurchaseInvoice[]
+
+  @@unique([organizationId, grnNo])
+  @@index([organizationId])
+  @@index([supplierId])
+  @@index([receivedDate])
+  @@index([deletedAt])
+  @@map("grns")
+}
+
+model GrnItem {
+  id           String   @id @default(cuid())
+  grnId        String   @map("grn_id")
+  itemId       String   @map("item_id")
+  quantity     Int
+  purchasePrice Decimal @db.Decimal(12, 2) @map("purchase_price")
+  total        Decimal  @db.Decimal(12, 2)
+
+  grn  Grn  @relation(fields: [grnId], references: [id], onDelete: Cascade)
+  item Item @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@unique([grnId, itemId])
+  @@index([grnId])
+  @@index([itemId])
+  @@map("grn_items")
+}
+
+model Client {
+  id                   String   @id @default(cuid())
+  organizationId       String   @map("organization_id")
+  name                 String
+  contactName          String?  @map("contact_name")
+  email                String?
+  phone                String?
+  address              String?
+  taxNumber            String?  @map("tax_number")
+  defaultPaymentTerms  Int?     @map("default_payment_terms") // days, e.g. 30 = NET 30
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+  deletedAt            DateTime? @map("deleted_at")
+
   organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  quotations     Quotation[]
   salesInvoices  SalesInvoice[]
 
   @@index([organizationId])
@@ -225,6 +278,7 @@ model PurchaseInvoice {
   id             String        @id @default(cuid())
   organizationId String        @map("organization_id")
   supplierId     String        @map("supplier_id")
+  grnId          String?       @map("grn_id")
   invoiceNo      String        @map("invoice_no")
   invoiceDate    DateTime      @map("invoice_date")
   dueDate        DateTime?     @map("due_date")
@@ -240,8 +294,10 @@ model PurchaseInvoice {
 
   organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   supplier     Supplier               @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  grn          Grn?                   @relation(fields: [grnId], references: [id], onDelete: SetNull)
   items        PurchaseInvoiceItem[]
 
+  @@index([grnId])
   @@unique([organizationId, invoiceNo])
   @@index([organizationId])
   @@index([supplierId])
@@ -274,10 +330,54 @@ model PurchaseInvoiceItem {
 // SALES
 // =============================================================================
 
+model Quotation {
+  id             String          @id @default(cuid())
+  organizationId String          @map("organization_id")
+  clientId       String          @map("client_id")
+  quotationNo    String          @map("quotation_no")
+  quotationDate  DateTime        @map("quotation_date")
+  status         QuotationStatus @default(DRAFT)
+  validUntil     DateTime?       @map("valid_until")
+  notes          String?
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  deletedAt      DateTime?       @map("deleted_at")
+
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client         Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  items          QuotationItem[]
+  salesInvoice   SalesInvoice?
+
+  @@unique([organizationId, quotationNo])
+  @@index([organizationId])
+  @@index([clientId])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("quotations")
+}
+
+model QuotationItem {
+  id           String   @id @default(cuid())
+  quotationId  String   @map("quotation_id")
+  itemId       String   @map("item_id")
+  quantity     Int
+  unitPrice    Decimal  @db.Decimal(12, 2) @map("unit_price")
+  total        Decimal  @db.Decimal(12, 2)
+
+  quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  item      Item      @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@unique([quotationId, itemId])
+  @@index([quotationId])
+  @@index([itemId])
+  @@map("quotation_items")
+}
+
 model SalesInvoice {
   id             String        @id @default(cuid())
   organizationId String        @map("organization_id")
   clientId       String        @map("client_id")
+  quotationId    String?       @unique @map("quotation_id")
   invoiceNo      String        @map("invoice_no")
   invoiceDate    DateTime      @map("invoice_date")
   dueDate        DateTime?     @map("due_date")
@@ -293,8 +393,10 @@ model SalesInvoice {
 
   organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   client       Client              @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  quotation    Quotation?          @relation(fields: [quotationId], references: [id], onDelete: SetNull)
   items        SalesInvoiceItem[]
 
+  @@index([quotationId])
   @@unique([organizationId, invoiceNo])
   @@index([organizationId])
   @@index([clientId])
@@ -352,6 +454,7 @@ model Expense {
   amount         Decimal  @db.Decimal(12, 2)
   description    String?
   expenseDate    DateTime @map("expense_date")
+  isRecurring    Boolean  @default(false) @map("is_recurring")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
   deletedAt      DateTime? @map("deleted_at")

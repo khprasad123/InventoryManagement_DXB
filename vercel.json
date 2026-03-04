@@ -1,5 +1,8 @@
 {
   "buildCommand": "prisma generate && pnpm build",
   "installCommand": "pnpm install",
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "git": {
+    "deploymentEnabled": false
+  }
 }

@@ -1,0 +1,107 @@
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { getQuotations } from "../actions";
+import { getOrganizationId } from "@/lib/auth-utils";
+import { redirect } from "next/navigation";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Plus, FileText } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+
+export default async function QuotationsPage() {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const quotations = await getQuotations();
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Quotations</h1>
+          <p className="text-muted-foreground">
+            Create and manage sales quotations
+          </p>
+        </div>
+        <Button asChild>
+          <Link href="/sales/quotations/add">
+            <Plus className="mr-2 h-4 w-4" />
+            New Quotation
+          </Link>
+        </Button>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>All Quotations</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {quotations.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <FileText className="h-12 w-12 text-muted-foreground" />
+              <p className="mt-2 text-sm text-muted-foreground">
+                No quotations yet. Create a quotation to send to clients.
+              </p>
+              <Button asChild className="mt-4">
+                <Link href="/sales/quotations/add">Create Quotation</Link>
+              </Button>
+            </div>
+          ) : (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Quotation</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Client</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {quotations.map((q) => (
+                    <TableRow key={q.id}>
+                      <TableCell className="font-medium">
+                        <Link
+                          href={`/sales/quotations/${q.id}`}
+                          className="text-primary hover:underline"
+                        >
+                          {q.quotationNo}
+                        </Link>
+                      </TableCell>
+                      <TableCell>
+                        {new Date(q.quotationDate).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>{q.client.name}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            q.status === "APPROVED" ? "default" : "secondary"
+                          }
+                        >
+                          {q.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {q.items
+                          .reduce((s, i) => s + Number(i.total), 0)
+                          .toFixed(2)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
