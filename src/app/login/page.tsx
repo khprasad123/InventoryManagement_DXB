@@ -22,6 +22,7 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const registered = searchParams.get("registered") === "1";
+  const deleted = searchParams.get("deleted") === "1";
   const [error, setError] = useState<string | null>(null);
 
   const {
@@ -57,9 +58,11 @@ function LoginForm() {
           </div>
           <h1 className="text-2xl font-semibold">Inventory System</h1>
           <p className="text-sm text-muted-foreground">
-            {registered
-              ? "Registration successful. Sign in to your account."
-              : "Sign in to your account"}
+            {deleted
+              ? "Organization deleted. You have been logged out."
+              : registered
+                ? "Registration successful. Sign in to your account."
+                : "Sign in to your account"}
           </p>
         </div>
 

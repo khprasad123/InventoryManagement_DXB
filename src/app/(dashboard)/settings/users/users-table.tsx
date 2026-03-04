@@ -66,7 +66,7 @@ export function UsersTable({
                     userOrgId={ou.id}
                     currentRoleId={ou.role.id}
                     roles={roles}
-                    disabled={ou.isSuperAdmin && !currentUserIsSuperAdmin}
+                    disabled={ou.isSuperAdmin}
                   />
                 </TableCell>
                 <TableCell>
@@ -90,7 +90,7 @@ export function UsersTable({
                   <RemoveUserButton
                     userOrgId={ou.id}
                     userName={ou.user.name || ou.user.email}
-                    disabled={ou.isSuperAdmin && !currentUserIsSuperAdmin}
+                    disabled={ou.isSuperAdmin}
                   />
                 </TableCell>
               </TableRow>

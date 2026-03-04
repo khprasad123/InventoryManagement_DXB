@@ -143,8 +143,8 @@ export async function updateOrgUser(userOrgId: string, formData: FormData) {
     return { error: { _form: ["User not found in organization."] } };
   }
 
-  if (userOrg.isSuperAdmin && !isSuperAdmin(currentUser)) {
-    return { error: { _form: ["Only the organization super admin can edit this user."] } };
+  if (userOrg.isSuperAdmin) {
+    return { error: { _form: ["Super admins cannot be updated."] } };
   }
 
   const role = await prisma.role.findFirst({
@@ -180,8 +180,8 @@ export async function removeUserFromOrg(userOrgId: string) {
     return { error: "User not found in organization." };
   }
 
-  if (userOrg.isSuperAdmin && !isSuperAdmin(currentUser)) {
-    return { error: "Only the organization super admin can remove this user." };
+  if (userOrg.isSuperAdmin) {
+    return { error: "Super admins cannot be removed from the organization." };
   }
 
   await prisma.userOrganization.delete({

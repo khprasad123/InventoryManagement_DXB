@@ -68,6 +68,47 @@ export async function registerUser(formData: FormData) {
       tx.role.create({ data: { name: "SALES", organizationId: org.id } }),
     ]);
 
+    // Assign same permissions as seed: ADMIN = all, others = subset
+    const permissions = await tx.permission.findMany({
+      select: { id: true, code: true },
+      orderBy: { code: "asc" },
+    });
+    const permByCode = Object.fromEntries(permissions.map((p) => [p.code, p.id]));
+    const allPermIds = permissions.map((p) => p.id);
+    const adminPerms = allPermIds.map((permissionId) => ({ roleId: adminRole.id, permissionId }));
+    const inventoryPerms = [
+      permByCode.adjust_stock,
+      permByCode.manage_inventory,
+      permByCode.manage_suppliers,
+      permByCode.manage_purchases,
+      permByCode.view_reports,
+      permByCode.view_audit,
+    ]
+      .filter(Boolean)
+      .map((permissionId) => ({ roleId: inventoryRole.id, permissionId: permissionId! }));
+    const financePerms = [
+      permByCode.record_payments,
+      permByCode.manage_expenses,
+      permByCode.manage_purchases,
+      permByCode.view_reports,
+      permByCode.view_audit,
+    ]
+      .filter(Boolean)
+      .map((permissionId) => ({ roleId: financeRole.id, permissionId: permissionId! }));
+    const salesPerms = [
+      permByCode.manage_sales,
+      permByCode.manage_clients,
+      permByCode.manage_inventory,
+      permByCode.view_reports,
+      permByCode.view_audit,
+    ]
+      .filter(Boolean)
+      .map((permissionId) => ({ roleId: salesRole.id, permissionId: permissionId! }));
+
+    await tx.rolePermission.createMany({
+      data: [...adminPerms, ...inventoryPerms, ...financePerms, ...salesPerms],
+    });
+
     await Promise.all([
       tx.currency.create({
         data: {
@@ -102,6 +143,7 @@ export async function registerUser(formData: FormData) {
         userId: user.id,
         organizationId: org.id,
         roleId: adminRole.id,
+        isSuperAdmin: true,
       },
     });
   });
