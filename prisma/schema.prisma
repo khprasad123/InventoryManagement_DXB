@@ -112,18 +112,20 @@ model UserOrganization {
 // =============================================================================
 
 model Item {
-  id          String   @id @default(cuid())
-  organizationId String @map("organization_id")
-  sku         String
-  name        String
-  description String?
-  unit        String   @default("pcs")
-  costPrice   Decimal  @db.Decimal(12, 2) @default(0) @map("cost_price")
-  sellingPrice Decimal @db.Decimal(12, 2) @default(0) @map("selling_price")
-  minStock    Int      @default(0) @map("min_stock")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-  deletedAt   DateTime? @map("deleted_at")
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  sku            String
+  name           String
+  description    String?
+  category       String?  @default("General")
+  unit           String   @default("pcs")
+  costPrice      Decimal  @db.Decimal(12, 2) @default(0) @map("cost_price")
+  sellingPrice   Decimal  @db.Decimal(12, 2) @default(0) @map("selling_price")
+  stockQty       Int      @default(0) @map("stock_qty")
+  minStock       Int      @default(0) @map("min_stock")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
 
   organization      Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   stockMovements    StockMovement[]
@@ -132,6 +134,7 @@ model Item {
 
   @@unique([organizationId, sku])
   @@index([organizationId])
+  @@index([category])
   @@index([name])
   @@index([sku])
   @@index([deletedAt])
