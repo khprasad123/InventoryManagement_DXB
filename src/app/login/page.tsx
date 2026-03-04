@@ -45,7 +45,7 @@ function LoginForm() {
       setError("Invalid email or password");
       return;
     }
-    router.push("/dashboard");
+    router.push("/select-org");
     router.refresh();
   }
 

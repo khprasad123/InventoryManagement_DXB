@@ -21,6 +21,7 @@ declare module "next-auth" {
       organizationName: string;
       permissions: string[];
       isSuperAdmin: boolean;
+      organizations?: { id: string; name: string; slug: string }[];
     };
   }
 }
@@ -33,5 +34,6 @@ declare module "next-auth/jwt" {
     organizationName: string;
     permissions: string[];
     isSuperAdmin: boolean;
+    organizations?: { id: string; name: string; slug: string; role: string; permissions: string[]; isSuperAdmin: boolean }[];
   }
 }

@@ -22,6 +22,7 @@ export default withAuth(
 
 export const config = {
   matcher: [
+    "/select-org",
     "/dashboard/:path*",
     "/inventory/:path*",
     "/suppliers/:path*",
