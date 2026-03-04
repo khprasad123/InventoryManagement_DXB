@@ -1,8 +1,9 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { getOrganizationId } from "@/lib/auth-utils";
+import { getOrganizationId, getCurrentUser } from "@/lib/auth-utils";
 import { redirect } from "next/navigation";
+import { canRecordPayments } from "@/lib/permissions";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { calculateDueDate } from "@/lib/date-utils";
@@ -430,6 +431,11 @@ const clientPaymentSchema = z.object({
 export async function recordClientPayment(formData: FormData) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
+
+  const user = await getCurrentUser();
+  if (!canRecordPayments(user?.role)) {
+    return { error: { _form: ["Only Finance can record payments."] } };
+  }
 
   const parsed = clientPaymentSchema.safeParse({
     invoiceId: formData.get("invoiceId"),

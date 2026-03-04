@@ -27,9 +27,13 @@ import type { Item } from "@prisma/client";
 
 interface StockMovementDialogProps {
   item: Item;
+  allowAdjustment?: boolean;
 }
 
-export function StockMovementDialog({ item }: StockMovementDialogProps) {
+export function StockMovementDialog({
+  item,
+  allowAdjustment = false,
+}: StockMovementDialogProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [type, setType] = useState<"IN" | "OUT" | "ADJUSTMENT">("IN");
@@ -91,7 +95,9 @@ export function StockMovementDialog({ item }: StockMovementDialogProps) {
                 <SelectContent>
                   <SelectItem value="IN">Stock In</SelectItem>
                   <SelectItem value="OUT">Stock Out</SelectItem>
-                  <SelectItem value="ADJUSTMENT">Adjustment</SelectItem>
+                  {allowAdjustment && (
+                    <SelectItem value="ADJUSTMENT">Adjustment</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>

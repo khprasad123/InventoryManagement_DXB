@@ -9,11 +9,13 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { getSalesInvoiceById } from "../actions";
-import { getOrganizationId } from "@/lib/auth-utils";
+import { getOrganizationId, getCurrentUser } from "@/lib/auth-utils";
+import { canRecordPayments } from "@/lib/permissions";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Printer } from "lucide-react";
 import { PrintInvoiceButton } from "../print-invoice-button";
+import { RecordClientPaymentDialog } from "../record-client-payment-dialog";
 
 export default async function SalesInvoiceDetailPage({
   params,
@@ -26,6 +28,12 @@ export default async function SalesInvoiceDetailPage({
   const { id } = await params;
   const invoice = await getSalesInvoiceById(id);
   if (!invoice) notFound();
+
+  const user = await getCurrentUser();
+  const canRecord = canRecordPayments(user?.role);
+  const total = Number(invoice.totalAmount);
+  const paid = Number(invoice.paidAmount);
+  const outstanding = total - paid;
 
   return (
     <>
@@ -118,6 +126,15 @@ export default async function SalesInvoiceDetailPage({
               <span className="text-muted-foreground">Paid</span>
               <span>{Number(invoice.paidAmount).toFixed(2)}</span>
             </div>
+            {canRecord && (
+              <div className="mt-4 pt-4 border-t">
+                <RecordClientPaymentDialog
+                  invoiceId={invoice.id}
+                  invoiceNo={invoice.invoiceNo}
+                  outstanding={outstanding}
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

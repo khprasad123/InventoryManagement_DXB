@@ -14,7 +14,8 @@ import {
   getItemCategories,
   deleteItem,
 } from "./actions";
-import { getOrganizationId } from "@/lib/auth-utils";
+import { getOrganizationId, getCurrentUser } from "@/lib/auth-utils";
+import { canAdjustStock } from "@/lib/permissions";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Plus, Pencil, Trash2, Package } from "lucide-react";
@@ -32,6 +33,9 @@ export default async function InventoryPage({
 }) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
+
+  const user = await getCurrentUser();
+  const allowAdjustment = canAdjustStock(user?.role);
 
   const params = await searchParams;
   const page = Math.max(1, parseInt(params.page ?? "1", 10));
@@ -127,7 +131,7 @@ export default async function InventoryPage({
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
-                              <StockMovementDialog item={item} />
+                              <StockMovementDialog item={item} allowAdjustment={allowAdjustment} />
                               <Button variant="ghost" size="icon" asChild>
                                 <Link href={`/inventory/${item.id}/edit`}>
                                   <Pencil className="h-4 w-4" />

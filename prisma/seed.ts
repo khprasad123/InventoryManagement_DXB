@@ -14,17 +14,37 @@ async function main() {
     },
   });
 
-  // Create ADMIN role for this organization
-  const adminRole = await prisma.role.upsert({
-    where: {
-      name_organizationId: { name: "ADMIN", organizationId: org.id },
-    },
-    update: {},
-    create: {
-      name: "ADMIN",
-      organizationId: org.id,
-    },
-  });
+  // Create roles for this organization: Admin, Inventory, Finance, Sales
+  const [adminRole, inventoryRole, financeRole, salesRole] = await Promise.all([
+    prisma.role.upsert({
+      where: {
+        name_organizationId: { name: "ADMIN", organizationId: org.id },
+      },
+      update: {},
+      create: { name: "ADMIN", organizationId: org.id },
+    }),
+    prisma.role.upsert({
+      where: {
+        name_organizationId: { name: "INVENTORY", organizationId: org.id },
+      },
+      update: {},
+      create: { name: "INVENTORY", organizationId: org.id },
+    }),
+    prisma.role.upsert({
+      where: {
+        name_organizationId: { name: "FINANCE", organizationId: org.id },
+      },
+      update: {},
+      create: { name: "FINANCE", organizationId: org.id },
+    }),
+    prisma.role.upsert({
+      where: {
+        name_organizationId: { name: "SALES", organizationId: org.id },
+      },
+      update: {},
+      create: { name: "SALES", organizationId: org.id },
+    }),
+  ]);
 
   // Create admin user
   const passwordHash = await hash("admin123", 12);
@@ -72,7 +92,7 @@ async function main() {
   console.log("Seed completed:");
   console.log("  - Organization: Default (slug: default)");
   console.log("  - User: admin@example.com / admin123");
-  console.log("  - Role: ADMIN");
+  console.log("  - Roles: ADMIN, INVENTORY, FINANCE, SALES");
 }
 
 main()

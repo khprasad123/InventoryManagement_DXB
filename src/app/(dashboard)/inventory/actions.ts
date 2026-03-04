@@ -1,8 +1,9 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { getOrganizationId } from "@/lib/auth-utils";
+import { getOrganizationId, getCurrentUser } from "@/lib/auth-utils";
 import { redirect } from "next/navigation";
+import { canAdjustStock } from "@/lib/permissions";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 
@@ -237,6 +238,17 @@ export async function createStockMovement(formData: FormData) {
   }
 
   const { itemId, type, quantity, notes } = parsed.data;
+
+  if (type === "ADJUSTMENT") {
+    const user = await getCurrentUser();
+    if (!canAdjustStock(user?.role)) {
+      return {
+        error: {
+          _form: ["Only Inventory can adjust stock."],
+        },
+      };
+    }
+  }
 
   const item = await prisma.item.findFirst({
     where: { id: itemId, organizationId: orgId, deletedAt: null },
