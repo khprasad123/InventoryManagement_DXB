@@ -156,6 +156,7 @@ const expenseSchema = z.object({
     .string()
     .optional()
     .transform((v) => v === "on" || v === "true"),
+  currencyCode: z.string().min(1).max(10).default("AED"),
 });
 
 export async function getExpenses() {
@@ -187,6 +188,7 @@ export async function createExpense(formData: FormData) {
     expenseDate: formData.get("expenseDate"),
     description: formData.get("description") || undefined,
     isRecurring: formData.get("isRecurring"),
+    currencyCode: formData.get("currencyCode") || "AED",
   });
 
   if (!parsed.success) {
@@ -212,6 +214,7 @@ export async function createExpense(formData: FormData) {
       expenseDate: new Date(parsed.data.expenseDate),
       description: parsed.data.description || null,
       isRecurring: parsed.data.isRecurring ?? false,
+      currencyCode: parsed.data.currencyCode || "AED",
     },
   });
 
@@ -230,6 +233,7 @@ export async function updateExpense(id: string, formData: FormData) {
     expenseDate: formData.get("expenseDate"),
     description: formData.get("description") || undefined,
     isRecurring: formData.get("isRecurring"),
+    currencyCode: formData.get("currencyCode") || "AED",
   });
 
   if (!parsed.success) {
@@ -262,6 +266,7 @@ export async function updateExpense(id: string, formData: FormData) {
       expenseDate: new Date(parsed.data.expenseDate),
       description: parsed.data.description || null,
       isRecurring: parsed.data.isRecurring ?? false,
+      currencyCode: parsed.data.currencyCode || "AED",
     },
   });
 

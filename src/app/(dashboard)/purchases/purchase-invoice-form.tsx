@@ -10,16 +10,22 @@ import type { Supplier, Grn } from "@prisma/client";
 
 type GrnWithSupplier = Grn & { supplier: Supplier };
 
+type CurrencyOption = { id: string; code: string; name: string; symbol: string | null; isDefault: boolean };
+
 interface PurchaseInvoiceFormProps {
   suppliers: Supplier[];
   grns: GrnWithSupplier[];
   defaultInvoiceNo: string;
+  currencies: CurrencyOption[];
+  defaultCurrencyCode: string;
 }
 
 export function PurchaseInvoiceForm({
   suppliers,
   grns,
   defaultInvoiceNo,
+  currencies,
+  defaultCurrencyCode,
 }: PurchaseInvoiceFormProps) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
@@ -145,6 +151,24 @@ export function PurchaseInvoiceForm({
         <p className="text-sm text-muted-foreground">
           Due date will be: <strong>{dueDatePreview}</strong> (Invoice date + {supplier?.defaultPaymentTerms} days)
         </p>
+      )}
+
+      {currencies.length > 0 && (
+        <div className="space-y-2">
+          <Label htmlFor="currencyCode">Currency</Label>
+          <select
+            id="currencyCode"
+            name="currencyCode"
+            defaultValue={defaultCurrencyCode}
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+          >
+            {currencies.map((c) => (
+              <option key={c.id} value={c.code}>
+                {c.code} – {c.name}{c.isDefault ? " (default)" : ""}
+              </option>
+            ))}
+          </select>
+        </div>
       )}
 
       <div className="grid gap-4 sm:grid-cols-3">

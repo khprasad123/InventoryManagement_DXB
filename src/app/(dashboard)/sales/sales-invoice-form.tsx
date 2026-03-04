@@ -17,13 +17,28 @@ type ItemWithStock = {
   sellingPrice: number;
 };
 
-type QuotationOption = { id: string; quotationNo: string; clientId: string; items: { itemId: string; quantity: number; unitPrice: number }[] };
+type QuotationOption = {
+  id: string;
+  quotationNo: string;
+  clientId: string;
+  items: { itemId: string; quantity: number; unitPrice: number }[];
+};
+
+type CurrencyOption = {
+  id: string;
+  code: string;
+  name: string;
+  symbol: string | null;
+  isDefault: boolean;
+};
 
 interface SalesInvoiceFormProps {
   clients: Client[];
   items: ItemWithStock[];
   quotations: QuotationOption[];
   defaultInvoiceNo: string;
+  currencies: CurrencyOption[];
+  defaultCurrencyCode: string;
 }
 
 type InvoiceItemRow = { itemId: string; quantity: number; unitPrice: number };
@@ -33,6 +48,8 @@ export function SalesInvoiceForm({
   items,
   quotations,
   defaultInvoiceNo,
+  currencies,
+  defaultCurrencyCode,
 }: SalesInvoiceFormProps) {
   const router = useRouter();
   const [rows, setRows] = useState<InvoiceItemRow[]>([
@@ -180,7 +197,7 @@ export function SalesInvoiceForm({
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-3">
         <div className="space-y-2">
           <Label htmlFor="invoiceNo">Invoice Number</Label>
           <Input
@@ -200,6 +217,24 @@ export function SalesInvoiceForm({
             required
           />
         </div>
+        {currencies.length > 0 && (
+          <div className="space-y-2">
+            <Label htmlFor="currencyCode">Currency</Label>
+            <select
+              id="currencyCode"
+              name="currencyCode"
+              defaultValue={defaultCurrencyCode}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              {currencies.map((c) => (
+                <option key={c.id} value={c.code}>
+                  {c.code} – {c.name}
+                  {c.isDefault ? " (default)" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">

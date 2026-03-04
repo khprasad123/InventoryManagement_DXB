@@ -11,7 +11,8 @@ import { Input } from "@/components/ui/input";
 import { registerUser } from "@/app/auth/register/actions";
 
 const registerSchema = z.object({
-  name: z.string().min(1, "Name is required"),
+  name: z.string().min(1, "Your name is required"),
+  companyName: z.string().min(1, "Company name is required"),
   email: z.string().email("Invalid email"),
   password: z.string().min(6, "Password must be at least 6 characters"),
 });
@@ -33,6 +34,7 @@ export default function RegisterPage() {
     setServerError({});
     const formData = new FormData();
     formData.set("name", data.name);
+    formData.set("companyName", data.companyName);
     formData.set("email", data.email);
     formData.set("password", data.password);
 
@@ -50,13 +52,13 @@ export default function RegisterPage() {
             <Package className="h-8 w-8 text-primary-foreground" />
           </div>
           <h1 className="text-2xl font-semibold">Inventory System</h1>
-          <p className="text-sm text-muted-foreground">Create your admin account</p>
+          <p className="text-sm text-muted-foreground">Create your company and admin account</p>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           <div className="space-y-2">
             <label htmlFor="name" className="block text-sm">
-              Name
+              Your name
             </label>
             <Input
               id="name"
@@ -68,6 +70,23 @@ export default function RegisterPage() {
             )}
             {serverError.name && (
               <p className="text-sm text-destructive">{serverError.name[0]}</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="companyName" className="block text-sm">
+              Company name
+            </label>
+            <Input
+              id="companyName"
+              placeholder="Your company or organization"
+              {...register("companyName")}
+            />
+            {errors.companyName && (
+              <p className="text-sm text-destructive">{errors.companyName.message}</p>
+            )}
+            {serverError.companyName && (
+              <p className="text-sm text-destructive">{serverError.companyName[0]}</p>
             )}
           </div>
 

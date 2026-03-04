@@ -3,12 +3,20 @@ import { ExpenseForm } from "../expense-form";
 import { createExpense, getExpenseCategories } from "../actions";
 import { getOrganizationId } from "@/lib/auth-utils";
 import { redirect } from "next/navigation";
+import {
+  getOrganizationCurrencies,
+  getDefaultCurrencyCodeForOrg,
+} from "@/lib/currency";
 
 export default async function AddExpensePage() {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
-  const categories = await getExpenseCategories();
+  const [categories, currencies, defaultCurrencyCode] = await Promise.all([
+    getExpenseCategories(),
+    getOrganizationCurrencies(orgId),
+    getDefaultCurrencyCodeForOrg(orgId),
+  ]);
   if (categories.length === 0) {
     redirect("/expenses/categories/add");
   }
@@ -25,7 +33,12 @@ export default async function AddExpensePage() {
           <CardTitle>Expense Details</CardTitle>
         </CardHeader>
         <CardContent>
-          <ExpenseForm action={createExpense} categories={categories} />
+          <ExpenseForm
+            action={createExpense}
+            categories={categories}
+            currencies={currencies}
+            defaultCurrencyCode={defaultCurrencyCode}
+          />
         </CardContent>
       </Card>
     </div>

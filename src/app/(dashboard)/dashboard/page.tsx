@@ -21,25 +21,25 @@ export default async function DashboardPage() {
   const kpiCards = [
     {
       title: "Total Stock Value",
-      value: data.totalStockValue.toFixed(2),
+      value: `${data.totalStockValue.toFixed(2)} ${data.defaultCurrencyCode}`,
       icon: Package,
       description: "Current inventory value (cost)",
     },
     {
       title: "Monthly Sales",
-      value: data.monthlySalesTotal.toFixed(2),
+      value: `${data.monthlySalesTotal.toFixed(2)} ${data.defaultCurrencyCode}`,
       icon: TrendingUp,
       description: `Revenue · ${data.currentMonthLabel}`,
     },
     {
       title: "Monthly Expenses",
-      value: data.monthlyExpensesTotal.toFixed(2),
+      value: `${data.monthlyExpensesTotal.toFixed(2)} ${data.defaultCurrencyCode}`,
       icon: CreditCard,
       description: data.currentMonthLabel,
     },
     {
       title: "Net Profit",
-      value: data.netProfit.toFixed(2),
+      value: `${data.netProfit.toFixed(2)} ${data.defaultCurrencyCode}`,
       icon: Wallet,
       description: `Revenue − COGS − Expenses · ${data.currentMonthLabel}`,
       valueClass: data.netProfit >= 0 ? "text-emerald-600" : "text-destructive",
@@ -85,22 +85,29 @@ export default async function DashboardPage() {
         <CardHeader>
           <CardTitle>Profit breakdown</CardTitle>
           <p className="text-sm text-muted-foreground">
-            {data.currentMonthLabel} · Net = Revenue − COGS − Expenses
+            {data.currentMonthLabel} · Net = Revenue − COGS − Expenses ·{" "}
+            {data.defaultCurrencyCode}
           </p>
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="flex justify-between rounded-lg border p-4 sm:flex-col sm:gap-1">
               <span className="text-sm text-muted-foreground">Revenue</span>
-              <span className="font-semibold">{data.monthlyRevenue.toFixed(2)}</span>
+              <span className="font-semibold">
+                {data.monthlyRevenue.toFixed(2)} {data.defaultCurrencyCode}
+              </span>
             </div>
             <div className="flex justify-between rounded-lg border p-4 sm:flex-col sm:gap-1">
               <span className="text-sm text-muted-foreground">COGS</span>
-              <span className="font-semibold">−{data.monthlyCogs.toFixed(2)}</span>
+              <span className="font-semibold">
+                −{data.monthlyCogs.toFixed(2)} {data.defaultCurrencyCode}
+              </span>
             </div>
             <div className="flex justify-between rounded-lg border p-4 sm:flex-col sm:gap-1">
               <span className="text-sm text-muted-foreground">Expenses</span>
-              <span className="font-semibold">−{data.monthlyExpensesTotal.toFixed(2)}</span>
+              <span className="font-semibold">
+                −{data.monthlyExpensesTotal.toFixed(2)} {data.defaultCurrencyCode}
+              </span>
             </div>
             <div className="flex justify-between rounded-lg border p-4 sm:flex-col sm:gap-1">
               <span className="text-sm text-muted-foreground">Net profit</span>
@@ -109,7 +116,7 @@ export default async function DashboardPage() {
                   data.netProfit >= 0 ? "text-emerald-600" : "text-destructive"
                 }`}
               >
-                {data.netProfit.toFixed(2)}
+                {data.netProfit.toFixed(2)} {data.defaultCurrencyCode}
               </span>
             </div>
           </div>

@@ -1,18 +1,20 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SalesInvoiceForm } from "../sales-invoice-form";
-import {
-  getNextInvoiceNo,
-  getQuotations,
-} from "../actions";
+import { getNextInvoiceNo, getQuotations } from "../actions";
 import { getOrganizationId } from "@/lib/auth-utils";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import {
+  getOrganizationCurrencies,
+  getDefaultCurrencyCodeForOrg,
+} from "@/lib/currency";
 
 export default async function AddSalesInvoicePage() {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
-  const [clients, items, quotations, defaultInvoiceNo] = await Promise.all([
+  const [clients, items, quotations, defaultInvoiceNo, currencies, defaultCurrencyCode] =
+    await Promise.all([
     prisma.client.findMany({
       where: { organizationId: orgId, deletedAt: null },
       orderBy: { name: "asc" },
@@ -50,6 +52,8 @@ export default async function AddSalesInvoicePage() {
         }))
     ),
     getNextInvoiceNo(),
+    getOrganizationCurrencies(orgId),
+    getDefaultCurrencyCodeForOrg(orgId),
   ]);
 
   return (
@@ -73,6 +77,8 @@ export default async function AddSalesInvoicePage() {
             items={items}
             quotations={quotations}
             defaultInvoiceNo={defaultInvoiceNo}
+            currencies={currencies}
+            defaultCurrencyCode={defaultCurrencyCode}
           />
         </CardContent>
       </Card>

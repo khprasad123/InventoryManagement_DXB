@@ -7,6 +7,10 @@ import {
 } from "../../actions";
 import { getOrganizationId } from "@/lib/auth-utils";
 import { redirect, notFound } from "next/navigation";
+import {
+  getOrganizationCurrencies,
+  getDefaultCurrencyCodeForOrg,
+} from "@/lib/currency";
 
 export default async function EditExpensePage({
   params,
@@ -17,10 +21,13 @@ export default async function EditExpensePage({
   if (!orgId) redirect("/login");
 
   const { id } = await params;
-  const [expense, categories] = await Promise.all([
-    getExpenseById(id),
-    getExpenseCategories(),
-  ]);
+  const [expense, categories, currencies, defaultCurrencyCode] =
+    await Promise.all([
+      getExpenseById(id),
+      getExpenseCategories(),
+      getOrganizationCurrencies(orgId),
+      getDefaultCurrencyCodeForOrg(orgId),
+    ]);
 
   if (!expense) notFound();
 
@@ -47,6 +54,8 @@ export default async function EditExpensePage({
           <ExpenseForm
             action={updateAction}
             categories={categories}
+            currencies={currencies}
+            defaultCurrencyCode={defaultCurrencyCode}
             defaultValues={{
               categoryId: expense.categoryId,
               amount: Number(expense.amount).toString(),
@@ -55,6 +64,7 @@ export default async function EditExpensePage({
                 .slice(0, 10),
               description: expense.description ?? "",
               isRecurring: expense.isRecurring,
+              currencyCode: expense.currencyCode,
             }}
           />
         </CardContent>

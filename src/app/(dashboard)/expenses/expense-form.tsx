@@ -16,13 +16,24 @@ interface ExpenseFormProps {
     expenseDate: string;
     description: string;
     isRecurring: boolean;
+    currencyCode?: string;
   };
+  currencies?: {
+    id: string;
+    code: string;
+    name: string;
+    symbol: string | null;
+    isDefault: boolean;
+  }[];
+  defaultCurrencyCode?: string;
 }
 
 export function ExpenseForm({
   action,
   categories,
   defaultValues,
+  currencies = [],
+  defaultCurrencyCode,
 }: ExpenseFormProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,7 +62,7 @@ export function ExpenseForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-3">
         <div className="space-y-2">
           <Label htmlFor="categoryId">Category *</Label>
           <select
@@ -81,6 +92,24 @@ export function ExpenseForm({
             required
           />
         </div>
+        {currencies.length > 0 && (
+          <div className="space-y-2">
+            <Label htmlFor="currencyCode">Currency</Label>
+            <select
+              id="currencyCode"
+              name="currencyCode"
+              defaultValue={defaultValues?.currencyCode ?? defaultCurrencyCode}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              {currencies.map((cur) => (
+                <option key={cur.id} value={cur.code}>
+                  {cur.code} – {cur.name}
+                  {cur.isDefault ? " (default)" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">

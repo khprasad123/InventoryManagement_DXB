@@ -30,6 +30,7 @@ const purchaseInvoiceSchema = z.object({
   subtotal: z.coerce.number().min(0),
   taxAmount: z.coerce.number().min(0).default(0),
   paidAmount: z.coerce.number().min(0).default(0),
+  currencyCode: z.string().min(1).max(10).default("AED"),
   notes: z.string().optional(),
 });
 
@@ -210,6 +211,7 @@ export async function createPurchaseInvoice(formData: FormData) {
     subtotal: formData.get("subtotal"),
     taxAmount: formData.get("taxAmount") || 0,
     paidAmount: formData.get("paidAmount") || 0,
+    currencyCode: formData.get("currencyCode") || "AED",
     notes: formData.get("notes") || undefined,
   });
 
@@ -217,7 +219,7 @@ export async function createPurchaseInvoice(formData: FormData) {
     return { error: parsed.error.flatten().fieldErrors };
   }
 
-  const { supplierId, grnId, invoiceNo, invoiceDate, subtotal, taxAmount, paidAmount, notes } =
+  const { supplierId, grnId, invoiceNo, invoiceDate, subtotal, taxAmount, paidAmount, currencyCode, notes } =
     parsed.data;
 
   const existing = await prisma.purchaseInvoice.findFirst({
@@ -253,6 +255,7 @@ export async function createPurchaseInvoice(formData: FormData) {
       totalAmount,
       paidAmount: paidAmount || 0,
       paymentStatus,
+      currencyCode: currencyCode || "AED",
       notes: notes || null,
     },
   });

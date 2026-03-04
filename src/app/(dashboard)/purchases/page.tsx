@@ -112,7 +112,7 @@ export default async function PurchasesPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        {Number(inv.totalAmount).toFixed(2)}
+                        {Number(inv.totalAmount).toFixed(2)} {inv.currencyCode}
                       </TableCell>
                       <TableCell>{inv.paymentStatus}</TableCell>
                     </TableRow>

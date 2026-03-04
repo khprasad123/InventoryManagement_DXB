@@ -3,6 +3,8 @@
 import { prisma } from "@/lib/prisma";
 import { getOrganizationId } from "@/lib/auth-utils";
 import { redirect } from "next/navigation";
+import { getDefaultCurrencyCodeForOrg } from "@/lib/currency";
+import { convertAmountToCurrency } from "@/lib/fx";
 
 function getMonthStartEnd(monthOffset: number = 0) {
   const d = new Date();
@@ -20,6 +22,7 @@ export async function getDashboardData() {
 
   const now = new Date();
   const currentMonth = getMonthStartEnd(0);
+  const defaultCurrencyCode = await getDefaultCurrencyCodeForOrg(orgId);
 
   // Total stock value: sum(stockQty * costPrice) per item
   const items = await prisma.item.findMany({
@@ -42,9 +45,20 @@ export async function getDashboardData() {
       items: { include: { item: { select: { costPrice: true } } } },
     },
   });
-  const monthlySalesTotal = salesInvoices.reduce(
-    (sum, inv) => sum + Number(inv.totalAmount),
-    0
+
+  // Convert all sales to default currency
+  const salesByCurrency = new Map<string, number>();
+  for (const inv of salesInvoices) {
+    const code = (inv as any).currencyCode ?? defaultCurrencyCode;
+    const current = salesByCurrency.get(code) ?? 0;
+    salesByCurrency.set(code, current + Number(inv.totalAmount));
+  }
+  let monthlySalesTotal = 0;
+  await Promise.all(
+    Array.from(salesByCurrency.entries()).map(async ([code, sum]) => {
+      const converted = await convertAmountToCurrency(sum, code, defaultCurrencyCode);
+      monthlySalesTotal += converted;
+    })
   );
   let monthlyCogs = 0;
   for (const inv of salesInvoices) {
@@ -60,42 +74,76 @@ export async function getDashboardData() {
       deletedAt: null,
       expenseDate: { gte: currentMonth.start, lte: currentMonth.end },
     },
-    select: { amount: true },
+    select: { amount: true, currencyCode: true },
   });
-  const monthlyExpensesTotal = expenses.reduce(
-    (sum, e) => sum + Number(e.amount),
-    0
+  const expensesByCurrency = new Map<string, number>();
+  for (const e of expenses) {
+    const code = e.currencyCode ?? defaultCurrencyCode;
+    const current = expensesByCurrency.get(code) ?? 0;
+    expensesByCurrency.set(code, current + Number(e.amount));
+  }
+  let monthlyExpensesTotal = 0;
+  await Promise.all(
+    Array.from(expensesByCurrency.entries()).map(async ([code, sum]) => {
+      const converted = await convertAmountToCurrency(sum, code, defaultCurrencyCode);
+      monthlyExpensesTotal += converted;
+    })
   );
 
   const monthlyRevenue = monthlySalesTotal;
   const netProfit = monthlyRevenue - monthlyCogs - monthlyExpensesTotal;
 
-  // Revenue vs Expense for last 6 months
+  // Revenue vs Expense for last 6 months (converted to default currency)
   const revenueExpenseByMonth: { month: string; revenue: number; expenses: number }[] = [];
   for (let i = 5; i >= 0; i--) {
     const { start, end, year, month } = getMonthStartEnd(-i);
-    const [salesSum, expenseSum] = await Promise.all([
-      prisma.salesInvoice
-        .aggregate({
-          where: {
-            organizationId: orgId,
-            deletedAt: null,
-            invoiceDate: { gte: start, lte: end },
-          },
-          _sum: { totalAmount: true },
-        })
-        .then((r) => Number(r._sum.totalAmount ?? 0)),
-      prisma.expense
-        .aggregate({
-          where: {
-            organizationId: orgId,
-            deletedAt: null,
-            expenseDate: { gte: start, lte: end },
-          },
-          _sum: { amount: true },
-        })
-        .then((r) => Number(r._sum.amount ?? 0)),
+    const [monthSales, monthExpenses] = await Promise.all([
+      prisma.salesInvoice.findMany({
+        where: {
+          organizationId: orgId,
+          deletedAt: null,
+          invoiceDate: { gte: start, lte: end },
+        },
+        select: { totalAmount: true, currencyCode: true },
+      }),
+      prisma.expense.findMany({
+        where: {
+          organizationId: orgId,
+          deletedAt: null,
+          expenseDate: { gte: start, lte: end },
+        },
+        select: { amount: true, currencyCode: true },
+      }),
     ]);
+
+    const monthSalesByCurrency = new Map<string, number>();
+    for (const inv of monthSales) {
+      const code = inv.currencyCode ?? defaultCurrencyCode;
+      const current = monthSalesByCurrency.get(code) ?? 0;
+      monthSalesByCurrency.set(code, current + Number(inv.totalAmount));
+    }
+    const monthExpensesByCurrency = new Map<string, number>();
+    for (const e of monthExpenses) {
+      const code = e.currencyCode ?? defaultCurrencyCode;
+      const current = monthExpensesByCurrency.get(code) ?? 0;
+      monthExpensesByCurrency.set(code, current + Number(e.amount));
+    }
+
+    let salesSum = 0;
+    await Promise.all(
+      Array.from(monthSalesByCurrency.entries()).map(async ([code, sum]) => {
+        const converted = await convertAmountToCurrency(sum, code, defaultCurrencyCode);
+        salesSum += converted;
+      })
+    );
+
+    let expenseSum = 0;
+    await Promise.all(
+      Array.from(monthExpensesByCurrency.entries()).map(async ([code, sum]) => {
+        const converted = await convertAmountToCurrency(sum, code, defaultCurrencyCode);
+        expenseSum += converted;
+      })
+    );
     const monthLabel = new Date(year, month - 1, 1).toLocaleDateString("en-US", {
       month: "short",
       year: "2-digit",
@@ -154,11 +202,24 @@ export async function getDashboardData() {
       deletedAt: null,
       paymentStatus: { not: "PAID" },
     },
-    select: { totalAmount: true, paidAmount: true },
+    select: { totalAmount: true, paidAmount: true, currencyCode: true },
   });
-  const outstandingReceivablesCorrect = salesUnpaid.reduce(
-    (sum, inv) => sum + Math.max(0, Number(inv.totalAmount) - Number(inv.paidAmount)),
-    0
+  const receivablesByCurrency = new Map<string, number>();
+  for (const inv of salesUnpaid) {
+    const code = inv.currencyCode ?? defaultCurrencyCode;
+    const outstanding = Math.max(
+      0,
+      Number(inv.totalAmount) - Number(inv.paidAmount)
+    );
+    const current = receivablesByCurrency.get(code) ?? 0;
+    receivablesByCurrency.set(code, current + outstanding);
+  }
+  let outstandingReceivablesCorrect = 0;
+  await Promise.all(
+    Array.from(receivablesByCurrency.entries()).map(async ([code, sum]) => {
+      const converted = await convertAmountToCurrency(sum, code, defaultCurrencyCode);
+      outstandingReceivablesCorrect += converted;
+    })
   );
 
   // Outstanding payables
@@ -168,11 +229,24 @@ export async function getDashboardData() {
       deletedAt: null,
       paymentStatus: { not: "PAID" },
     },
-    select: { totalAmount: true, paidAmount: true },
+    select: { totalAmount: true, paidAmount: true, currencyCode: true },
   });
-  const outstandingPayables = purchasesUnpaid.reduce(
-    (sum, inv) => sum + Math.max(0, Number(inv.totalAmount) - Number(inv.paidAmount)),
-    0
+  const payablesByCurrency = new Map<string, number>();
+  for (const inv of purchasesUnpaid) {
+    const code = inv.currencyCode ?? defaultCurrencyCode;
+    const outstanding = Math.max(
+      0,
+      Number(inv.totalAmount) - Number(inv.paidAmount)
+    );
+    const current = payablesByCurrency.get(code) ?? 0;
+    payablesByCurrency.set(code, current + outstanding);
+  }
+  let outstandingPayables = 0;
+  await Promise.all(
+    Array.from(payablesByCurrency.entries()).map(async ([code, sum]) => {
+      const converted = await convertAmountToCurrency(sum, code, defaultCurrencyCode);
+      outstandingPayables += converted;
+    })
   );
 
   return {
@@ -191,5 +265,6 @@ export async function getDashboardData() {
       "en-US",
       { month: "long", year: "numeric" }
     ),
+    defaultCurrencyCode,
   };
 }

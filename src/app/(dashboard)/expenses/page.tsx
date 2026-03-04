@@ -89,7 +89,7 @@ export default async function ExpensesPage() {
                         {expense.description ?? "-"}
                       </TableCell>
                       <TableCell className="text-right font-medium">
-                        {Number(expense.amount).toFixed(2)}
+                        {Number(expense.amount).toFixed(2)} {expense.currencyCode}
                       </TableCell>
                       <TableCell>
                         {expense.isRecurring ? "Yes" : "-"}

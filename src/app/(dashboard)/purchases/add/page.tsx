@@ -5,15 +5,18 @@ import { getSuppliers } from "@/app/(dashboard)/suppliers/actions";
 import { getGrns } from "../actions";
 import { PurchaseInvoiceForm } from "../purchase-invoice-form";
 import { redirect } from "next/navigation";
+import { getOrganizationCurrencies, getDefaultCurrencyCodeForOrg } from "@/lib/currency";
 
 export default async function AddPurchaseInvoicePage() {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
-  const [suppliers, grns, nextInvoiceNo] = await Promise.all([
+  const [suppliers, grns, nextInvoiceNo, currencies, defaultCurrencyCode] = await Promise.all([
     getSuppliers(),
     getGrns(),
     getNextInvoiceNo(),
+    getOrganizationCurrencies(orgId),
+    getDefaultCurrencyCodeForOrg(orgId),
   ]);
 
   return (
@@ -34,6 +37,8 @@ export default async function AddPurchaseInvoicePage() {
             suppliers={suppliers}
             grns={grns}
             defaultInvoiceNo={nextInvoiceNo}
+            currencies={currencies}
+            defaultCurrencyCode={defaultCurrencyCode}
           />
         </CardContent>
       </Card>

@@ -97,24 +97,24 @@ export default async function PurchaseInvoiceDetailPage({
 
         <Card>
           <CardHeader>
-            <CardTitle>Amounts</CardTitle>
+            <CardTitle>Amounts ({invoice.currencyCode})</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Subtotal</span>
-              <span>{Number(invoice.subtotal).toFixed(2)}</span>
+              <span>{Number(invoice.subtotal).toFixed(2)} {invoice.currencyCode}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Tax</span>
-              <span>{Number(invoice.taxAmount).toFixed(2)}</span>
+              <span>{Number(invoice.taxAmount).toFixed(2)} {invoice.currencyCode}</span>
             </div>
             <div className="flex justify-between font-medium">
               <span>Total</span>
-              <span>{Number(invoice.totalAmount).toFixed(2)}</span>
+              <span>{Number(invoice.totalAmount).toFixed(2)} {invoice.currencyCode}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Paid</span>
-              <span>{Number(invoice.paidAmount).toFixed(2)}</span>
+              <span>{Number(invoice.paidAmount).toFixed(2)} {invoice.currencyCode}</span>
             </div>
             {canRecord && (
               <div className="mt-4 pt-4 border-t">
