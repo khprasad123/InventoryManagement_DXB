@@ -260,3 +260,88 @@ export async function createPurchaseInvoice(formData: FormData) {
   revalidatePath("/dashboard");
   redirect("/purchases");
 }
+
+const supplierPaymentSchema = z.object({
+  invoiceId: z.string().min(1),
+  amount: z.coerce.number().positive("Amount must be greater than 0"),
+  paymentDate: z.string().min(1, "Payment date is required"),
+  method: z.string().optional(),
+  reference: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+export async function recordSupplierPayment(formData: FormData) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const parsed = supplierPaymentSchema.safeParse({
+    invoiceId: formData.get("invoiceId"),
+    amount: formData.get("amount"),
+    paymentDate: formData.get("paymentDate"),
+    method: formData.get("method") || undefined,
+    reference: formData.get("reference") || undefined,
+    notes: formData.get("notes") || undefined,
+  });
+
+  if (!parsed.success) {
+    return { error: parsed.error.flatten().fieldErrors };
+  }
+
+  const { invoiceId, amount, paymentDate, method, reference, notes } =
+    parsed.data;
+
+  const invoice = await prisma.purchaseInvoice.findFirst({
+    where: { id: invoiceId, organizationId: orgId, deletedAt: null },
+  });
+
+  if (!invoice) {
+    return { error: { _form: ["Invoice not found"] } };
+  }
+
+  const total = Number(invoice.totalAmount);
+  const alreadyPaid = Number(invoice.paidAmount);
+  const outstanding = total - alreadyPaid;
+
+  if (amount > outstanding + 0.0001) {
+    return {
+      error: {
+        amount: [
+          `Amount exceeds outstanding balance (${outstanding.toFixed(2)})`,
+        ],
+      },
+    };
+  }
+
+  const payDate = new Date(paymentDate);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.supplierPayment.create({
+      data: {
+        organizationId: orgId,
+        purchaseInvoiceId: invoice.id,
+        amount,
+        paymentDate: payDate,
+        method: method || null,
+        reference: reference || null,
+        notes: notes || null,
+      },
+    });
+
+    const newPaid = alreadyPaid + amount;
+    const newStatus =
+      newPaid >= total ? "PAID" : newPaid > 0 ? "PARTIAL" : "UNPAID";
+
+    await tx.purchaseInvoice.update({
+      where: { id: invoice.id },
+      data: {
+        paidAmount: newPaid,
+        paymentStatus: newStatus,
+      },
+    });
+  });
+
+  revalidatePath("/purchases");
+  revalidatePath(`/purchases/${parsed.data.invoiceId}`);
+  revalidatePath("/dashboard");
+  return { success: true };
+}
