@@ -44,6 +44,7 @@ model Organization {
 
   users             UserOrganization[]
   roles             Role[]
+  currencies        Currency[]
   items             Item[]
   suppliers         Supplier[]
   clients           Client[]
@@ -61,6 +62,25 @@ model Organization {
   @@index([slug])
   @@index([deletedAt])
   @@map("organizations")
+}
+
+model Currency {
+  id             String    @id @default(cuid())
+  organizationId String    @map("organization_id")
+  code           String
+  name           String
+  symbol         String?   @map("symbol")
+  isDefault      Boolean   @default(false) @map("is_default")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@index([deletedAt])
+  @@map("currencies")
 }
 
 model Role {
@@ -290,6 +310,7 @@ model PurchaseInvoice {
   totalAmount    Decimal       @map("total_amount") @db.Decimal(12, 2)
   paidAmount     Decimal       @default(0) @map("paid_amount") @db.Decimal(12, 2)
   paymentStatus  PaymentStatus @default(UNPAID) @map("payment_status")
+  currencyCode   String        @default("AED") @map("currency_code")
   notes          String?
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
@@ -413,6 +434,7 @@ model SalesInvoice {
   totalAmount    Decimal       @map("total_amount") @db.Decimal(12, 2)
   paidAmount     Decimal       @default(0) @map("paid_amount") @db.Decimal(12, 2)
   paymentStatus  PaymentStatus @default(UNPAID) @map("payment_status")
+  currencyCode   String        @default("AED") @map("currency_code")
   notes          String?
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
@@ -506,6 +528,8 @@ model Expense {
   description    String?
   expenseDate    DateTime  @map("expense_date")
   isRecurring    Boolean   @default(false) @map("is_recurring")
+   // Currency of this expense (e.g. AED, USD)
+  currencyCode   String    @default("AED") @map("currency_code")
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
   deletedAt      DateTime? @map("deleted_at")

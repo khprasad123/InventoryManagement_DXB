@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth-utils";
 import { canManageUsers } from "@/lib/permissions";
-import { Users } from "lucide-react";
+import { Users, Coins } from "lucide-react";
 
 export default async function SettingsPage() {
   const user = await getCurrentUser();
@@ -26,14 +26,22 @@ export default async function SettingsPage() {
           <p className="text-sm text-muted-foreground">
             Application settings and preferences will be available here.
           </p>
-          {showUsersLink && (
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" asChild>
-              <Link href="/settings/users">
-                <Users className="mr-2 h-4 w-4" />
-                User management
+              <Link href="/settings/currencies">
+                <Coins className="mr-2 h-4 w-4" />
+                Currencies
               </Link>
             </Button>
-          )}
+            {showUsersLink && (
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/settings/users">
+                  <Users className="mr-2 h-4 w-4" />
+                  User management
+                </Link>
+              </Button>
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>

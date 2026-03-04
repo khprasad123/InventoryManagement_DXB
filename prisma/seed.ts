@@ -14,6 +14,43 @@ async function main() {
     },
   });
 
+  // Create currencies: AED (default) and USD
+  const [aedCurrency, usdCurrency] = await Promise.all([
+    prisma.currency.upsert({
+      where: {
+        organizationId_code: { organizationId: org.id, code: "AED" },
+      },
+      update: {
+        name: "UAE Dirham",
+        symbol: "د.إ",
+        isDefault: true,
+      },
+      create: {
+        organizationId: org.id,
+        code: "AED",
+        name: "UAE Dirham",
+        symbol: "د.إ",
+        isDefault: true,
+      },
+    }),
+    prisma.currency.upsert({
+      where: {
+        organizationId_code: { organizationId: org.id, code: "USD" },
+      },
+      update: {
+        name: "US Dollar",
+        symbol: "$",
+      },
+      create: {
+        organizationId: org.id,
+        code: "USD",
+        name: "US Dollar",
+        symbol: "$",
+        isDefault: false,
+      },
+    }),
+  ]);
+
   // Create roles for this organization: Admin, Inventory, Finance, Sales
   const [adminRole, inventoryRole, financeRole, salesRole] = await Promise.all([
     prisma.role.upsert({
@@ -93,6 +130,7 @@ async function main() {
   console.log("  - Organization: Default (slug: default)");
   console.log("  - User: admin@example.com / admin123");
   console.log("  - Roles: ADMIN, INVENTORY, FINANCE, SALES");
+  console.log("  - Currencies: AED (default), USD");
 }
 
 main()
