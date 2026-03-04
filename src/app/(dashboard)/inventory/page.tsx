@@ -18,7 +18,7 @@ import { getOrganizationId, getCurrentUser } from "@/lib/auth-utils";
 import { canAdjustStock } from "@/lib/permissions";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Plus, Pencil, Trash2, Package } from "lucide-react";
+import { Plus, Pencil, Trash2, Package, Eye } from "lucide-react";
 import { Suspense } from "react";
 import { InventoryFilters } from "./inventory-filters";
 import { DeleteItemButton } from "./delete-item-button";
@@ -138,8 +138,13 @@ export default async function InventoryPage({
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
+                              <Button variant="ghost" size="icon" asChild title="View details & documents">
+                                <Link href={`/inventory/${item.id}`}>
+                                  <Eye className="h-4 w-4" />
+                                </Link>
+                              </Button>
                               <StockMovementDialog item={item} allowAdjustment={allowAdjustment} />
-                              <Button variant="ghost" size="icon" asChild>
+                              <Button variant="ghost" size="icon" asChild title="Edit">
                                 <Link href={`/inventory/${item.id}/edit`}>
                                   <Pencil className="h-4 w-4" />
                                 </Link>

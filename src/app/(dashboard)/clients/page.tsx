@@ -72,7 +72,14 @@ export default async function ClientsPage() {
                 <TableBody>
                   {clients.map((client) => (
                     <TableRow key={client.id}>
-                      <TableCell className="font-medium">{client.name}</TableCell>
+                      <TableCell className="font-medium">
+                        <Link
+                          href={`/clients/${client.id}`}
+                          className="text-primary hover:underline"
+                        >
+                          {client.name}
+                        </Link>
+                      </TableCell>
                       <TableCell>{client.contactName ?? "-"}</TableCell>
                       <TableCell>{client.email ?? "-"}</TableCell>
                       <TableCell>{client.phone ?? "-"}</TableCell>
@@ -88,12 +95,12 @@ export default async function ClientsPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="icon" asChild>
+                          <Button variant="ghost" size="icon" asChild title="View details & documents">
                             <Link href={`/clients/${client.id}`}>
                               <Eye className="h-4 w-4" />
                             </Link>
                           </Button>
-                          <Button variant="ghost" size="icon" asChild>
+                          <Button variant="ghost" size="icon" asChild title="Edit">
                             <Link href={`/clients/${client.id}/edit`}>
                               <Pencil className="h-4 w-4" />
                             </Link>

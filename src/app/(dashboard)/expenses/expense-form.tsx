@@ -44,7 +44,7 @@ export function ExpenseForm({
     const form = e.target as HTMLFormElement;
     const formData = new FormData(form);
     const recurringEl = form.querySelector("#isRecurring") as HTMLInputElement;
-    if (recurringEl?.checked) formData.set("isRecurring", "on");
+    formData.set("isRecurring", recurringEl?.checked ? "on" : "false");
     setSubmitting(true);
     const result = await action(formData);
     setSubmitting(false);

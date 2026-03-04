@@ -11,23 +11,47 @@ import type { Client } from "@prisma/client";
 
 type ItemWithStock = { id: string; sku: string; name: string; stockQty: number; sellingPrice: number };
 
+type QuotationItemRow = { itemId: string; quantity: number; unitPrice: number };
+
+interface QuotationFormDefaultValues {
+  quotationNo: string;
+  quotationDate: string;
+  clientId: string;
+  status: string;
+  notes?: string;
+  validUntil?: string;
+  items: QuotationItemRow[];
+}
+
 interface QuotationFormProps {
   clients: Client[];
   items: ItemWithStock[];
   defaultQuotationNo: string;
+  mode?: "add" | "edit";
+  quotationId?: string;
+  defaultValues?: QuotationFormDefaultValues;
+  updateAction?: (formData: FormData) => Promise<{ error?: Record<string, string[]> } | void>;
 }
-
-type QuotationItemRow = { itemId: string; quantity: number; unitPrice: number };
 
 export function QuotationForm({
   clients,
   items,
   defaultQuotationNo,
+  mode = "add",
+  quotationId,
+  defaultValues,
+  updateAction,
 }: QuotationFormProps) {
   const router = useRouter();
-  const [rows, setRows] = useState<QuotationItemRow[]>([
-    { itemId: "", quantity: 1, unitPrice: 0 },
-  ]);
+  const [rows, setRows] = useState<QuotationItemRow[]>(
+    defaultValues?.items?.length
+      ? defaultValues.items.map((i) => ({
+          itemId: i.itemId,
+          quantity: i.quantity,
+          unitPrice: typeof i.unitPrice === "number" ? i.unitPrice : Number(i.unitPrice),
+        }))
+      : [{ itemId: "", quantity: 1, unitPrice: 0 }]
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,6 +82,7 @@ export function QuotationForm({
     formData.set(
       "quotationNo",
       (form.querySelector("#quotationNo") as HTMLInputElement)?.value ||
+        defaultValues?.quotationNo ||
         defaultQuotationNo
     );
     formData.set(
@@ -82,7 +107,10 @@ export function QuotationForm({
     formData.set("items", JSON.stringify(validRows));
 
     setSubmitting(true);
-    const result = await createQuotation(formData);
+    const result =
+      mode === "edit" && quotationId && updateAction
+        ? await updateAction(formData)
+        : await createQuotation(formData);
     setSubmitting(false);
     if (result?.error) {
       const err = result.error as Record<string, string[]>;
@@ -105,8 +133,9 @@ export function QuotationForm({
           <Input
             id="quotationNo"
             name="quotationNo"
-            defaultValue={defaultQuotationNo}
+            defaultValue={defaultValues?.quotationNo ?? defaultQuotationNo}
             required
+            disabled={mode === "edit"}
           />
         </div>
         <div className="space-y-2">
@@ -127,6 +156,7 @@ export function QuotationForm({
             id="clientId"
             name="clientId"
             required
+            defaultValue={defaultValues?.clientId}
             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
           >
             <option value="">Select client</option>
@@ -260,13 +290,13 @@ export function QuotationForm({
 
       <div className="space-y-2">
         <Label htmlFor="notes">Notes</Label>
-        <Input id="notes" name="notes" placeholder="Optional" />
+        <Input id="notes" name="notes" placeholder="Optional" defaultValue={defaultValues?.notes} />
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
       <div className="flex gap-4">
         <Button type="submit" disabled={submitting}>
-          {submitting ? "Saving..." : "Create Quotation"}
+          {submitting ? "Saving..." : mode === "edit" ? "Update Quotation" : "Create Quotation"}
         </Button>
         <Button type="button" variant="outline" asChild>
           <a href="/sales/quotations">Cancel</a>

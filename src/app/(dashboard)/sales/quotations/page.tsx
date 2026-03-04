@@ -12,8 +12,9 @@ import { getOrganizationId } from "@/lib/auth-utils";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Plus, FileText } from "lucide-react";
+import { Plus, FileText, Eye, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { DeleteQuotationButton } from "../delete-quotation-button";
 
 export default async function QuotationsPage() {
   const orgId = await getOrganizationId();
@@ -63,39 +64,65 @@ export default async function QuotationsPage() {
                     <TableHead>Client</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {quotations.map((q) => (
-                    <TableRow key={q.id}>
-                      <TableCell className="font-medium">
-                        <Link
-                          href={`/sales/quotations/${q.id}`}
-                          className="text-primary hover:underline"
-                        >
-                          {q.quotationNo}
-                        </Link>
-                      </TableCell>
-                      <TableCell>
-                        {new Date(q.quotationDate).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell>{q.client.name}</TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            q.status === "APPROVED" ? "default" : "secondary"
-                          }
-                        >
-                          {q.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {q.items
-                          .reduce((s, i) => s + Number(i.total), 0)
-                          .toFixed(2)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {quotations.map((q) => {
+                    const canEdit = q.status === "DRAFT" && !q.salesInvoice;
+                    return (
+                      <TableRow key={q.id}>
+                        <TableCell className="font-medium">
+                          <Link
+                            href={`/sales/quotations/${q.id}`}
+                            className="text-primary hover:underline"
+                          >
+                            {q.quotationNo}
+                          </Link>
+                        </TableCell>
+                        <TableCell>
+                          {new Date(q.quotationDate).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell>{q.client.name}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              q.status === "APPROVED" ? "default" : "secondary"
+                            }
+                          >
+                            {q.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {q.items
+                            .reduce((s, i) => s + Number(i.total), 0)
+                            .toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button variant="ghost" size="icon" asChild title="View">
+                              <Link href={`/sales/quotations/${q.id}`}>
+                                <Eye className="h-4 w-4" />
+                              </Link>
+                            </Button>
+                            {canEdit && (
+                              <>
+                                <Button variant="ghost" size="icon" asChild title="Edit">
+                                  <Link href={`/sales/quotations/${q.id}/edit`}>
+                                    <Pencil className="h-4 w-4" />
+                                  </Link>
+                                </Button>
+                                <DeleteQuotationButton
+                                  quotationId={q.id}
+                                  quotationNo={q.quotationNo}
+                                />
+                              </>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

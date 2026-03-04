@@ -12,12 +12,27 @@ type GrnWithSupplier = Grn & { supplier: Supplier };
 
 type CurrencyOption = { id: string; code: string; name: string; symbol: string | null; isDefault: boolean };
 
+interface PurchaseInvoiceFormDefaultValues {
+  invoiceNo: string;
+  invoiceDate: string;
+  supplierId: string;
+  grnId: string;
+  subtotal: number;
+  taxAmount: number;
+  paidAmount: number;
+  currencyCode: string;
+  notes?: string;
+}
+
 interface PurchaseInvoiceFormProps {
   suppliers: Supplier[];
   grns: GrnWithSupplier[];
   defaultInvoiceNo: string;
   currencies: CurrencyOption[];
   defaultCurrencyCode: string;
+  mode?: "add" | "edit";
+  defaultValues?: PurchaseInvoiceFormDefaultValues;
+  updateAction?: (formData: FormData) => Promise<{ error?: Record<string, string[]> } | void>;
 }
 
 export function PurchaseInvoiceForm({
@@ -26,12 +41,15 @@ export function PurchaseInvoiceForm({
   defaultInvoiceNo,
   currencies,
   defaultCurrencyCode,
+  mode = "add",
+  defaultValues,
+  updateAction,
 }: PurchaseInvoiceFormProps) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [supplierId, setSupplierId] = useState("");
-  const [grnId, setGrnId] = useState("");
+  const [supplierId, setSupplierId] = useState(defaultValues?.supplierId ?? "");
+  const [grnId, setGrnId] = useState(defaultValues?.grnId ?? "");
   const [dueDatePreview, setDueDatePreview] = useState<string | null>(null);
 
   const supplier = suppliers.find((s) => s.id === supplierId);
@@ -74,6 +92,9 @@ export function PurchaseInvoiceForm({
     setError(null);
     const form = e.target as HTMLFormElement;
     const formData = new FormData(form);
+    if (mode === "edit" && defaultValues?.invoiceNo) {
+      formData.set("invoiceNo", defaultValues.invoiceNo);
+    }
     setSubmitting(true);
     const result = await createPurchaseInvoice(formData);
     setSubmitting(false);
@@ -93,8 +114,9 @@ export function PurchaseInvoiceForm({
           <Input
             id="invoiceNo"
             name="invoiceNo"
-            defaultValue={defaultInvoiceNo}
+            defaultValue={defaultValues?.invoiceNo ?? defaultInvoiceNo}
             required
+            disabled={mode === "edit"}
           />
         </div>
         <div className="space-y-2">
@@ -159,7 +181,7 @@ export function PurchaseInvoiceForm({
           <select
             id="currencyCode"
             name="currencyCode"
-            defaultValue={defaultCurrencyCode}
+            defaultValue={defaultValues?.currencyCode ?? defaultCurrencyCode}
             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
           >
             {currencies.map((c) => (
@@ -180,7 +202,7 @@ export function PurchaseInvoiceForm({
             type="number"
             step="0.01"
             min={0}
-            defaultValue={0}
+            defaultValue={defaultValues?.subtotal ?? 0}
             required
           />
         </div>
@@ -192,7 +214,7 @@ export function PurchaseInvoiceForm({
             type="number"
             step="0.01"
             min={0}
-            defaultValue={0}
+            defaultValue={defaultValues?.taxAmount ?? 0}
           />
         </div>
         <div className="space-y-2">
@@ -203,7 +225,7 @@ export function PurchaseInvoiceForm({
             type="number"
             step="0.01"
             min={0}
-            defaultValue={0}
+            defaultValue={defaultValues?.paidAmount ?? 0}
           />
         </div>
       </div>
@@ -217,7 +239,7 @@ export function PurchaseInvoiceForm({
 
       <div className="flex gap-4">
         <Button type="submit" disabled={submitting}>
-          {submitting ? "Creating..." : "Create Invoice"}
+          {submitting ? "Saving..." : mode === "edit" ? "Update Invoice" : "Create Invoice"}
         </Button>
         <Button type="button" variant="outline" asChild>
           <a href="/purchases">Cancel</a>

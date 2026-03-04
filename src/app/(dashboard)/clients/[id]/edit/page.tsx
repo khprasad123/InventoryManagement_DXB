@@ -3,6 +3,7 @@ import { getOrganizationId } from "@/lib/auth-utils";
 import { getClientById, updateClient } from "../../actions";
 import { ClientForm } from "../../client-form";
 import { redirect, notFound } from "next/navigation";
+import { DocumentSection } from "@/app/(dashboard)/documents/document-section";
 
 export default async function EditClientPage({
   params,
@@ -40,6 +41,8 @@ export default async function EditClientPage({
           />
         </CardContent>
       </Card>
+
+      <DocumentSection documentableType="Client" documentableId={client.id} />
     </div>
   );
 }

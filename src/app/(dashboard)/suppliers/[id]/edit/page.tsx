@@ -3,6 +3,7 @@ import { getOrganizationId } from "@/lib/auth-utils";
 import { getSupplierById, updateSupplier } from "../../actions";
 import { SupplierForm } from "../../supplier-form";
 import { redirect, notFound } from "next/navigation";
+import { DocumentSection } from "@/app/(dashboard)/documents/document-section";
 
 export default async function EditSupplierPage({
   params,
@@ -40,6 +41,8 @@ export default async function EditSupplierPage({
           />
         </CardContent>
       </Card>
+
+      <DocumentSection documentableType="Supplier" documentableId={supplier.id} />
     </div>
   );
 }

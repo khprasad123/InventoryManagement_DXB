@@ -153,8 +153,7 @@ const expenseSchema = z.object({
   expenseDate: z.string().min(1, "Date is required"),
   description: z.string().max(1000).optional(),
   isRecurring: z
-    .string()
-    .optional()
+    .union([z.string(), z.null(), z.undefined()])
     .transform((v) => v === "on" || v === "true"),
   currencyCode: z.string().min(1).max(10).default("AED"),
 });

@@ -265,6 +265,88 @@ export async function createPurchaseInvoice(formData: FormData) {
   redirect("/purchases");
 }
 
+export async function updatePurchaseInvoice(id: string, formData: FormData) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const existing = await prisma.purchaseInvoice.findFirst({
+    where: { id, organizationId: orgId, deletedAt: null },
+    include: { supplier: true },
+  });
+  if (!existing) return { error: { _form: ["Invoice not found"] } };
+
+  const parsed = purchaseInvoiceSchema.safeParse({
+    supplierId: formData.get("supplierId"),
+    grnId: formData.get("grnId") || undefined,
+    invoiceNo: formData.get("invoiceNo"),
+    invoiceDate: formData.get("invoiceDate"),
+    subtotal: formData.get("subtotal"),
+    taxAmount: formData.get("taxAmount") || 0,
+    paidAmount: formData.get("paidAmount") || 0,
+    currencyCode: formData.get("currencyCode") || "AED",
+    notes: formData.get("notes") || undefined,
+  });
+
+  if (!parsed.success) {
+    return { error: parsed.error.flatten().fieldErrors };
+  }
+
+  const { supplierId, invoiceDate, subtotal, taxAmount, paidAmount, currencyCode, notes } =
+    parsed.data;
+
+  const supplier = await prisma.supplier.findFirst({
+    where: { id: supplierId, organizationId: orgId, deletedAt: null },
+  });
+  if (!supplier) {
+    return { error: { _form: ["Supplier not found"] } };
+  }
+
+  const invDate = new Date(invoiceDate);
+  const dueDate = calculateDueDate(invDate, supplier.defaultPaymentTerms);
+  const totalAmount = subtotal + taxAmount;
+  const paymentStatus =
+    paidAmount >= totalAmount ? "PAID" : paidAmount > 0 ? "PARTIAL" : "UNPAID";
+
+  await prisma.purchaseInvoice.update({
+    where: { id },
+    data: {
+      supplierId,
+      invoiceDate: invDate,
+      dueDate,
+      subtotal,
+      taxAmount,
+      totalAmount,
+      paidAmount: paidAmount || 0,
+      paymentStatus,
+      currencyCode: currencyCode || "AED",
+      notes: notes || null,
+    },
+  });
+
+  revalidatePath("/purchases");
+  revalidatePath("/dashboard");
+  revalidatePath(`/purchases/${id}`);
+  redirect("/purchases");
+}
+
+export async function deletePurchaseInvoice(id: string) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const inv = await prisma.purchaseInvoice.findFirst({
+    where: { id, organizationId: orgId, deletedAt: null },
+  });
+  if (!inv) return { error: "Invoice not found" };
+
+  await prisma.purchaseInvoice.update({
+    where: { id },
+    data: { deletedAt: new Date() },
+  });
+
+  revalidatePath("/purchases");
+  revalidatePath("/dashboard");
+}
+
 const supplierPaymentSchema = z.object({
   invoiceId: z.string().min(1),
   amount: z.coerce.number().positive("Amount must be greater than 0"),

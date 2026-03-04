@@ -12,7 +12,7 @@ import { getExpenses } from "./actions";
 import { getOrganizationId } from "@/lib/auth-utils";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Plus, Pencil, Trash2, FolderTree, FileText } from "lucide-react";
+import { Plus, Pencil, Trash2, FolderTree, FileText, Eye } from "lucide-react";
 import { DeleteExpenseButton } from "./delete-expense-button";
 
 export default async function ExpensesPage() {
@@ -96,9 +96,9 @@ export default async function ExpensesPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="icon" asChild title="View">
+                          <Button variant="ghost" size="icon" asChild title="View details & documents">
                             <Link href={`/expenses/${expense.id}`}>
-                              <FileText className="h-4 w-4" />
+                              <Eye className="h-4 w-4" />
                             </Link>
                           </Button>
                           <Button variant="ghost" size="icon" asChild title="Edit">

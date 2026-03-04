@@ -12,7 +12,7 @@ import { getQuotationById } from "../../actions";
 import { getOrganizationId } from "@/lib/auth-utils";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ConvertToInvoiceButton } from "../../convert-to-invoice-button";
 import { ApproveQuotationButton } from "../../approve-quotation-button";
@@ -44,6 +44,14 @@ export default async function QuotationDetailPage({
           <h1 className="text-3xl font-bold tracking-tight">
             {quotation.quotationNo}
           </h1>
+          {quotation.status === "DRAFT" && !quotation.salesInvoice && (
+            <Button asChild size="sm" variant="outline">
+              <Link href={`/sales/quotations/${quotation.id}/edit`}>
+                <Pencil className="mr-2 h-4 w-4" />
+                Edit
+              </Link>
+            </Button>
+          )}
           <Badge
             variant={
               quotation.status === "APPROVED" ? "default" : "secondary"

@@ -140,6 +140,102 @@ export async function createQuotation(formData: FormData) {
   redirect("/sales/quotations");
 }
 
+export async function updateQuotation(id: string, formData: FormData) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const existing = await prisma.quotation.findFirst({
+    where: { id, organizationId: orgId, deletedAt: null },
+    include: { salesInvoice: true },
+  });
+  if (!existing) return { error: { _form: ["Quotation not found"] } };
+  if (existing.salesInvoice) return { error: { _form: ["Cannot edit: already converted to invoice"] } };
+
+  const itemsJson = formData.get("items") as string;
+  const items = itemsJson
+    ? (JSON.parse(itemsJson) as { itemId: string; quantity: number; unitPrice: number }[])
+    : [];
+
+  const parsed = quotationSchema.safeParse({
+    clientId: formData.get("clientId"),
+    quotationDate: formData.get("quotationDate"),
+    quotationNo: formData.get("quotationNo"),
+    status: formData.get("status") || "DRAFT",
+    validUntil: formData.get("validUntil") || undefined,
+    notes: formData.get("notes") || undefined,
+    items,
+  });
+
+  if (!parsed.success) {
+    return { error: parsed.error.flatten().fieldErrors };
+  }
+
+  const { clientId, quotationDate, quotationNo, status, validUntil, notes, items: quoteItems } =
+    parsed.data;
+
+  const duplicateNo = await prisma.quotation.findFirst({
+    where: { organizationId: orgId, quotationNo, deletedAt: null, id: { not: id } },
+  });
+  if (duplicateNo) {
+    return { error: { quotationNo: ["Quotation number already in use"] } };
+  }
+
+  const client = await prisma.client.findFirst({
+    where: { id: clientId, organizationId: orgId, deletedAt: null },
+  });
+  if (!client) {
+    return { error: { _form: ["Client not found"] } };
+  }
+
+  await prisma.$transaction([
+    prisma.quotationItem.deleteMany({ where: { quotationId: id } }),
+    prisma.quotation.update({
+      where: { id },
+      data: {
+        clientId,
+        quotationNo,
+        quotationDate: new Date(quotationDate),
+        status: status as "DRAFT" | "APPROVED",
+        validUntil: validUntil ? new Date(validUntil) : null,
+        notes: notes || null,
+        items: {
+          create: quoteItems.map((it) => ({
+            itemId: it.itemId,
+            quantity: it.quantity,
+            unitPrice: it.unitPrice,
+            total: it.quantity * it.unitPrice,
+          })),
+        },
+      },
+    }),
+  ]);
+
+  revalidatePath("/sales");
+  revalidatePath("/sales/quotations");
+  revalidatePath(`/sales/quotations/${id}`);
+  redirect("/sales/quotations");
+}
+
+export async function deleteQuotation(id: string) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const q = await prisma.quotation.findFirst({
+    where: { id, organizationId: orgId, deletedAt: null },
+    include: { salesInvoice: true },
+  });
+  if (!q) return { error: "Quotation not found" };
+  if (q.salesInvoice) return { error: "Cannot delete: already converted to invoice" };
+
+  await prisma.quotation.update({
+    where: { id },
+    data: { deletedAt: new Date() },
+  });
+
+  revalidatePath("/sales");
+  revalidatePath("/sales/quotations");
+}
+
 export async function approveQuotation(id: string) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
@@ -421,6 +517,74 @@ export async function createSalesInvoice(formData: FormData) {
   revalidatePath("/inventory");
   revalidatePath("/dashboard");
   redirect("/sales");
+}
+
+const updateSalesInvoiceSchema = z.object({
+  invoiceDate: z.string().min(1, "Date is required"),
+  notes: z.string().optional(),
+  paidAmount: z.coerce.number().min(0).default(0),
+});
+
+export async function updateSalesInvoice(id: string, formData: FormData) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const existing = await prisma.salesInvoice.findFirst({
+    where: { id, organizationId: orgId, deletedAt: null },
+    include: { client: true },
+  });
+  if (!existing) return { error: { _form: ["Invoice not found"] } };
+
+  const parsed = updateSalesInvoiceSchema.safeParse({
+    invoiceDate: formData.get("invoiceDate"),
+    notes: formData.get("notes") || undefined,
+    paidAmount: formData.get("paidAmount") ?? 0,
+  });
+
+  if (!parsed.success) {
+    return { error: parsed.error.flatten().fieldErrors };
+  }
+
+  const { invoiceDate, notes, paidAmount } = parsed.data;
+  const invDate = new Date(invoiceDate);
+  const dueDate = calculateDueDate(invDate, existing.client.defaultPaymentTerms);
+  const totalAmount = Number(existing.totalAmount ?? 0);
+  const paymentStatus =
+    paidAmount >= totalAmount ? "PAID" : paidAmount > 0 ? "PARTIAL" : "UNPAID";
+
+  await prisma.salesInvoice.update({
+    where: { id },
+    data: {
+      invoiceDate: invDate,
+      dueDate,
+      paidAmount,
+      paymentStatus,
+      notes: notes ?? null,
+    },
+  });
+
+  revalidatePath("/sales");
+  revalidatePath("/dashboard");
+  revalidatePath(`/sales/${id}`);
+  redirect("/sales");
+}
+
+export async function deleteSalesInvoice(id: string) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const inv = await prisma.salesInvoice.findFirst({
+    where: { id, organizationId: orgId, deletedAt: null },
+  });
+  if (!inv) return { error: "Invoice not found" };
+
+  await prisma.salesInvoice.update({
+    where: { id },
+    data: { deletedAt: new Date() },
+  });
+
+  revalidatePath("/sales");
+  revalidatePath("/dashboard");
 }
 
 const clientPaymentSchema = z.object({

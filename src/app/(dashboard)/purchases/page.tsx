@@ -12,7 +12,8 @@ import { getPurchaseInvoices } from "./actions";
 import { getOrganizationId } from "@/lib/auth-utils";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Plus, Package, FileText } from "lucide-react";
+import { Plus, Package, FileText, Eye, Pencil } from "lucide-react";
+import { DeletePurchaseInvoiceButton } from "./delete-purchase-invoice-button";
 
 export default async function PurchasesPage() {
   const orgId = await getOrganizationId();
@@ -82,6 +83,7 @@ export default async function PurchasesPage() {
                     <TableHead>GRN</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -115,6 +117,21 @@ export default async function PurchasesPage() {
                         {Number(inv.totalAmount).toFixed(2)} {inv.currencyCode}
                       </TableCell>
                       <TableCell>{inv.paymentStatus}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button variant="ghost" size="icon" asChild title="View details & documents">
+                            <Link href={`/purchases/${inv.id}`}>
+                              <Eye className="h-4 w-4" />
+                            </Link>
+                          </Button>
+                          <Button variant="ghost" size="icon" asChild title="Edit">
+                            <Link href={`/purchases/${inv.id}/edit`}>
+                              <Pencil className="h-4 w-4" />
+                            </Link>
+                          </Button>
+                          <DeletePurchaseInvoiceButton invoiceId={inv.id} invoiceNo={inv.invoiceNo} />
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

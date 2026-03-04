@@ -72,7 +72,14 @@ export default async function SuppliersPage() {
                 <TableBody>
                   {suppliers.map((supplier) => (
                     <TableRow key={supplier.id}>
-                      <TableCell className="font-medium">{supplier.name}</TableCell>
+                      <TableCell className="font-medium">
+                        <Link
+                          href={`/suppliers/${supplier.id}`}
+                          className="text-primary hover:underline"
+                        >
+                          {supplier.name}
+                        </Link>
+                      </TableCell>
                       <TableCell>{supplier.contactName ?? "-"}</TableCell>
                       <TableCell>{supplier.email ?? "-"}</TableCell>
                       <TableCell>{supplier.phone ?? "-"}</TableCell>
@@ -88,12 +95,12 @@ export default async function SuppliersPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="icon" asChild>
+                          <Button variant="ghost" size="icon" asChild title="View details & documents">
                             <Link href={`/suppliers/${supplier.id}`}>
                               <Eye className="h-4 w-4" />
                             </Link>
                           </Button>
-                          <Button variant="ghost" size="icon" asChild>
+                          <Button variant="ghost" size="icon" asChild title="Edit">
                             <Link href={`/suppliers/${supplier.id}/edit`}>
                               <Pencil className="h-4 w-4" />
                             </Link>
