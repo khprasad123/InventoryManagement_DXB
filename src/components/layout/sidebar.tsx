@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -17,6 +18,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import logoDark from "@/lib/logo/kaha-logo-dark.png";
 import { useState } from "react";
 
 const navItems = [
@@ -53,8 +55,14 @@ export function Sidebar() {
       >
         <div className="flex h-full flex-col">
           <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-6">
-            <Link href="/dashboard" className="text-xl font-semibold">
-              Inventory System
+            <Link href="/dashboard" className="flex items-center gap-2">
+              <Image
+                src={logoDark}
+                alt="KaHa Enterprise Cloud"
+                width={140}
+                height={32}
+                className="h-8 w-auto object-contain"
+              />
             </Link>
             <Button
               variant="ghost"

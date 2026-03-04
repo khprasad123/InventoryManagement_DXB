@@ -1,6 +1,6 @@
-# DXB Inventory Management System
+# KaHa Enterprise Cloud
 
-Full-stack Inventory Management System built with Next.js 14, Prisma, PostgreSQL, and NextAuth.
+Full-stack Business Management Platform built with Next.js 14, Prisma, PostgreSQL, and NextAuth. Inventory, sales, purchases, expenses, and more.
 
 ## Stack
 

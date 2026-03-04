@@ -2,14 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Inventory Management System – matches UI-Design at C:\Workspace\DXB01-InventoryManagement\UI-Design */
+/* KaHa Enterprise Cloud – UI styles */
 @layer base {
   :root {
     --font-size: 16px;
     --font-weight-medium: 500;
     --font-weight-normal: 400;
 
-    /* Inventory Management System Colors */
+    /* KaHa Enterprise Cloud Colors */
     --background: #F8F9FA;
     --foreground: #1F2937;
     --card: #ffffff;

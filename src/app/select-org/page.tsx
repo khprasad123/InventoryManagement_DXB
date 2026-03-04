@@ -3,8 +3,9 @@
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Package, Building2 } from "lucide-react";
+import { Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Logo } from "@/components/logo";
 
 export default function SelectOrgPage() {
   const { data: session, status, update } = useSession();
@@ -53,8 +54,8 @@ export default function SelectOrgPage() {
     <div className="flex min-h-screen items-center justify-center bg-background">
       <div className="w-full max-w-md space-y-8 rounded-lg border border-border bg-card p-8 shadow-lg">
         <div className="flex flex-col items-center space-y-2">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary">
-            <Package className="h-8 w-8 text-primary-foreground" />
+          <div className="flex h-16 w-16 items-center justify-center">
+            <Logo variant="icon" width={64} height={64} className="object-contain" />
           </div>
           <h1 className="text-2xl font-semibold">Select Organization</h1>
           <p className="text-sm text-muted-foreground text-center">

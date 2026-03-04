@@ -1,4 +1,4 @@
-// Prisma schema for DXB Inventory Management (SaaS Multi-Tenant)
+// Prisma schema for KaHa Enterprise Cloud (SaaS Multi-Tenant)
 generator client {
   provider = "prisma-client-js"
 }

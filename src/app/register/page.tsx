@@ -5,8 +5,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import Link from "next/link";
-import { Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Logo } from "@/components/logo";
 import { Input } from "@/components/ui/input";
 import { registerUser } from "@/app/auth/register/actions";
 
@@ -48,10 +48,10 @@ export default function RegisterPage() {
     <div className="flex min-h-screen items-center justify-center bg-background">
       <div className="w-full max-w-md space-y-8 rounded-lg border border-border bg-card p-8 shadow-lg">
         <div className="flex flex-col items-center space-y-2">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary">
-            <Package className="h-8 w-8 text-primary-foreground" />
+          <div className="flex h-16 w-16 items-center justify-center">
+            <Logo variant="icon" width={64} height={64} className="object-contain" />
           </div>
-          <h1 className="text-2xl font-semibold">Inventory System</h1>
+          <h1 className="text-2xl font-semibold">KaHa Enterprise Cloud</h1>
           <p className="text-sm text-muted-foreground">Create your company and admin account</p>
         </div>
 
