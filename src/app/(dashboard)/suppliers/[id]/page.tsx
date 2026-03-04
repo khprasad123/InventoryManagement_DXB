@@ -14,6 +14,7 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { Pencil, ArrowLeft } from "lucide-react";
 import { calculateDueDate } from "@/lib/date-utils";
+import { DocumentSection } from "@/app/(dashboard)/documents/document-section";
 
 export default async function SupplierDetailPage({
   params,
@@ -173,6 +174,8 @@ export default async function SupplierDetailPage({
           )}
         </CardContent>
       </Card>
+
+      <DocumentSection documentableType="Supplier" documentableId={supplier.id} />
     </div>
   );
 }

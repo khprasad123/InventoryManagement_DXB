@@ -16,6 +16,7 @@ import Link from "next/link";
 import { ArrowLeft, Printer } from "lucide-react";
 import { PrintInvoiceButton } from "../print-invoice-button";
 import { RecordClientPaymentDialog } from "../record-client-payment-dialog";
+import { DocumentSection } from "@/app/(dashboard)/documents/document-section";
 
 export default async function SalesInvoiceDetailPage({
   params,
@@ -182,6 +183,11 @@ export default async function SalesInvoiceDetailPage({
       <div className="hidden print:block">
         <InvoicePrintLayout invoice={invoice} />
       </div>
+
+      <DocumentSection
+        documentableType="SalesInvoice"
+        documentableId={invoice.id}
+      />
     </>
   );
 }

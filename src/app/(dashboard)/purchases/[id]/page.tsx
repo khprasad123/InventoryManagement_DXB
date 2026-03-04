@@ -15,6 +15,7 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { RecordSupplierPaymentDialog } from "../record-supplier-payment-dialog";
+import { DocumentSection } from "@/app/(dashboard)/documents/document-section";
 
 export default async function PurchaseInvoiceDetailPage({
   params,
@@ -52,7 +53,7 @@ export default async function PurchaseInvoiceDetailPage({
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
-        <Card>
+      <Card>
           <CardHeader>
             <CardTitle>Invoice Details</CardTitle>
           </CardHeader>
@@ -166,6 +167,11 @@ export default async function PurchaseInvoiceDetailPage({
           </CardContent>
         </Card>
       )}
+
+      <DocumentSection
+        documentableType="PurchaseInvoice"
+        documentableId={invoice.id}
+      />
     </div>
   );
 }

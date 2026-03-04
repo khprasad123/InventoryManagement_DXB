@@ -3,6 +3,7 @@ import { getOrganizationId } from "@/lib/auth-utils";
 import { getItemById, getItemCategories, updateItem } from "../../actions";
 import { ItemForm } from "../../item-form";
 import { redirect, notFound } from "next/navigation";
+import { DocumentSection } from "@/app/(dashboard)/documents/document-section";
 
 export default async function EditItemPage({
   params,
@@ -43,6 +44,8 @@ export default async function EditItemPage({
           />
         </CardContent>
       </Card>
+
+      <DocumentSection documentableType="Item" documentableId={item.id} />
     </div>
   );
 }
