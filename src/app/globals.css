@@ -1,0 +1,94 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Inventory Management System – matches UI-Design at C:\Workspace\DXB01-InventoryManagement\UI-Design */
+@layer base {
+  :root {
+    --font-size: 16px;
+    --font-weight-medium: 500;
+    --font-weight-normal: 400;
+
+    /* Inventory Management System Colors */
+    --background: #F8F9FA;
+    --foreground: #1F2937;
+    --card: #ffffff;
+    --card-foreground: #1F2937;
+    --popover: #ffffff;
+    --popover-foreground: #1F2937;
+
+    /* Primary: Deep Blue */
+    --primary: #1E3A8A;
+    --primary-foreground: #ffffff;
+
+    /* Secondary */
+    --secondary: #F3F4F6;
+    --secondary-foreground: #1F2937;
+
+    /* Muted */
+    --muted: #E5E7EB;
+    --muted-foreground: #6B7280;
+
+    /* Accent */
+    --accent: #F3F4F6;
+    --accent-foreground: #1F2937;
+
+    /* Success: Emerald Green */
+    --success: #059669;
+    --success-foreground: #ffffff;
+
+    /* Warning: Amber */
+    --warning: #F59E0B;
+    --warning-foreground: #ffffff;
+
+    /* Destructive: Red for alerts */
+    --destructive: #DC2626;
+    --destructive-foreground: #ffffff;
+
+    /* Borders and inputs */
+    --border: #E5E7EB;
+    --input: #E5E7EB;
+    --input-background: #ffffff;
+
+    /* Focus ring */
+    --ring: #1E3A8A;
+
+    /* Border radius: 8px */
+    --radius: 0.5rem;
+
+    /* Sidebar */
+    --sidebar: #1E3A8A;
+    --sidebar-foreground: #ffffff;
+    --sidebar-primary: #3B82F6;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #1E40AF;
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-border: #1E40AF;
+  }
+
+  .dark {
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.145 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.985 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --sidebar: oklch(0.205 0 0);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.269 0 0);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(0.269 0 0);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    font-size: var(--font-size);
+  }
+}
