@@ -22,6 +22,11 @@ export default async function EditItemPage({
     categories.unshift("General");
   }
 
+  async function updateAction(formData: FormData) {
+    "use server";
+    return updateItem(id, formData);
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -40,7 +45,7 @@ export default async function EditItemPage({
             mode="edit"
             item={item}
             categories={categories}
-            onSubmit={(formData) => updateItem(id, formData)}
+            onSubmit={updateAction}
           />
         </CardContent>
       </Card>

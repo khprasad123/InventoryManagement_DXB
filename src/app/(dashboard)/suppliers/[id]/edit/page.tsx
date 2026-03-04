@@ -16,6 +16,11 @@ export default async function EditSupplierPage({
   const supplier = await getSupplierById(id);
   if (!supplier) notFound();
 
+  async function updateAction(formData: FormData) {
+    "use server";
+    return updateSupplier(id, formData);
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -31,7 +36,7 @@ export default async function EditSupplierPage({
           <SupplierForm
             mode="edit"
             supplier={supplier}
-            onSubmit={(formData) => updateSupplier(id, formData)}
+            onSubmit={updateAction}
           />
         </CardContent>
       </Card>

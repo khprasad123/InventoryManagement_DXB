@@ -8,7 +8,8 @@ type DocumentableType =
   | "Client"
   | "Item"
   | "PurchaseInvoice"
-  | "SalesInvoice";
+  | "SalesInvoice"
+  | "Expense";
 
 interface DocumentSectionProps {
   documentableType: DocumentableType;

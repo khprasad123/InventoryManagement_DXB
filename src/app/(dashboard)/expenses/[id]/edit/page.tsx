@@ -11,6 +11,7 @@ import {
   getOrganizationCurrencies,
   getDefaultCurrencyCodeForOrg,
 } from "@/lib/currency";
+import { DocumentSection } from "@/app/(dashboard)/documents/document-section";
 
 export default async function EditExpensePage({
   params,
@@ -69,6 +70,8 @@ export default async function EditExpensePage({
           />
         </CardContent>
       </Card>
+
+      <DocumentSection documentableType="Expense" documentableId={expense.id} />
     </div>
   );
 }

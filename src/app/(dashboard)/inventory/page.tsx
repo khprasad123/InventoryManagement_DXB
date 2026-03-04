@@ -110,7 +110,14 @@ export default async function InventoryPage({
                       return (
                         <TableRow key={item.id}>
                           <TableCell className="font-medium">{item.sku}</TableCell>
-                          <TableCell>{item.name}</TableCell>
+                          <TableCell>
+                            <Link
+                              href={`/inventory/${item.id}`}
+                              className="text-primary hover:underline"
+                            >
+                              {item.name}
+                            </Link>
+                          </TableCell>
                           <TableCell>{item.category ?? "-"}</TableCell>
                           <TableCell>{item.unit}</TableCell>
                           <TableCell className="text-right">

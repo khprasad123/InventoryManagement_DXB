@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { getOrganizationId } from "@/lib/auth-utils";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { put } from "@vercel/blob";
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -26,7 +27,8 @@ type DocumentableType =
   | "Client"
   | "Item"
   | "PurchaseInvoice"
-  | "SalesInvoice";
+  | "SalesInvoice"
+  | "Expense";
 
 export async function getDocumentsFor(
   documentableType: DocumentableType,
@@ -106,6 +108,14 @@ export async function uploadDocument(formData: FormData) {
       documentableId,
     },
   });
+
+  // Revalidate pages that show document sections so the list refreshes
+  revalidatePath("/expenses");
+  revalidatePath("/inventory");
+  revalidatePath("/suppliers");
+  revalidatePath("/clients");
+  revalidatePath("/purchases");
+  revalidatePath("/sales");
 
   return { success: true };
 }

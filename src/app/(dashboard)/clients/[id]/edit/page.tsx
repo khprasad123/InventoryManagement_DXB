@@ -16,6 +16,11 @@ export default async function EditClientPage({
   const client = await getClientById(id);
   if (!client) notFound();
 
+  async function updateAction(formData: FormData) {
+    "use server";
+    return updateClient(id, formData);
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -31,7 +36,7 @@ export default async function EditClientPage({
           <ClientForm
             mode="edit"
             client={client}
-            onSubmit={(formData) => updateClient(id, formData)}
+            onSubmit={updateAction}
           />
         </CardContent>
       </Card>
