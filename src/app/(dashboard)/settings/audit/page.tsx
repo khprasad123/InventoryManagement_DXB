@@ -1,6 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/auth-utils";
+import { hasPermission } from "@/lib/permissions";
 import { AuditLogTable } from "./audit-log-table";
 import { getAuditLogs, getAuditActions, getAuditEntityTypes } from "./actions";
 import { AuditLogFiltersForm } from "./audit-log-filters-form";
@@ -10,6 +13,9 @@ export default async function AuditLogPage({
 }: {
   searchParams: Promise<{ from?: string; to?: string; action?: string; entityType?: string; page?: string }>;
 }) {
+  const user = await getCurrentUser();
+  if (!hasPermission(user, "view_audit")) redirect("/settings");
+
   const params = await searchParams;
   const page = params.page ? parseInt(params.page, 10) : 1;
 

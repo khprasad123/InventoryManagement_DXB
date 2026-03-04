@@ -21,7 +21,7 @@ async function requireAdminOrg() {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
   const user = await getCurrentUser();
-  if (!canManageUsers(user?.role)) {
+  if (!canManageUsers(user)) {
     throw new Error("Not authorized to manage currencies");
   }
   return orgId;

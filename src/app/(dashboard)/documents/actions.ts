@@ -5,7 +5,7 @@ import { getOrganizationId, getCurrentUser } from "@/lib/auth-utils";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { put } from "@vercel/blob";
-import { ROLES } from "@/lib/permissions";
+import { canManageUsers } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -139,7 +139,7 @@ export async function deleteDocument(id: string) {
   if (!orgId) redirect("/login");
 
   const user = await getCurrentUser();
-  if (!user || user.role !== ROLES.ADMIN) {
+  if (!user || !canManageUsers(user)) {
     return { error: "Only admins can delete documents." };
   }
 

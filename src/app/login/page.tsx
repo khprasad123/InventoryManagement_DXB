@@ -102,12 +102,14 @@ function LoginForm() {
           </Button>
         </form>
 
-        <p className="text-center text-sm text-muted-foreground">
-          Don&apos;t have an account?{" "}
-          <Link href="/register" className="text-primary hover:underline">
-            Register
-          </Link>
-        </p>
+        {process.env.NEXT_PUBLIC_IS_DEV === "true" && (
+          <p className="text-center text-sm text-muted-foreground pt-2">
+            Don&apos;t have an account?{" "}
+            <Link href="/register" className="text-primary hover:underline">
+              Register
+            </Link>
+          </p>
+        )}
       </div>
     </div>
   );

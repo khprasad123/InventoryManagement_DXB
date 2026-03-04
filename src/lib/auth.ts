@@ -26,7 +26,11 @@ export const authOptions: NextAuthOptions = {
               where: { organization: { deletedAt: null } },
               include: {
                 organization: true,
-                role: true,
+                role: {
+                  include: {
+                    permissions: { include: { permission: true } },
+                  },
+                },
               },
               take: 1,
             },
@@ -47,6 +51,8 @@ export const authOptions: NextAuthOptions = {
           throw new Error("No organization assigned");
         }
 
+        const permissionCodes = userOrg.role.permissions.map((rp) => rp.permission.code);
+
         await prisma.auditLog.create({
           data: {
             organizationId: userOrg.organizationId,
@@ -64,6 +70,8 @@ export const authOptions: NextAuthOptions = {
           role: userOrg.role.name,
           organizationId: userOrg.organizationId,
           organizationName: userOrg.organization.name,
+          permissions: permissionCodes,
+          isSuperAdmin: userOrg.isSuperAdmin,
         };
       },
     }),
@@ -96,6 +104,8 @@ export const authOptions: NextAuthOptions = {
         token.role = user.role;
         token.organizationId = user.organizationId;
         token.organizationName = user.organizationName;
+        token.permissions = (user as { permissions?: string[] }).permissions ?? [];
+        token.isSuperAdmin = (user as { isSuperAdmin?: boolean }).isSuperAdmin ?? false;
       }
       return token;
     },
@@ -105,6 +115,8 @@ export const authOptions: NextAuthOptions = {
         session.user.role = token.role;
         session.user.organizationId = token.organizationId;
         session.user.organizationName = token.organizationName;
+        session.user.permissions = (token.permissions as string[]) ?? [];
+        session.user.isSuperAdmin = (token.isSuperAdmin as boolean) ?? false;
       }
       return session;
     },

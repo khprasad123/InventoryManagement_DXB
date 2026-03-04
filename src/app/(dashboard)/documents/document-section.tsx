@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { getDocumentsFor, uploadDocument, deleteDocument } from "./actions";
 import { getCurrentUser } from "@/lib/auth-utils";
-import { ROLES } from "@/lib/permissions";
+import { canManageUsers } from "@/lib/permissions";
 
 type DocumentableType =
   | "Supplier"
@@ -24,7 +24,7 @@ export async function DocumentSection({
 }: DocumentSectionProps) {
   const docs = await getDocumentsFor(documentableType, documentableId);
   const user = await getCurrentUser();
-  const isAdmin = user?.role === ROLES.ADMIN;
+  const isAdmin = canManageUsers(user);
 
   async function uploadAction(formData: FormData) {
     "use server";

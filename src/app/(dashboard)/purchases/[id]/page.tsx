@@ -31,7 +31,7 @@ export default async function PurchaseInvoiceDetailPage({
   if (!invoice) notFound();
 
   const user = await getCurrentUser();
-  const canRecord = canRecordPayments(user?.role);
+  const canRecord = canRecordPayments(user);
   const total = Number(invoice.totalAmount);
   const paid = Number(invoice.paidAmount);
   const outstanding = total - paid;

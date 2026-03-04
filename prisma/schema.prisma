@@ -86,7 +86,7 @@ model Currency {
 
 model Role {
   id             String    @id @default(cuid())
-  name           String // ADMIN, MANAGER, STAFF, VIEWER
+  name           String // ADMIN, INVENTORY, FINANCE, SALES or custom
   organizationId String?   @map("organization_id") // null = system-wide role
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
@@ -94,11 +94,36 @@ model Role {
 
   organization      Organization?      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   userOrganizations UserOrganization[]
+  permissions       RolePermission[]
 
   @@unique([name, organizationId])
   @@index([organizationId])
   @@index([deletedAt])
   @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  code        String   @unique // e.g. manage_users, record_payments
+  name        String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String @map("role_id")
+  permissionId String @map("permission_id")
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
 }
 
 model User {
@@ -141,6 +166,7 @@ model UserOrganization {
   userId         String   @map("user_id")
   organizationId String   @map("organization_id")
   roleId         String   @map("role_id")
+  isSuperAdmin   Boolean  @default(false) @map("is_super_admin") // org super admin; only they can edit/remove other super admins
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 

@@ -23,7 +23,7 @@ export default async function ItemDetailPage({
   if (!item) notFound();
 
   const user = await getCurrentUser();
-  const allowAdjustment = canAdjustStock(user?.role);
+  const allowAdjustment = canAdjustStock(user);
   const isLowStock = item.stockQty <= item.minStock;
 
   return (

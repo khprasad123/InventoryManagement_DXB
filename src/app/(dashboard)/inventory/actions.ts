@@ -282,7 +282,7 @@ export async function createStockMovement(formData: FormData) {
 
   if (type === "ADJUSTMENT") {
     const user = await getCurrentUser();
-    if (!canAdjustStock(user?.role)) {
+    if (!canAdjustStock(user)) {
       return {
         error: {
           _form: ["Only Inventory can adjust stock."],

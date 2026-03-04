@@ -678,7 +678,7 @@ export async function recordClientPayment(formData: FormData) {
   if (!orgId) redirect("/login");
 
   const user = await getCurrentUser();
-  if (!canRecordPayments(user?.role)) {
+  if (!canRecordPayments(user)) {
     return { error: { _form: ["Only Finance can record payments."] } };
   }
 

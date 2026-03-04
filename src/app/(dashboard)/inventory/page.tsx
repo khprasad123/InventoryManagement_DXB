@@ -35,7 +35,7 @@ export default async function InventoryPage({
   if (!orgId) redirect("/login");
 
   const user = await getCurrentUser();
-  const allowAdjustment = canAdjustStock(user?.role);
+  const allowAdjustment = canAdjustStock(user);
 
   const params = await searchParams;
   const page = Math.max(1, parseInt(params.page ?? "1", 10));

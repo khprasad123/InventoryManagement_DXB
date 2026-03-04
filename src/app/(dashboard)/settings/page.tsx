@@ -2,12 +2,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth-utils";
-import { canManageUsers } from "@/lib/permissions";
-import { Users, Coins, ClipboardList } from "lucide-react";
+import { canManageUsers, canManageRoles, hasPermission } from "@/lib/permissions";
+import { Users, Coins, ClipboardList, Shield } from "lucide-react";
 
 export default async function SettingsPage() {
   const user = await getCurrentUser();
-  const showUsersLink = canManageUsers(user?.role);
+  const showUsersLink = canManageUsers(user);
+  const showRolesLink = canManageRoles(user);
+  const showAuditLink = hasPermission(user, "view_audit");
 
   return (
     <div className="space-y-6">
@@ -41,12 +43,22 @@ export default async function SettingsPage() {
                 </Link>
               </Button>
             )}
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/settings/audit">
-                <ClipboardList className="mr-2 h-4 w-4" />
-                Audit log
-              </Link>
-            </Button>
+            {showRolesLink && (
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/settings/roles">
+                  <Shield className="mr-2 h-4 w-4" />
+                  Role management
+                </Link>
+              </Button>
+            )}
+            {showAuditLink && (
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/settings/audit">
+                  <ClipboardList className="mr-2 h-4 w-4" />
+                  Audit log
+                </Link>
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
