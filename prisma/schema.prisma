@@ -170,17 +170,19 @@ model StockMovement {
 // =============================================================================
 
 model Supplier {
-  id             String   @id @default(cuid())
-  organizationId String   @map("organization_id")
-  name           String
-  contactName    String?  @map("contact_name")
-  email          String?
-  phone          String?
-  address        String?
-  taxNumber      String?  @map("tax_number")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
-  deletedAt      DateTime? @map("deleted_at")
+  id                   String   @id @default(cuid())
+  organizationId       String   @map("organization_id")
+  name                 String
+  contactName          String?  @map("contact_name")
+  email                String?
+  phone                String?
+  address              String?
+  taxNumber            String?  @map("tax_number")
+  defaultPaymentTerms  Int?     @map("default_payment_terms") // days, e.g. 30 = NET 30
+  creditLimit          Decimal? @db.Decimal(12, 2) @map("credit_limit")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+  deletedAt            DateTime? @map("deleted_at")
 
   organization     Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   purchaseInvoices PurchaseInvoice[]

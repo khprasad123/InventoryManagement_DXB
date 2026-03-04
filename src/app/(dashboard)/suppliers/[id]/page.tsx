@@ -1,0 +1,178 @@
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { getSupplierById } from "../actions";
+import { getOrganizationId } from "@/lib/auth-utils";
+import { redirect, notFound } from "next/navigation";
+import Link from "next/link";
+import { Pencil, ArrowLeft } from "lucide-react";
+import { calculateDueDate } from "@/lib/date-utils";
+
+export default async function SupplierDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const { id } = await params;
+  const supplier = await getSupplierById(id);
+  if (!supplier) notFound();
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/suppliers">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Suppliers
+            </Link>
+          </Button>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight">
+            {supplier.name}
+          </h1>
+          <p className="text-muted-foreground">Supplier details and purchase history</p>
+        </div>
+        <Button asChild>
+          <Link href={`/suppliers/${id}/edit`}>
+            <Pencil className="mr-2 h-4 w-4" />
+            Edit
+          </Link>
+        </Button>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Contact Information</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <div>
+              <span className="text-sm text-muted-foreground">Contact</span>
+              <p className="font-medium">{supplier.contactName ?? "-"}</p>
+            </div>
+            <div>
+              <span className="text-sm text-muted-foreground">Email</span>
+              <p className="font-medium">{supplier.email ?? "-"}</p>
+            </div>
+            <div>
+              <span className="text-sm text-muted-foreground">Phone</span>
+              <p className="font-medium">{supplier.phone ?? "-"}</p>
+            </div>
+            <div>
+              <span className="text-sm text-muted-foreground">Address</span>
+              <p className="font-medium">{supplier.address ?? "-"}</p>
+            </div>
+            <div>
+              <span className="text-sm text-muted-foreground">Tax Number</span>
+              <p className="font-medium">{supplier.taxNumber ?? "-"}</p>
+            </div>
+            <div>
+              <span className="text-sm text-muted-foreground">
+                Default Payment Terms
+              </span>
+              <p className="font-medium">
+                {supplier.defaultPaymentTerms != null
+                  ? `NET ${supplier.defaultPaymentTerms} days`
+                  : "-"}
+              </p>
+            </div>
+            <div>
+              <span className="text-sm text-muted-foreground">Credit Limit</span>
+              <p className="font-medium">
+                {supplier.creditLimit != null
+                  ? Number(supplier.creditLimit).toLocaleString()
+                  : "-"}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Purchase Summary</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold">
+              {supplier.purchaseInvoices.length} invoice(s)
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Total:{" "}
+              {supplier.purchaseInvoices
+                .reduce(
+                  (sum, inv) => sum + Number(inv.totalAmount),
+                  0
+                )
+                .toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Purchase History</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Due dates calculated from invoice date + supplier default payment terms (
+            {supplier.defaultPaymentTerms ?? 30} days)
+          </p>
+        </CardHeader>
+        <CardContent>
+          {supplier.purchaseInvoices.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No purchase invoices for this supplier yet.
+            </p>
+          ) : (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Invoice</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Due Date</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {supplier.purchaseInvoices.map((inv) => {
+                    const dueDate = inv.dueDate ?? calculateDueDate(
+                      inv.invoiceDate,
+                      supplier.defaultPaymentTerms
+                    );
+                    return (
+                      <TableRow key={inv.id}>
+                        <TableCell className="font-medium">
+                          {inv.invoiceNo}
+                        </TableCell>
+                        <TableCell>
+                          {new Date(inv.invoiceDate).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell>
+                          {new Date(dueDate).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {Number(inv.totalAmount).toFixed(2)}
+                        </TableCell>
+                        <TableCell>{inv.paymentStatus}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
