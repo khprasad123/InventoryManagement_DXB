@@ -1,5 +1,5 @@
 {
-  "buildCommand": "prisma generate && pnpm build",
+  "buildCommand": "pnpm db:push && pnpm db:seed && pnpm build",
   "installCommand": "pnpm install",
   "framework": "nextjs",
   "git": {
