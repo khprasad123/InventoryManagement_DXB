@@ -13,6 +13,7 @@ import { requireAuth } from "@/lib/auth-utils";
 import { getDashboardData } from "./actions";
 import { RevenueExpenseChart } from "./revenue-expense-chart";
 import Link from "next/link";
+import { Badge } from "@/components/ui/badge";
 
 export default async function DashboardPage() {
   const user = await requireAuth();
@@ -162,6 +163,98 @@ export default async function DashboardPage() {
                 {data.outstandingPayables.toFixed(2)}
               </span>
             </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Receivables due soon</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Next 7 days • Sales invoices not fully paid
+            </p>
+          </CardHeader>
+          <CardContent>
+            {data.dueSoonReceivables.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No receivables due in the next 7 days.
+              </p>
+            ) : (
+              <ul className="space-y-2 text-sm">
+                {data.dueSoonReceivables.map((inv: any) => (
+                  <li
+                    key={inv.id}
+                    className="flex items-center justify-between rounded border px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <Link
+                        href={`/sales/${inv.id}`}
+                        className="font-medium text-primary hover:underline"
+                      >
+                        {inv.invoiceNo}
+                      </Link>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {inv.name} · Due{" "}
+                        {inv.dueDate
+                          ? new Date(inv.dueDate).toLocaleDateString()
+                          : "-"}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold">
+                        {Number(inv.outstanding).toFixed(2)} {inv.currencyCode}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Payables due soon</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Next 7 days • Purchase invoices not fully paid
+            </p>
+          </CardHeader>
+          <CardContent>
+            {data.dueSoonPayables.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No payables due in the next 7 days.
+              </p>
+            ) : (
+              <ul className="space-y-2 text-sm">
+                {data.dueSoonPayables.map((inv: any) => (
+                  <li
+                    key={inv.id}
+                    className="flex items-center justify-between rounded border px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <Link
+                        href={`/purchases/${inv.id}`}
+                        className="font-medium text-primary hover:underline"
+                      >
+                        {inv.invoiceNo}
+                      </Link>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {inv.name} · Due{" "}
+                        {inv.dueDate
+                          ? new Date(inv.dueDate).toLocaleDateString()
+                          : "-"}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold">
+                        {Number(inv.outstanding).toFixed(2)} {inv.currencyCode}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </CardContent>
         </Card>
       </div>

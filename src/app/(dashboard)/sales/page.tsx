@@ -13,6 +13,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Plus, FileText, FileSignature, Eye, Pencil } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { DeleteSalesInvoiceButton } from "./delete-sales-invoice-button";
 
 export default async function SalesPage() {
@@ -20,6 +21,8 @@ export default async function SalesPage() {
   if (!orgId) redirect("/login");
 
   const invoices = await getSalesInvoices();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
   return (
     <div className="space-y-6">
@@ -79,6 +82,7 @@ export default async function SalesPage() {
                   <TableRow>
                     <TableHead>Invoice</TableHead>
                     <TableHead>Date</TableHead>
+                    <TableHead>Due Date</TableHead>
                     <TableHead>Client</TableHead>
                     <TableHead>Quotation</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
@@ -100,6 +104,11 @@ export default async function SalesPage() {
                       <TableCell>
                         {new Date(inv.invoiceDate).toLocaleDateString()}
                       </TableCell>
+                      <TableCell>
+                        {inv.dueDate
+                          ? new Date(inv.dueDate).toLocaleDateString()
+                          : "-"}
+                      </TableCell>
                       <TableCell>{inv.client.name}</TableCell>
                       <TableCell>
                         {inv.quotation ? (
@@ -116,7 +125,19 @@ export default async function SalesPage() {
                       <TableCell className="text-right">
                         {Number(inv.totalAmount).toFixed(2)} {inv.currencyCode}
                       </TableCell>
-                      <TableCell>{inv.paymentStatus}</TableCell>
+                      <TableCell>
+                        <Badge
+                          className={
+                            inv.paymentStatus === "PAID"
+                              ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+                              : inv.paymentStatus === "PARTIAL"
+                              ? "bg-amber-100 text-amber-800 border-amber-200"
+                              : "bg-red-100 text-red-800 border-red-200"
+                          }
+                        >
+                          {inv.paymentStatus}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Button variant="ghost" size="icon" asChild title="View details & documents">

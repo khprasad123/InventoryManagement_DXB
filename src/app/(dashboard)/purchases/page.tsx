@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -20,6 +21,8 @@ export default async function PurchasesPage() {
   if (!orgId) redirect("/login");
 
   const invoices = await getPurchaseInvoices();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
   return (
     <div className="space-y-6">
@@ -79,6 +82,7 @@ export default async function PurchasesPage() {
                   <TableRow>
                     <TableHead>Invoice</TableHead>
                     <TableHead>Date</TableHead>
+                    <TableHead>Due Date</TableHead>
                     <TableHead>Supplier</TableHead>
                     <TableHead>GRN</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
@@ -100,6 +104,11 @@ export default async function PurchasesPage() {
                       <TableCell>
                         {new Date(inv.invoiceDate).toLocaleDateString()}
                       </TableCell>
+                      <TableCell>
+                        {inv.dueDate
+                          ? new Date(inv.dueDate).toLocaleDateString()
+                          : "-"}
+                      </TableCell>
                       <TableCell>{inv.supplier.name}</TableCell>
                       <TableCell>
                         {inv.grn ? (
@@ -116,7 +125,19 @@ export default async function PurchasesPage() {
                       <TableCell className="text-right">
                         {Number(inv.totalAmount).toFixed(2)} {inv.currencyCode}
                       </TableCell>
-                      <TableCell>{inv.paymentStatus}</TableCell>
+                      <TableCell>
+                        <Badge
+                          className={
+                            inv.paymentStatus === "PAID"
+                              ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+                              : inv.paymentStatus === "PARTIAL"
+                              ? "bg-amber-100 text-amber-800 border-amber-200"
+                              : "bg-red-100 text-red-800 border-red-200"
+                          }
+                        >
+                          {inv.paymentStatus}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Button variant="ghost" size="icon" asChild title="View details & documents">

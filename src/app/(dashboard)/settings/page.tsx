@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth-utils";
 import { canManageUsers } from "@/lib/permissions";
-import { Users, Coins } from "lucide-react";
+import { Users, Coins, ClipboardList } from "lucide-react";
 
 export default async function SettingsPage() {
   const user = await getCurrentUser();
@@ -41,6 +41,12 @@ export default async function SettingsPage() {
                 </Link>
               </Button>
             )}
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/settings/audit">
+                <ClipboardList className="mr-2 h-4 w-4" />
+                Audit log
+              </Link>
+            </Button>
           </div>
         </CardContent>
       </Card>

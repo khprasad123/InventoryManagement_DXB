@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -29,6 +30,7 @@ interface ItemFormProps {
 }
 
 export function ItemForm({ mode, item, categories, onSubmit }: ItemFormProps) {
+  const attachmentRef = useRef<HTMLInputElement>(null);
   const {
     register,
     handleSubmit,
@@ -175,6 +177,23 @@ export function ItemForm({ mode, item, categories, onSubmit }: ItemFormProps) {
           )}
         </div>
       </div>
+
+      {mode === "add" && (
+        <div className="space-y-2">
+          <Label htmlFor="attachment">Attachment (optional)</Label>
+          <Input
+            id="attachment"
+            ref={attachmentRef}
+            type="file"
+            name="attachment"
+            accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.txt,.csv,.doc,.docx,.xls,.xlsx"
+            className="cursor-pointer"
+          />
+          <p className="text-xs text-muted-foreground">
+            PDF, images, or documents up to 10MB
+          </p>
+        </div>
+      )}
 
       <div className="flex gap-4">
         <Button type="submit" disabled={isSubmitting}>

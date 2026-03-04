@@ -1,10 +1,12 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { getOrganizationId } from "@/lib/auth-utils";
+import { getOrganizationId, getCurrentUser } from "@/lib/auth-utils";
+import { createAuditLog } from "@/lib/audit";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { uploadDocument } from "@/app/(dashboard)/documents/actions";
 
 const supplierSchema = z.object({
   name: z.string().min(1, "Name is required").max(255),
@@ -74,8 +76,11 @@ export async function createSupplier(formData: FormData) {
     return { error: parsed.error.flatten().fieldErrors };
   }
 
+  const user = await getCurrentUser();
+  const userId = (user as { id?: string } | null)?.id ?? null;
+
   const data = parsed.data;
-  await prisma.supplier.create({
+  const supplier = await prisma.supplier.create({
     data: {
       organizationId: orgId,
       name: data.name,
@@ -86,8 +91,26 @@ export async function createSupplier(formData: FormData) {
       taxNumber: data.taxNumber || null,
       defaultPaymentTerms: data.defaultPaymentTerms ?? null,
       creditLimit: data.creditLimit ?? null,
+      createdById: userId ?? undefined,
+      updatedById: userId ?? undefined,
     },
   });
+
+  await createAuditLog({
+    action: "CREATE_Supplier",
+    entityType: "Supplier",
+    entityId: supplier.id,
+    metadata: { name: supplier.name },
+  });
+
+  const file = formData.get("attachment") as File | null;
+  if (file && file.size > 0) {
+    const fd = new FormData();
+    fd.set("documentableType", "Supplier");
+    fd.set("documentableId", supplier.id);
+    fd.set("file", file);
+    await uploadDocument(fd);
+  }
 
   revalidatePath("/suppliers");
   revalidatePath("/dashboard");
@@ -113,6 +136,9 @@ export async function updateSupplier(id: string, formData: FormData) {
     return { error: parsed.error.flatten().fieldErrors };
   }
 
+  const user = await getCurrentUser();
+  const userId = (user as { id?: string } | null)?.id ?? null;
+
   const existing = await prisma.supplier.findFirst({
     where: { id, organizationId: orgId, deletedAt: null },
   });
@@ -132,7 +158,15 @@ export async function updateSupplier(id: string, formData: FormData) {
       taxNumber: data.taxNumber || null,
       defaultPaymentTerms: data.defaultPaymentTerms ?? null,
       creditLimit: data.creditLimit ?? null,
+      updatedById: userId ?? undefined,
     },
+  });
+
+  await createAuditLog({
+    action: "UPDATE_Supplier",
+    entityType: "Supplier",
+    entityId: id,
+    metadata: { name: data.name },
   });
 
   revalidatePath("/suppliers");
@@ -165,6 +199,13 @@ export async function deleteSupplier(id: string) {
   await prisma.supplier.update({
     where: { id },
     data: { deletedAt: new Date() },
+  });
+
+  await createAuditLog({
+    action: "DELETE_Supplier",
+    entityType: "Supplier",
+    entityId: id,
+    metadata: { name: supplier.name },
   });
 
   revalidatePath("/suppliers");

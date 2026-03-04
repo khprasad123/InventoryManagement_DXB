@@ -7,6 +7,8 @@ import { canRecordPayments } from "@/lib/permissions";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { calculateDueDate } from "@/lib/date-utils";
+import { uploadDocument } from "@/app/(dashboard)/documents/actions";
+import { createAuditLog } from "@/lib/audit";
 
 const quotationItemSchema = z.object({
   itemId: z.string().min(1),
@@ -115,7 +117,10 @@ export async function createQuotation(formData: FormData) {
     return { error: { _form: ["Client not found"] } };
   }
 
-  await prisma.quotation.create({
+  const user = await getCurrentUser();
+  const userId = (user as { id?: string } | null)?.id ?? null;
+
+  const quotation = await prisma.quotation.create({
     data: {
       organizationId: orgId,
       clientId,
@@ -124,6 +129,8 @@ export async function createQuotation(formData: FormData) {
       status: status as "DRAFT" | "APPROVED",
       validUntil: validUntil ? new Date(validUntil) : null,
       notes: notes || null,
+      createdById: userId ?? undefined,
+      updatedById: userId ?? undefined,
       items: {
         create: quoteItems.map((it) => ({
           itemId: it.itemId,
@@ -133,6 +140,13 @@ export async function createQuotation(formData: FormData) {
         })),
       },
     },
+  });
+
+  await createAuditLog({
+    action: "CREATE_Quotation",
+    entityType: "Quotation",
+    entityId: quotation.id,
+    metadata: { quotationNo: quotation.quotationNo },
   });
 
   revalidatePath("/sales");
@@ -187,6 +201,9 @@ export async function updateQuotation(id: string, formData: FormData) {
     return { error: { _form: ["Client not found"] } };
   }
 
+  const user = await getCurrentUser();
+  const userId = (user as { id?: string } | null)?.id ?? null;
+
   await prisma.$transaction([
     prisma.quotationItem.deleteMany({ where: { quotationId: id } }),
     prisma.quotation.update({
@@ -198,6 +215,7 @@ export async function updateQuotation(id: string, formData: FormData) {
         status: status as "DRAFT" | "APPROVED",
         validUntil: validUntil ? new Date(validUntil) : null,
         notes: notes || null,
+        updatedById: userId ?? undefined,
         items: {
           create: quoteItems.map((it) => ({
             itemId: it.itemId,
@@ -209,6 +227,13 @@ export async function updateQuotation(id: string, formData: FormData) {
       },
     }),
   ]);
+
+  await createAuditLog({
+    action: "UPDATE_Quotation",
+    entityType: "Quotation",
+    entityId: id,
+    metadata: { quotationNo: parsed.data.quotationNo },
+  });
 
   revalidatePath("/sales");
   revalidatePath("/sales/quotations");
@@ -230,6 +255,13 @@ export async function deleteQuotation(id: string) {
   await prisma.quotation.update({
     where: { id },
     data: { deletedAt: new Date() },
+  });
+
+  await createAuditLog({
+    action: "DELETE_Quotation",
+    entityType: "Quotation",
+    entityId: id,
+    metadata: { quotationNo: q.quotationNo },
   });
 
   revalidatePath("/sales");
@@ -452,6 +484,9 @@ export async function createSalesInvoice(formData: FormData) {
     }
   }
 
+  const user = await getCurrentUser();
+  const userId = (user as { id?: string } | null)?.id ?? null;
+
   const invDate = new Date(invoiceDate);
   const dueDate = calculateDueDate(invDate, client.defaultPaymentTerms);
   const totalAmount = subtotal + taxAmount;
@@ -474,6 +509,8 @@ export async function createSalesInvoice(formData: FormData) {
         paymentStatus,
         currencyCode,
         notes: notes || null,
+        createdById: userId ?? undefined,
+        updatedById: userId ?? undefined,
       },
     });
 
@@ -513,6 +550,28 @@ export async function createSalesInvoice(formData: FormData) {
     }
   });
 
+  const created = await prisma.salesInvoice.findFirst({
+    where: { organizationId: orgId, invoiceNo, deletedAt: null },
+    select: { id: true },
+  });
+  if (created) {
+    await createAuditLog({
+      action: "CREATE_SalesInvoice",
+      entityType: "SalesInvoice",
+      entityId: created.id,
+      metadata: { invoiceNo },
+    });
+  }
+
+  const file = formData.get("attachment") as File | null;
+  if (file && file.size > 0 && created) {
+    const fd = new FormData();
+    fd.set("file", file);
+    fd.set("documentableType", "SalesInvoice");
+    fd.set("documentableId", created.id);
+    await uploadDocument(fd);
+  }
+
   revalidatePath("/sales");
   revalidatePath("/inventory");
   revalidatePath("/dashboard");
@@ -545,6 +604,9 @@ export async function updateSalesInvoice(id: string, formData: FormData) {
     return { error: parsed.error.flatten().fieldErrors };
   }
 
+  const user = await getCurrentUser();
+  const userId = (user as { id?: string } | null)?.id ?? null;
+
   const { invoiceDate, notes, paidAmount } = parsed.data;
   const invDate = new Date(invoiceDate);
   const dueDate = calculateDueDate(invDate, existing.client.defaultPaymentTerms);
@@ -560,7 +622,15 @@ export async function updateSalesInvoice(id: string, formData: FormData) {
       paidAmount,
       paymentStatus,
       notes: notes ?? null,
+      updatedById: userId ?? undefined,
     },
+  });
+
+  await createAuditLog({
+    action: "UPDATE_SalesInvoice",
+    entityType: "SalesInvoice",
+    entityId: id,
+    metadata: { invoiceNo: existing.invoiceNo },
   });
 
   revalidatePath("/sales");
@@ -581,6 +651,13 @@ export async function deleteSalesInvoice(id: string) {
   await prisma.salesInvoice.update({
     where: { id },
     data: { deletedAt: new Date() },
+  });
+
+  await createAuditLog({
+    action: "DELETE_SalesInvoice",
+    entityType: "SalesInvoice",
+    entityId: id,
+    metadata: { invoiceNo: inv.invoiceNo },
   });
 
   revalidatePath("/sales");

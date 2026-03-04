@@ -1,7 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { getDocumentsFor, uploadDocument } from "./actions";
+import { getDocumentsFor, uploadDocument, deleteDocument } from "./actions";
+import { getCurrentUser } from "@/lib/auth-utils";
+import { ROLES } from "@/lib/permissions";
 
 type DocumentableType =
   | "Supplier"
@@ -21,12 +23,21 @@ export async function DocumentSection({
   documentableId,
 }: DocumentSectionProps) {
   const docs = await getDocumentsFor(documentableType, documentableId);
+  const user = await getCurrentUser();
+  const isAdmin = user?.role === ROLES.ADMIN;
 
   async function uploadAction(formData: FormData) {
     "use server";
     formData.set("documentableType", documentableType);
     formData.set("documentableId", documentableId);
     await uploadDocument(formData);
+  }
+
+  async function deleteAction(formData: FormData) {
+    "use server";
+    const id = formData.get("id") as string | null;
+    if (!id) return;
+    await deleteDocument(id);
   }
 
   return (
@@ -76,6 +87,19 @@ export async function DocumentSection({
                       {doc.mimeType} • {sizeKb} KB • {created}
                     </p>
                   </div>
+                  {isAdmin && (
+                    <form action={deleteAction}>
+                      <input type="hidden" name="id" value={doc.id} />
+                      <Button
+                        type="submit"
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs text-destructive hover:text-destructive"
+                      >
+                        Delete
+                      </Button>
+                    </form>
+                  )}
                 </li>
               );
             })}

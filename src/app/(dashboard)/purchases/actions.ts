@@ -7,6 +7,8 @@ import { canRecordPayments } from "@/lib/permissions";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { calculateDueDate } from "@/lib/date-utils";
+import { uploadDocument } from "@/app/(dashboard)/documents/actions";
+import { createAuditLog } from "@/lib/audit";
 
 const grnItemSchema = z.object({
   itemId: z.string().min(1),
@@ -236,13 +238,16 @@ export async function createPurchaseInvoice(formData: FormData) {
     return { error: { _form: ["Supplier not found"] } };
   }
 
+  const user = await getCurrentUser();
+  const userId = (user as { id?: string } | null)?.id ?? null;
+
   const invDate = new Date(invoiceDate);
   const dueDate = calculateDueDate(invDate, supplier.defaultPaymentTerms);
   const totalAmount = subtotal + taxAmount;
   const paymentStatus =
     paidAmount >= totalAmount ? "PAID" : paidAmount > 0 ? "PARTIAL" : "UNPAID";
 
-  await prisma.purchaseInvoice.create({
+  const invoice = await prisma.purchaseInvoice.create({
     data: {
       organizationId: orgId,
       supplierId,
@@ -257,8 +262,26 @@ export async function createPurchaseInvoice(formData: FormData) {
       paymentStatus,
       currencyCode: currencyCode || "AED",
       notes: notes || null,
+      createdById: userId ?? undefined,
+      updatedById: userId ?? undefined,
     },
   });
+
+  await createAuditLog({
+    action: "CREATE_PurchaseInvoice",
+    entityType: "PurchaseInvoice",
+    entityId: invoice.id,
+    metadata: { invoiceNo: invoice.invoiceNo },
+  });
+
+  const file = formData.get("attachment") as File | null;
+  if (file && file.size > 0) {
+    const fd = new FormData();
+    fd.set("file", file);
+    fd.set("documentableType", "PurchaseInvoice");
+    fd.set("documentableId", invoice.id);
+    await uploadDocument(fd);
+  }
 
   revalidatePath("/purchases");
   revalidatePath("/dashboard");
@@ -341,6 +364,13 @@ export async function deletePurchaseInvoice(id: string) {
   await prisma.purchaseInvoice.update({
     where: { id },
     data: { deletedAt: new Date() },
+  });
+
+  await createAuditLog({
+    action: "DELETE_PurchaseInvoice",
+    entityType: "PurchaseInvoice",
+    entityId: id,
+    metadata: { invoiceNo: inv.invoiceNo },
   });
 
   revalidatePath("/purchases");

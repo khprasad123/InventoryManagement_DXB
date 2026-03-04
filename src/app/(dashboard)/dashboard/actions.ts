@@ -249,6 +249,72 @@ export async function getDashboardData() {
     })
   );
 
+  // Invoices due soon (next 7 days, not fully paid)
+  const soonStart = new Date();
+  soonStart.setHours(0, 0, 0, 0);
+  const soonEnd = new Date(soonStart);
+  soonEnd.setDate(soonEnd.getDate() + 7);
+
+  const salesDueSoonRaw = await prisma.salesInvoice.findMany({
+    where: {
+      organizationId: orgId,
+      deletedAt: null,
+      paymentStatus: { not: "PAID" },
+      dueDate: { gte: soonStart, lte: soonEnd },
+    },
+    select: {
+      id: true,
+      invoiceNo: true,
+      dueDate: true,
+      totalAmount: true,
+      paidAmount: true,
+      currencyCode: true,
+      client: { select: { name: true } },
+    },
+    orderBy: { dueDate: "asc" },
+    take: 10,
+  });
+
+  const purchasesDueSoonRaw = await prisma.purchaseInvoice.findMany({
+    where: {
+      organizationId: orgId,
+      deletedAt: null,
+      paymentStatus: { not: "PAID" },
+      dueDate: { gte: soonStart, lte: soonEnd },
+    },
+    select: {
+      id: true,
+      invoiceNo: true,
+      dueDate: true,
+      totalAmount: true,
+      paidAmount: true,
+      currencyCode: true,
+      supplier: { select: { name: true } },
+    },
+    orderBy: { dueDate: "asc" },
+    take: 10,
+  });
+
+  const dueSoonReceivables = salesDueSoonRaw.map((inv) => ({
+    id: inv.id,
+    invoiceNo: inv.invoiceNo,
+    name: inv.client.name,
+    dueDate: inv.dueDate,
+    outstanding:
+      Math.max(0, Number(inv.totalAmount) - Number(inv.paidAmount)),
+    currencyCode: inv.currencyCode ?? defaultCurrencyCode,
+  }));
+
+  const dueSoonPayables = purchasesDueSoonRaw.map((inv) => ({
+    id: inv.id,
+    invoiceNo: inv.invoiceNo,
+    name: inv.supplier.name,
+    dueDate: inv.dueDate,
+    outstanding:
+      Math.max(0, Number(inv.totalAmount) - Number(inv.paidAmount)),
+    currencyCode: inv.currencyCode ?? defaultCurrencyCode,
+  }));
+
   return {
     totalStockValue: Math.round(totalStockValue * 100) / 100,
     monthlySalesTotal: Math.round(monthlySalesTotal * 100) / 100,
@@ -266,5 +332,7 @@ export async function getDashboardData() {
       { month: "long", year: "numeric" }
     ),
     defaultCurrencyCode,
+    dueSoonReceivables,
+    dueSoonPayables,
   };
 }

@@ -6,6 +6,8 @@ import { redirect } from "next/navigation";
 import { canAdjustStock } from "@/lib/permissions";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { uploadDocument } from "@/app/(dashboard)/documents/actions";
+import { createAuditLog } from "@/lib/audit";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -117,6 +119,9 @@ export async function createItem(formData: FormData) {
   const { sku, name, description, category, unit, costPrice, sellingPrice, minStock } =
     parsed.data;
 
+  const user = await getCurrentUser();
+  const userId = (user as { id?: string } | null)?.id ?? null;
+
   const existing = await prisma.item.findFirst({
     where: { organizationId: orgId, sku, deletedAt: null },
   });
@@ -124,7 +129,7 @@ export async function createItem(formData: FormData) {
     return { error: { sku: ["SKU already exists"] } };
   }
 
-  await prisma.item.create({
+  const item = await prisma.item.create({
     data: {
       organizationId: orgId,
       sku,
@@ -136,8 +141,26 @@ export async function createItem(formData: FormData) {
       sellingPrice,
       minStock,
       stockQty: 0,
+      createdById: userId ?? undefined,
+      updatedById: userId ?? undefined,
     },
   });
+
+  await createAuditLog({
+    action: "CREATE_Item",
+    entityType: "Item",
+    entityId: item.id,
+    metadata: { sku: item.sku, name: item.name },
+  });
+
+  const file = formData.get("attachment") as File | null;
+  if (file && file.size > 0) {
+    const fd = new FormData();
+    fd.set("documentableType", "Item");
+    fd.set("documentableId", item.id);
+    fd.set("file", file);
+    await uploadDocument(fd);
+  }
 
   revalidatePath("/inventory");
   revalidatePath("/dashboard");
@@ -162,6 +185,9 @@ export async function updateItem(id: string, formData: FormData) {
   if (!parsed.success) {
     return { error: parsed.error.flatten().fieldErrors };
   }
+
+  const user = await getCurrentUser();
+  const userId = (user as { id?: string } | null)?.id ?? null;
 
   const existing = await prisma.item.findFirst({
     where: { id, organizationId: orgId, deletedAt: null },
@@ -193,7 +219,15 @@ export async function updateItem(id: string, formData: FormData) {
       costPrice,
       sellingPrice,
       minStock,
+      updatedById: userId ?? undefined,
     },
+  });
+
+  await createAuditLog({
+    action: "UPDATE_Item",
+    entityType: "Item",
+    entityId: id,
+    metadata: { sku, name },
   });
 
   revalidatePath("/inventory");
@@ -215,6 +249,13 @@ export async function deleteItem(id: string) {
   await prisma.item.update({
     where: { id },
     data: { deletedAt: new Date() },
+  });
+
+  await createAuditLog({
+    action: "DELETE_Item",
+    entityType: "Item",
+    entityId: id,
+    metadata: { sku: item.sku, name: item.name },
   });
 
   revalidatePath("/inventory");

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -37,6 +38,7 @@ export function SupplierForm({
   supplier,
   onSubmit,
 }: SupplierFormProps) {
+  const attachmentRef = useRef<HTMLInputElement>(null);
   const {
     register,
     handleSubmit,
@@ -70,6 +72,9 @@ export function SupplierForm({
           if (v !== undefined && v !== null && v !== "")
             formData.set(k, String(v));
         });
+        if (mode === "add" && attachmentRef.current?.files?.[0]) {
+          formData.set("attachment", attachmentRef.current.files[0]);
+        }
         const result = await onSubmit(formData);
         if (result?.error) {
           Object.entries(result.error).forEach(([field, messages]) => {
@@ -159,6 +164,23 @@ export function SupplierForm({
           placeholder="0"
         />
       </div>
+
+      {mode === "add" && (
+        <div className="space-y-2">
+          <Label htmlFor="attachment">Attachment (optional)</Label>
+          <Input
+            id="attachment"
+            ref={attachmentRef}
+            type="file"
+            name="attachment"
+            accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.txt,.csv,.doc,.docx,.xls,.xlsx"
+            className="cursor-pointer"
+          />
+          <p className="text-xs text-muted-foreground">
+            PDF, images, or documents up to 10MB
+          </p>
+        </div>
+      )}
 
       <div className="flex gap-4">
         <Button type="submit" disabled={isSubmitting}>

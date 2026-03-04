@@ -148,6 +148,10 @@ export function ExpenseForm({
           maxLength={1000}
         />
       </div>
+      <div className="space-y-2">
+        <Label htmlFor="attachment">Attachment</Label>
+        <Input id="attachment" name="attachment" type="file" />
+      </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
       <div className="flex gap-4">
         <Button type="submit" disabled={submitting}>

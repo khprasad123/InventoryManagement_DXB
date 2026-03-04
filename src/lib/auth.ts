@@ -47,6 +47,16 @@ export const authOptions: NextAuthOptions = {
           throw new Error("No organization assigned");
         }
 
+        await prisma.auditLog.create({
+          data: {
+            organizationId: userOrg.organizationId,
+            userId: user.id,
+            action: "LOGIN",
+            entityType: null,
+            entityId: null,
+          },
+        });
+
         return {
           id: user.id,
           email: user.email,
@@ -58,6 +68,27 @@ export const authOptions: NextAuthOptions = {
       },
     }),
   ],
+  events: {
+    async signOut({ token }) {
+      const orgId = token?.organizationId as string | undefined;
+      const userId = token?.id as string | undefined;
+      if (orgId && userId) {
+        try {
+          await prisma.auditLog.create({
+            data: {
+              organizationId: orgId,
+              userId,
+              action: "LOGOUT",
+              entityType: null,
+              entityId: null,
+            },
+          });
+        } catch {
+          // ignore
+        }
+      }
+    },
+  },
   callbacks: {
     async jwt({ token, user }) {
       if (user) {

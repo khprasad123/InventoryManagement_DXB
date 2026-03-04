@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -173,7 +174,19 @@ export default async function ClientDetailPage({
                         <TableCell className="text-right">
                           {Number(inv.totalAmount).toFixed(2)}
                         </TableCell>
-                        <TableCell>{inv.paymentStatus}</TableCell>
+                        <TableCell>
+                          <Badge
+                            className={
+                              inv.paymentStatus === "PAID"
+                                ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+                                : inv.paymentStatus === "PARTIAL"
+                                ? "bg-amber-100 text-amber-800 border-amber-200"
+                                : "bg-red-100 text-red-800 border-red-200"
+                            }
+                          >
+                            {inv.paymentStatus}
+                          </Badge>
+                        </TableCell>
                       </TableRow>
                     );
                   })}

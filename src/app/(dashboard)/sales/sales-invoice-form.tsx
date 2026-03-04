@@ -395,6 +395,11 @@ export function SalesInvoiceForm({
         <Input id="notes" name="notes" placeholder="Optional" />
       </div>
 
+      <div className="space-y-2">
+        <Label htmlFor="attachment">Attachment</Label>
+        <Input id="attachment" name="attachment" type="file" />
+      </div>
+
       {error && <p className="text-sm text-destructive">{error}</p>}
       <div className="flex gap-4">
         <Button type="submit" disabled={submitting}>

@@ -1,10 +1,12 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { getOrganizationId } from "@/lib/auth-utils";
+import { getOrganizationId, getCurrentUser } from "@/lib/auth-utils";
+import { createAuditLog } from "@/lib/audit";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { uploadDocument } from "@/app/(dashboard)/documents/actions";
 
 // -----------------------------------------------------------------------------
 // Expense Categories
@@ -205,7 +207,10 @@ export async function createExpense(formData: FormData) {
     return { error: { categoryId: ["Category not found"] } };
   }
 
-  await prisma.expense.create({
+  const user = await getCurrentUser();
+  const userId = (user as { id?: string } | null)?.id ?? null;
+
+  const expense = await prisma.expense.create({
     data: {
       organizationId: orgId,
       categoryId: parsed.data.categoryId,
@@ -214,8 +219,26 @@ export async function createExpense(formData: FormData) {
       description: parsed.data.description || null,
       isRecurring: parsed.data.isRecurring ?? false,
       currencyCode: parsed.data.currencyCode || "AED",
+      createdById: userId ?? undefined,
+      updatedById: userId ?? undefined,
     },
   });
+
+  await createAuditLog({
+    action: "CREATE_Expense",
+    entityType: "Expense",
+    entityId: expense.id,
+    metadata: { amount: Number(expense.amount), categoryId: expense.categoryId },
+  });
+
+  const file = formData.get("attachment") as File | null;
+  if (file && file.size > 0) {
+    const fd = new FormData();
+    fd.set("file", file);
+    fd.set("documentableType", "Expense");
+    fd.set("documentableId", expense.id);
+    await uploadDocument(fd);
+  }
 
   revalidatePath("/expenses");
   revalidatePath("/dashboard");
@@ -238,6 +261,9 @@ export async function updateExpense(id: string, formData: FormData) {
   if (!parsed.success) {
     return { error: parsed.error.flatten().fieldErrors };
   }
+
+  const user = await getCurrentUser();
+  const userId = (user as { id?: string } | null)?.id ?? null;
 
   const existing = await prisma.expense.findFirst({
     where: { id, organizationId: orgId, deletedAt: null },
@@ -266,7 +292,15 @@ export async function updateExpense(id: string, formData: FormData) {
       description: parsed.data.description || null,
       isRecurring: parsed.data.isRecurring ?? false,
       currencyCode: parsed.data.currencyCode || "AED",
+      updatedById: userId ?? undefined,
     },
+  });
+
+  await createAuditLog({
+    action: "UPDATE_Expense",
+    entityType: "Expense",
+    entityId: id,
+    metadata: { amount: parsed.data.amount },
   });
 
   revalidatePath("/expenses");
@@ -288,6 +322,13 @@ export async function deleteExpense(id: string) {
   await prisma.expense.update({
     where: { id },
     data: { deletedAt: new Date() },
+  });
+
+  await createAuditLog({
+    action: "DELETE_Expense",
+    entityType: "Expense",
+    entityId: id,
+    metadata: { amount: Number(existing.amount) },
   });
 
   revalidatePath("/expenses");

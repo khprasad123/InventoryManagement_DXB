@@ -58,6 +58,7 @@ model Organization {
   supplierPayments  SupplierPayment[]
   clientPayments    ClientPayment[]
   documents         Document[]
+  auditLogs         AuditLog[]
 
   @@index([slug])
   @@index([deletedAt])
@@ -110,7 +111,24 @@ model User {
   updatedAt     DateTime  @updatedAt @map("updated_at")
   deletedAt     DateTime? @map("deleted_at")
 
-  organizations UserOrganization[]
+  organizations            UserOrganization[]
+  auditLogs                AuditLog[]
+  createdItems             Item[]             @relation("ItemCreatedBy")
+  updatedItems             Item[]             @relation("ItemUpdatedBy")
+  createdSuppliers         Supplier[]         @relation("SupplierCreatedBy")
+  updatedSuppliers         Supplier[]         @relation("SupplierUpdatedBy")
+  createdClients           Client[]           @relation("ClientCreatedBy")
+  updatedClients           Client[]           @relation("ClientUpdatedBy")
+  createdPurchaseInvoices  PurchaseInvoice[]  @relation("PurchaseInvoiceCreatedBy")
+  updatedPurchaseInvoices  PurchaseInvoice[]  @relation("PurchaseInvoiceUpdatedBy")
+  createdSalesInvoices     SalesInvoice[]     @relation("SalesInvoiceCreatedBy")
+  updatedSalesInvoices     SalesInvoice[]     @relation("SalesInvoiceUpdatedBy")
+  createdQuotations        Quotation[]        @relation("QuotationCreatedBy")
+  updatedQuotations        Quotation[]        @relation("QuotationUpdatedBy")
+  createdExpenses          Expense[]          @relation("ExpenseCreatedBy")
+  updatedExpenses          Expense[]          @relation("ExpenseUpdatedBy")
+  createdDocuments         Document[]         @relation("DocumentCreatedBy")
+  updatedDocuments         Document[]         @relation("DocumentUpdatedBy")
 
   @@unique([email])
   @@index([email])
@@ -155,8 +173,12 @@ model Item {
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
   deletedAt      DateTime? @map("deleted_at")
+  createdById    String?   @map("created_by_id")
+  updatedById    String?   @map("updated_by_id")
 
   organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy      User?                  @relation("ItemCreatedBy", fields: [createdById], references: [id])
+  updatedBy      User?                  @relation("ItemUpdatedBy", fields: [updatedById], references: [id])
   stockMovements StockMovement[]
   purchaseItems  PurchaseInvoiceItem[]
   salesItems     SalesInvoiceItem[]
@@ -214,8 +236,12 @@ model Supplier {
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
   deletedAt           DateTime? @map("deleted_at")
+  createdById         String?   @map("created_by_id")
+  updatedById         String?   @map("updated_by_id")
 
   organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy        User?             @relation("SupplierCreatedBy", fields: [createdById], references: [id])
+  updatedBy        User?             @relation("SupplierUpdatedBy", fields: [updatedById], references: [id])
   purchaseInvoices PurchaseInvoice[]
   grns             Grn[]
 
@@ -281,8 +307,12 @@ model Client {
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
   deletedAt           DateTime? @map("deleted_at")
+  createdById         String?   @map("created_by_id")
+  updatedById         String?   @map("updated_by_id")
 
   organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy     User?          @relation("ClientCreatedBy", fields: [createdById], references: [id])
+  updatedBy     User?          @relation("ClientUpdatedBy", fields: [updatedById], references: [id])
   quotations    Quotation[]
   salesInvoices SalesInvoice[]
 
@@ -315,10 +345,14 @@ model PurchaseInvoice {
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
   deletedAt      DateTime?     @map("deleted_at")
+  createdById    String?       @map("created_by_id")
+  updatedById    String?       @map("updated_by_id")
 
   organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   supplier     Supplier              @relation(fields: [supplierId], references: [id], onDelete: Restrict)
   grn          Grn?                  @relation(fields: [grnId], references: [id], onDelete: SetNull)
+  createdBy    User?                 @relation("PurchaseInvoiceCreatedBy", fields: [createdById], references: [id])
+  updatedBy    User?                 @relation("PurchaseInvoiceUpdatedBy", fields: [updatedById], references: [id])
   items        PurchaseInvoiceItem[]
   payments     SupplierPayment[]
 
@@ -390,9 +424,13 @@ model Quotation {
   createdAt      DateTime        @default(now()) @map("created_at")
   updatedAt      DateTime        @updatedAt @map("updated_at")
   deletedAt      DateTime?       @map("deleted_at")
+  createdById    String?         @map("created_by_id")
+  updatedById    String?         @map("updated_by_id")
 
   organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   client       Client          @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  createdBy    User?           @relation("QuotationCreatedBy", fields: [createdById], references: [id])
+  updatedBy    User?           @relation("QuotationUpdatedBy", fields: [updatedById], references: [id])
   items        QuotationItem[]
   salesInvoice SalesInvoice?
 
@@ -439,10 +477,14 @@ model SalesInvoice {
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
   deletedAt      DateTime?     @map("deleted_at")
+  createdById    String?       @map("created_by_id")
+  updatedById    String?       @map("updated_by_id")
 
   organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   client       Client             @relation(fields: [clientId], references: [id], onDelete: Restrict)
   quotation    Quotation?         @relation(fields: [quotationId], references: [id], onDelete: SetNull)
+  createdBy    User?              @relation("SalesInvoiceCreatedBy", fields: [createdById], references: [id])
+  updatedBy    User?              @relation("SalesInvoiceUpdatedBy", fields: [updatedById], references: [id])
   items        SalesInvoiceItem[]
   payments     ClientPayment[]
 
@@ -533,9 +575,13 @@ model Expense {
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
   deletedAt      DateTime? @map("deleted_at")
+  createdById    String?   @map("created_by_id")
+  updatedById    String?   @map("updated_by_id")
 
   organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   category     ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  createdBy    User?           @relation("ExpenseCreatedBy", fields: [createdById], references: [id])
+  updatedBy    User?           @relation("ExpenseUpdatedBy", fields: [updatedById], references: [id])
 
   @@index([organizationId])
   @@index([categoryId])
@@ -560,11 +606,40 @@ model Document {
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
   deletedAt        DateTime? @map("deleted_at")
+  createdById      String?   @map("created_by_id")
+  updatedById      String?   @map("updated_by_id")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?         @relation("DocumentCreatedBy", fields: [createdById], references: [id])
+  updatedBy    User?         @relation("DocumentUpdatedBy", fields: [updatedById], references: [id])
 
   @@index([organizationId])
   @@index([documentableType, documentableId])
   @@index([deletedAt])
   @@map("documents")
+}
+
+// =============================================================================
+// AUDIT LOG (all actions: login, logout, create, update, delete)
+// =============================================================================
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  userId         String?  @map("user_id")
+  action         String   // LOGIN, LOGOUT, CREATE_Supplier, UPDATE_Item, DELETE_Client, etc.
+  entityType     String?  @map("entity_type") // Supplier, Client, Item, PurchaseInvoice, ...
+  entityId      String?  @map("entity_id")
+  metadata       Json?    // optional payload (e.g. { "invoiceNo": "INV-001" })
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([action])
+  @@index([entityType])
+  @@index([createdAt])
+  @@map("audit_logs")
 }

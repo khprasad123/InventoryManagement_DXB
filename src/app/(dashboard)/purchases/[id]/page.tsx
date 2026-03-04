@@ -8,6 +8,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { getPurchaseInvoiceById } from "../actions";
 import { getOrganizationId, getCurrentUser } from "@/lib/auth-utils";
 import { canRecordPayments } from "@/lib/permissions";
@@ -78,7 +79,17 @@ export default async function PurchaseInvoiceDetailPage({
             </div>
             <div>
               <span className="text-sm text-muted-foreground">Payment Status</span>
-              <p className="font-medium">{invoice.paymentStatus}</p>
+              <Badge
+                className={
+                  invoice.paymentStatus === "PAID"
+                    ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+                    : invoice.paymentStatus === "PARTIAL"
+                    ? "bg-amber-100 text-amber-800 border-amber-200"
+                    : "bg-red-100 text-red-800 border-red-200"
+                }
+              >
+                {invoice.paymentStatus}
+              </Badge>
             </div>
             {invoice.grn && (
               <div>

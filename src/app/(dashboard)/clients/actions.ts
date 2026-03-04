@@ -1,10 +1,12 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { getOrganizationId } from "@/lib/auth-utils";
+import { getOrganizationId, getCurrentUser } from "@/lib/auth-utils";
+import { createAuditLog } from "@/lib/audit";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { uploadDocument } from "@/app/(dashboard)/documents/actions";
 
 const clientSchema = z.object({
   name: z.string().min(1, "Name is required").max(255),
@@ -73,8 +75,11 @@ export async function createClient(formData: FormData) {
     return { error: parsed.error.flatten().fieldErrors };
   }
 
+  const user = await getCurrentUser();
+  const userId = (user as { id?: string } | null)?.id ?? null;
+
   const data = parsed.data;
-  await prisma.client.create({
+  const client = await prisma.client.create({
     data: {
       organizationId: orgId,
       name: data.name,
@@ -85,8 +90,26 @@ export async function createClient(formData: FormData) {
       taxNumber: data.taxNumber || null,
       defaultPaymentTerms: data.defaultPaymentTerms ?? null,
       creditLimit: data.creditLimit ?? null,
+      createdById: userId ?? undefined,
+      updatedById: userId ?? undefined,
     },
   });
+
+  await createAuditLog({
+    action: "CREATE_Client",
+    entityType: "Client",
+    entityId: client.id,
+    metadata: { name: client.name },
+  });
+
+  const file = formData.get("attachment") as File | null;
+  if (file && file.size > 0) {
+    const fd = new FormData();
+    fd.set("documentableType", "Client");
+    fd.set("documentableId", client.id);
+    fd.set("file", file);
+    await uploadDocument(fd);
+  }
 
   revalidatePath("/clients");
   revalidatePath("/dashboard");
@@ -113,6 +136,9 @@ export async function updateClient(id: string, formData: FormData) {
     return { error: parsed.error.flatten().fieldErrors };
   }
 
+  const user = await getCurrentUser();
+  const userId = (user as { id?: string } | null)?.id ?? null;
+
   const existing = await prisma.client.findFirst({
     where: { id, organizationId: orgId, deletedAt: null },
   });
@@ -132,7 +158,15 @@ export async function updateClient(id: string, formData: FormData) {
       taxNumber: data.taxNumber || null,
       defaultPaymentTerms: data.defaultPaymentTerms ?? null,
       creditLimit: data.creditLimit ?? null,
+      updatedById: userId ?? undefined,
     },
+  });
+
+  await createAuditLog({
+    action: "UPDATE_Client",
+    entityType: "Client",
+    entityId: id,
+    metadata: { name: data.name },
   });
 
   revalidatePath("/clients");
@@ -166,6 +200,13 @@ export async function deleteClient(id: string) {
   await prisma.client.update({
     where: { id },
     data: { deletedAt: new Date() },
+  });
+
+  await createAuditLog({
+    action: "DELETE_Client",
+    entityType: "Client",
+    entityId: id,
+    metadata: { name: client.name },
   });
 
   revalidatePath("/clients");
