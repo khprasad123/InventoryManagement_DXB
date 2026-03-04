@@ -255,6 +255,7 @@ model Client {
   address              String?
   taxNumber            String?  @map("tax_number")
   defaultPaymentTerms  Int?     @map("default_payment_terms") // days, e.g. 30 = NET 30
+  creditLimit          Decimal? @db.Decimal(12, 2) @map("credit_limit")
   createdAt            DateTime @default(now()) @map("created_at")
   updatedAt            DateTime @updatedAt @map("updated_at")
   deletedAt            DateTime? @map("deleted_at")

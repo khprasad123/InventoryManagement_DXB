@@ -17,6 +17,7 @@ const pathToTitle: Record<string, string> = {
   "/inventory": "Inventory",
   "/suppliers": "Suppliers",
   "/clients": "Clients",
+  "/clients/add": "Add Client",
   "/purchases": "Purchases",
   "/purchases/grn": "Goods Received Notes",
   "/purchases/grn/add": "Create GRN",
@@ -41,6 +42,7 @@ function getTitle(pathname: string): string {
   if (pathname.startsWith("/sales/")) return "Sales";
   if (pathname.startsWith("/expenses/categories/")) return "Expense Category";
   if (pathname.startsWith("/expenses/")) return "Expenses";
+  if (pathname.startsWith("/clients/")) return "Client";
   return pathToTitle[pathname] ?? "Dashboard";
 }
 
