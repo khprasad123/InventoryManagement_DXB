@@ -54,14 +54,15 @@ export function Sidebar() {
         )}
       >
         <div className="flex h-full flex-col">
-          <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-6">
-            <Link href="/dashboard" className="flex items-center gap-2">
+          <div className="flex h-16 min-h-16 items-center justify-between border-b border-sidebar-border px-4">
+            <Link href="/dashboard" className="flex shrink-0 items-center">
               <Image
                 src={logoDark}
                 alt="KaHa Enterprise Cloud"
-                width={140}
-                height={32}
-                className="h-8 w-auto object-contain"
+                width={220}
+                height={56}
+                className="h-12 w-auto max-w-[220px] object-contain object-left"
+                priority
               />
             </Link>
             <Button
