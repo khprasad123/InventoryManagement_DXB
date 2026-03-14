@@ -28,12 +28,14 @@ enum QuotationStatus {
   DRAFT
   PENDING_APPROVAL
   APPROVED
+  REJECTED
 }
 
 enum PurchaseRequestStatus {
   DRAFT
   PENDING_APPROVAL
   APPROVED
+  REJECTED
 }
 
 enum JobStatus {
@@ -607,7 +609,6 @@ model QuotationItem {
   quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
   item      Item      @relation(fields: [itemId], references: [id], onDelete: Restrict)
 
-  @@unique([quotationId, itemId])
   @@index([quotationId])
   @@index([itemId])
   @@map("quotation_items")

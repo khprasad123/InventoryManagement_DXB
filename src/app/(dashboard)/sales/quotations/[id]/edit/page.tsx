@@ -39,18 +39,14 @@ export default async function EditQuotationPage({
         orderBy: { name: "asc" },
       })
       .then((rows) =>
-        rows.map((r) => {
-          const cost = Number(r.defaultPurchaseCost);
-          const margin = Number(r.defaultMargin);
-          const sellingPrice = cost * (1 + margin / 100);
-          return {
-            id: r.id,
-            sku: r.sku,
-            name: r.name,
-            stockQty: r.stockQty,
-            sellingPrice,
-          };
-        })
+        rows.map((r) => ({
+          id: r.id,
+          sku: r.sku,
+          name: r.name,
+          stockQty: r.stockQty,
+          defaultPurchaseCost: Number(r.defaultPurchaseCost),
+          defaultMargin: Number(r.defaultMargin),
+        }))
       ),
     getNextQuotationNo(),
   ]);
@@ -67,7 +63,8 @@ export default async function EditQuotationPage({
     items: quotation.items.map((i) => ({
       itemId: i.itemId,
       quantity: i.quantity,
-      unitPrice: Number(i.unitPrice),
+      purchaseCost: Number(i.purchaseCost),
+      margin: Number(i.margin),
     })),
   };
 

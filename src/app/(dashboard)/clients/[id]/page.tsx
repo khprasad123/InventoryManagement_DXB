@@ -82,12 +82,16 @@ export default async function ClientDetailPage({
             </div>
             <div>
               <span className="text-sm text-muted-foreground">
-                Default Payment Terms
+                Payment Terms
+              </span>
+              <p className="font-medium">{client.defaultPaymentTerms ?? "-"}</p>
+            </div>
+            <div>
+              <span className="text-sm text-muted-foreground">
+                Agreed Due Days
               </span>
               <p className="font-medium">
-                {client.defaultPaymentTerms != null
-                  ? `NET ${client.defaultPaymentTerms} days`
-                  : "-"}
+                {client.agreedDueDays != null ? `${client.agreedDueDays} days` : "-"}
               </p>
             </div>
             <div>
@@ -105,12 +109,12 @@ export default async function ClientDetailPage({
           <CardHeader>
             <CardTitle>Sales Summary</CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-semibold">
-              {client.salesInvoices.length} invoice(s)
+          <CardContent className="space-y-2">
+            <p className="font-medium">
+              {client.quotations.length} quotation(s) • {client.salesOrders.length} order(s) • {client.salesInvoices.length} invoice(s)
             </p>
             <p className="text-sm text-muted-foreground">
-              Total:{" "}
+              Invoice total:{" "}
               {client.salesInvoices
                 .reduce(
                   (sum, inv) => sum + Number(inv.totalAmount),
@@ -122,12 +126,52 @@ export default async function ClientDetailPage({
         </Card>
       </div>
 
+      {client.quotations.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Order History (Quotations)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Quotation</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Job ID</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {client.quotations.map((q) => (
+                    <TableRow key={q.id}>
+                      <TableCell className="font-medium">
+                        <Link
+                          href={`/sales/quotations/${q.id}`}
+                          className="text-primary hover:underline"
+                        >
+                          {q.quotationNo}
+                        </Link>
+                      </TableCell>
+                      <TableCell>{new Date(q.quotationDate).toLocaleDateString()}</TableCell>
+                      <TableCell>{q.jobId ?? "-"}</TableCell>
+                      <TableCell>{q.status}</TableCell>
+                      <TableCell className="text-right">-</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
-          <CardTitle>Sales History</CardTitle>
+          <CardTitle>Invoice History</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Due dates from invoice date + client default payment terms (
-            {client.defaultPaymentTerms ?? 30} days)
+            Due dates use client agreed due days ({client.agreedDueDays ?? 30} days)
           </p>
         </CardHeader>
         <CardContent>

@@ -13,6 +13,7 @@ import { getOrganizationId } from "@/lib/auth-utils";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { DocumentSection } from "@/app/(dashboard)/documents/document-section";
 
 export default async function GrnDetailPage({
   params,
@@ -77,7 +78,9 @@ export default async function GrnDetailPage({
         </CardContent>
       </Card>
 
-      {grn.purchaseInvoices.length > 0 && (
+      <DocumentSection documentableType="Grn" documentableId={grn.id} />
+
+      {grn.purchaseInvoices && grn.purchaseInvoices.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Linked Invoices</CardTitle>

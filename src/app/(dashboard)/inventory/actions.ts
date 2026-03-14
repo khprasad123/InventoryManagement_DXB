@@ -122,6 +122,13 @@ export async function createItem(formData: FormData) {
   const user = await getCurrentUser();
   const userId = (user as { id?: string } | null)?.id ?? null;
 
+  const org = await prisma.organization.findFirst({
+    where: { id: orgId, deletedAt: null },
+  });
+  if (!org) {
+    redirect("/select-org");
+  }
+
   const existing = await prisma.item.findFirst({
     where: { organizationId: orgId, sku, deletedAt: null },
   });

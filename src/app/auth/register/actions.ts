@@ -5,12 +5,23 @@ import { hash } from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { redirect } from "next/navigation";
+import { put } from "@vercel/blob";
+
 const registerSchema = z.object({
   name: z.string().min(1, "Your name is required"),
   companyName: z.string().min(1, "Company name is required").max(200),
+  address: z.string().min(1, "Company address is required").max(500),
+  phone: z.string().max(50).optional(),
+  fax: z.string().max(50).optional(),
+  website: z.string().max(200).optional(),
+  taxRegistrationNo: z.string().max(100).optional(),
+  bankDetails: z.string().max(500).optional(),
   email: z.string().email("Invalid email"),
   password: z.string().min(6, "Password must be at least 6 characters"),
 });
+
+const IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
+const MAX_SIZE = 2 * 1024 * 1024; // 2MB
 
 function slugFromCompanyName(name: string): string {
   const base = name
@@ -22,9 +33,19 @@ function slugFromCompanyName(name: string): string {
 }
 
 export async function registerUser(formData: FormData) {
+  if (process.env.IS_OWNER !== "true") {
+    return { error: { _form: ["Registration is not enabled"] } };
+  }
+
   const parsed = registerSchema.safeParse({
     name: formData.get("name"),
     companyName: formData.get("companyName"),
+    address: formData.get("address"),
+    phone: formData.get("phone") || undefined,
+    fax: formData.get("fax") || undefined,
+    website: formData.get("website") || undefined,
+    taxRegistrationNo: formData.get("taxRegistrationNo") || undefined,
+    bankDetails: formData.get("bankDetails") || undefined,
     email: formData.get("email"),
     password: formData.get("password"),
   });
@@ -33,7 +54,13 @@ export async function registerUser(formData: FormData) {
     return { error: parsed.error.flatten().fieldErrors };
   }
 
-  const { name, companyName, email, password } = parsed.data;
+  const { name, companyName, address, phone, fax, website, taxRegistrationNo, bankDetails, email, password } =
+    parsed.data;
+
+  let logoUrl: string | null = null;
+  let sealUrl: string | null = null;
+  const logoFile = formData.get("logo") as File | null;
+  const sealFile = formData.get("seal") as File | null;
 
   const existing = await prisma.user.findUnique({
     where: { email },
@@ -53,14 +80,49 @@ export async function registerUser(formData: FormData) {
 
   const passwordHash = await hash(password, 12);
 
-  await prisma.$transaction(async (tx) => {
-    const org = await tx.organization.create({
-      data: {
-        name: companyName.trim(),
-        slug,
-      },
-    });
+  // Create org first to get org ID for blob paths
+  const org = await prisma.organization.create({
+    data: {
+      name: companyName.trim(),
+      slug,
+      address: address.trim(),
+      logoUrl: null,
+      sealUrl: null,
+      phone: phone?.trim() || null,
+      fax: fax?.trim() || null,
+      website: website?.trim() || null,
+      taxRegistrationNo: taxRegistrationNo?.trim() || null,
+      bankDetails: bankDetails?.trim() || null,
+    },
+  });
 
+  // Upload logo and seal with org-id path for easy blob organization
+  if (logoFile && logoFile.size > 0 && logoFile.size <= MAX_SIZE && IMAGE_TYPES.includes(logoFile.type)) {
+    const ext = logoFile.name.split(".").pop() || "png";
+    const blob = await put(`org-${org.id}/logo/${Date.now()}.${ext}`, logoFile, {
+      access: "public",
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+    });
+    logoUrl = blob.url;
+    await prisma.organization.update({
+      where: { id: org.id },
+      data: { logoUrl },
+    });
+  }
+  if (sealFile && sealFile.size > 0 && sealFile.size <= MAX_SIZE && IMAGE_TYPES.includes(sealFile.type)) {
+    const ext = sealFile.name.split(".").pop() || "png";
+    const blob = await put(`org-${org.id}/seal/${Date.now()}.${ext}`, sealFile, {
+      access: "public",
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+    });
+    sealUrl = blob.url;
+    await prisma.organization.update({
+      where: { id: org.id },
+      data: { sealUrl },
+    });
+  }
+
+  await prisma.$transaction(async (tx) => {
     const [adminRole, inventoryRole, financeRole, salesRole] = await Promise.all([
       tx.role.create({ data: { name: "ADMIN", organizationId: org.id } }),
       tx.role.create({ data: { name: "INVENTORY", organizationId: org.id } }),

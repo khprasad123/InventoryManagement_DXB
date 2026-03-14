@@ -18,6 +18,7 @@ const supplierSchema = z.object({
     .refine((v) => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), "Invalid email"),
   phone: z.string().max(50).optional(),
   address: z.string().optional(),
+  paymentTerms: z.string().max(100).optional(),
   taxNumber: z.string().max(50).optional(),
   defaultPaymentTerms: z.coerce.number().int().min(0).optional().nullable(),
   creditLimit: z.coerce.number().min(0).optional().nullable(),
@@ -53,6 +54,7 @@ export function SupplierForm({
           email: supplier.email ?? "",
           phone: supplier.phone ?? "",
           address: supplier.address ?? "",
+          paymentTerms: supplier.paymentTerms ?? "",
           taxNumber: supplier.taxNumber ?? "",
           defaultPaymentTerms: supplier.defaultPaymentTerms ?? undefined,
           creditLimit: supplier.creditLimit
@@ -133,13 +135,22 @@ export function SupplierForm({
         />
       </div>
 
+      <div className="space-y-2">
+        <Label htmlFor="paymentTerms">Payment Terms</Label>
+        <Input
+          id="paymentTerms"
+          {...register("paymentTerms")}
+          placeholder="e.g. NET 30, 50% advance"
+        />
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="taxNumber">Tax Number</Label>
           <Input id="taxNumber" {...register("taxNumber")} placeholder="VAT/Tax ID" />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="defaultPaymentTerms">Default Payment Terms (days)</Label>
+          <Label htmlFor="defaultPaymentTerms">Default Due Days</Label>
           <Input
             id="defaultPaymentTerms"
             type="number"

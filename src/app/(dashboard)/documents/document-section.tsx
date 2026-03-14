@@ -11,7 +11,9 @@ type DocumentableType =
   | "Item"
   | "PurchaseInvoice"
   | "SalesInvoice"
-  | "Expense";
+  | "Expense"
+  | "Grn"
+  | "Quotation";
 
 interface DocumentSectionProps {
   documentableType: DocumentableType;

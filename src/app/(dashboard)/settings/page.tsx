@@ -21,13 +21,35 @@ export default async function SettingsPage() {
         </p>
       </div>
 
+      {showOrgLink && (
+        <Card className="border-primary/30">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5" />
+              Company details for invoicing
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Configure your organization name, address, logo, seal (stamp), tax registration, and bank details. These appear on all sales invoices.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <Button asChild>
+              <Link href="/settings/org">
+                <Building2 className="mr-2 h-4 w-4" />
+                Open Org management
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>Settings</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Application settings and preferences will be available here.
+            Application settings and preferences.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" asChild>

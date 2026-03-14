@@ -16,6 +16,7 @@ import { ArrowLeft, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ConvertToInvoiceButton } from "../../convert-to-invoice-button";
 import { ApproveQuotationButton } from "../../approve-quotation-button";
+import { DocumentSection } from "@/app/(dashboard)/documents/document-section";
 
 export default async function QuotationDetailPage({
   params,
@@ -69,7 +70,7 @@ export default async function QuotationDetailPage({
           )}
         </div>
         <p className="text-muted-foreground">
-          {quotation.client.name} •{" "}
+          {quotation.client.name} • Job ID: {quotation.jobId || "-"} •{" "}
           {new Date(quotation.quotationDate).toLocaleDateString()}
         </p>
       </div>

@@ -9,9 +9,21 @@ import { useRouter } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
 import type { Client } from "@prisma/client";
 
-type ItemWithStock = { id: string; sku: string; name: string; stockQty: number; sellingPrice: number };
+type ItemWithDefaults = {
+  id: string;
+  sku: string;
+  name: string;
+  stockQty: number;
+  defaultPurchaseCost: number;
+  defaultMargin: number;
+};
 
-type QuotationItemRow = { itemId: string; quantity: number; unitPrice: number };
+type QuotationItemRow = {
+  itemId: string;
+  quantity: number;
+  purchaseCost: number;
+  margin: number;
+};
 
 interface QuotationFormDefaultValues {
   quotationNo: string;
@@ -20,17 +32,27 @@ interface QuotationFormDefaultValues {
   status: string;
   notes?: string;
   validUntil?: string;
-  items: QuotationItemRow[];
+  items: Array<{
+    itemId: string;
+    quantity: number;
+    purchaseCost?: number;
+    margin?: number;
+    unitPrice?: number;
+  }>;
 }
 
 interface QuotationFormProps {
   clients: Client[];
-  items: ItemWithStock[];
+  items: ItemWithDefaults[];
   defaultQuotationNo: string;
   mode?: "add" | "edit";
   quotationId?: string;
   defaultValues?: QuotationFormDefaultValues;
   updateAction?: (formData: FormData) => Promise<{ error?: Record<string, string[]> } | void>;
+}
+
+function salesPrice(cost: number, margin: number) {
+  return cost * (1 + margin / 100);
 }
 
 export function QuotationForm({
@@ -45,18 +67,23 @@ export function QuotationForm({
   const router = useRouter();
   const [rows, setRows] = useState<QuotationItemRow[]>(
     defaultValues?.items?.length
-      ? defaultValues.items.map((i) => ({
-          itemId: i.itemId,
-          quantity: i.quantity,
-          unitPrice: typeof i.unitPrice === "number" ? i.unitPrice : Number(i.unitPrice),
-        }))
-      : [{ itemId: "", quantity: 1, unitPrice: 0 }]
+      ? defaultValues.items.map((i) => {
+          const cost = typeof i.purchaseCost === "number" ? i.purchaseCost : Number(i.purchaseCost ?? 0);
+          const margin = typeof i.margin === "number" ? i.margin : Number(i.margin ?? 0);
+          return {
+            itemId: i.itemId,
+            quantity: i.quantity,
+            purchaseCost: cost,
+            margin,
+          };
+        })
+      : [{ itemId: "", quantity: 1, purchaseCost: 0, margin: 0 }]
   );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const addRow = () =>
-    setRows((r) => [...r, { itemId: "", quantity: 1, unitPrice: 0 }]);
+    setRows((r) => [...r, { itemId: "", quantity: 1, purchaseCost: 0, margin: 0 }]);
   const removeRow = (i: number) =>
     setRows((r) => r.filter((_, idx) => idx !== i));
   const updateRow = (
@@ -69,9 +96,12 @@ export function QuotationForm({
     );
 
   const getItem = (itemId: string) => items.find((it) => it.id === itemId);
-  const setUnitPriceFromItem = (i: number, itemId: string) => {
+  const setDefaultsFromItem = (i: number, itemId: string) => {
     const item = getItem(itemId);
-    if (item) updateRow(i, "unitPrice", item.sellingPrice);
+    if (item) {
+      updateRow(i, "purchaseCost", item.defaultPurchaseCost);
+      updateRow(i, "margin", item.defaultMargin);
+    }
   };
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -99,9 +129,11 @@ export function QuotationForm({
       (form.querySelector("#status") as HTMLSelectElement)?.value || "DRAFT"
     );
 
-    const validRows = rows.filter((r) => r.itemId && r.quantity > 0);
+    const validRows = rows.filter(
+      (r) => r.itemId && r.quantity > 0 && r.purchaseCost >= 0 && r.margin >= 0
+    );
     if (validRows.length === 0) {
-      setError("Add at least one item with quantity");
+      setError("Add at least one item with quantity, cost, and margin");
       return;
     }
     formData.set("items", JSON.stringify(validRows));
@@ -175,14 +207,16 @@ export function QuotationForm({
             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
           >
             <option value="DRAFT">Draft</option>
+            <option value="PENDING_APPROVAL">Pending Approval</option>
             <option value="APPROVED">Approved</option>
+            <option value="REJECTED">Rejected</option>
           </select>
         </div>
       </div>
 
       <div>
         <div className="flex items-center justify-between">
-          <Label>Items</Label>
+          <Label>Items (same item can be added multiple times)</Label>
           <Button type="button" variant="outline" size="sm" onClick={addRow}>
             <Plus className="mr-2 h-4 w-4" />
             Add Item
@@ -195,7 +229,9 @@ export function QuotationForm({
                 <th className="px-4 py-2 text-left">Item</th>
                 <th className="w-20 px-4 py-2 text-right">Stock</th>
                 <th className="w-24 px-4 py-2 text-right">Qty</th>
-                <th className="w-32 px-4 py-2 text-right">Price</th>
+                <th className="w-24 px-4 py-2 text-right">Purchase Cost</th>
+                <th className="w-20 px-4 py-2 text-right">Margin %</th>
+                <th className="w-28 px-4 py-2 text-right">Sales Price</th>
                 <th className="w-10" />
               </tr>
             </thead>
@@ -203,6 +239,7 @@ export function QuotationForm({
               {rows.map((row, i) => {
                 const item = getItem(row.itemId);
                 const lowStock = item && row.quantity > item.stockQty;
+                const price = salesPrice(row.purchaseCost, row.margin);
                 return (
                   <tr key={i} className="border-b last:border-0">
                     <td className="px-4 py-2">
@@ -210,7 +247,7 @@ export function QuotationForm({
                         value={row.itemId}
                         onChange={(e) => {
                           updateRow(i, "itemId", e.target.value);
-                          setUnitPriceFromItem(i, e.target.value);
+                          setDefaultsFromItem(i, e.target.value);
                         }}
                         className="flex h-9 w-full rounded border border-input bg-background px-2 text-sm"
                       >
@@ -224,7 +261,7 @@ export function QuotationForm({
                     </td>
                     <td className="px-4 py-2 text-right">
                       {item ? (
-                        <span className={lowStock ? "text-destructive font-medium" : ""}>
+                        <span className={lowStock ? "font-medium text-destructive" : ""}>
                           {item.stockQty}
                         </span>
                       ) : (
@@ -250,15 +287,33 @@ export function QuotationForm({
                         type="number"
                         step="0.01"
                         min={0}
-                        value={row.unitPrice}
+                        value={row.purchaseCost}
                         onChange={(e) =>
                           updateRow(
                             i,
-                            "unitPrice",
+                            "purchaseCost",
                             parseFloat(e.target.value) || 0
                           )
                         }
                       />
+                    </td>
+                    <td className="px-4 py-2">
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min={0}
+                        value={row.margin}
+                        onChange={(e) =>
+                          updateRow(
+                            i,
+                            "margin",
+                            parseFloat(e.target.value) || 0
+                          )
+                        }
+                      />
+                    </td>
+                    <td className="px-4 py-2 text-right text-muted-foreground">
+                      {price.toFixed(2)}
                     </td>
                     <td>
                       <Button

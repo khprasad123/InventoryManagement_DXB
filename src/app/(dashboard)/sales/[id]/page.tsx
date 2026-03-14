@@ -9,13 +9,14 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { getSalesInvoiceById } from "../actions";
+import { getSalesInvoiceById, getOrgForInvoice } from "../actions";
 import { getOrganizationId, getCurrentUser } from "@/lib/auth-utils";
 import { canRecordPayments } from "@/lib/permissions";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Printer } from "lucide-react";
 import { PrintInvoiceButton } from "../print-invoice-button";
+import { InvoicePrintLayout } from "../invoice-print-layout";
 import { RecordClientPaymentDialog } from "../record-client-payment-dialog";
 import { DocumentSection } from "@/app/(dashboard)/documents/document-section";
 
@@ -28,7 +29,10 @@ export default async function SalesInvoiceDetailPage({
   if (!orgId) redirect("/login");
 
   const { id } = await params;
-  const invoice = await getSalesInvoiceById(id);
+  const [invoice, org] = await Promise.all([
+    getSalesInvoiceById(id),
+    getOrgForInvoice(),
+  ]);
   if (!invoice) notFound();
 
   const user = await getCurrentUser();
@@ -192,7 +196,7 @@ export default async function SalesInvoiceDetailPage({
 
       {/* Printable invoice - shown only when printing */}
       <div className="hidden print:block">
-        <InvoicePrintLayout invoice={invoice} />
+        <InvoicePrintLayout invoice={invoice} org={org} />
       </div>
 
       <DocumentSection
@@ -203,90 +207,3 @@ export default async function SalesInvoiceDetailPage({
   );
 }
 
-function InvoicePrintLayout({
-  invoice,
-}: {
-  invoice: Awaited<ReturnType<typeof getSalesInvoiceById>>;
-}) {
-  if (!invoice) return null;
-  return (
-    <div className="min-h-screen p-8">
-      <div className="mb-8 flex justify-between border-b pb-4">
-        <div>
-          <h1 className="text-2xl font-bold">INVOICE</h1>
-          <p className="text-sm text-muted-foreground">{invoice.invoiceNo}</p>
-        </div>
-        <div className="text-right text-sm">
-          <p className="font-medium">Invoice Date</p>
-          <p>{new Date(invoice.invoiceDate).toLocaleDateString()}</p>
-          <p className="mt-2 font-medium">Due Date</p>
-          <p>
-            {invoice.dueDate
-              ? new Date(invoice.dueDate).toLocaleDateString()
-              : "-"}
-          </p>
-        </div>
-      </div>
-
-      <div className="mb-8">
-        <h2 className="mb-2 text-sm font-medium text-muted-foreground">
-          BILL TO
-        </h2>
-        <p className="font-medium">{invoice.client.name}</p>
-        {invoice.client.contactName && <p>{invoice.client.contactName}</p>}
-        {invoice.client.email && <p>{invoice.client.email}</p>}
-        {invoice.client.address && <p className="whitespace-pre-wrap">{invoice.client.address}</p>}
-      </div>
-
-      <table className="w-full border-collapse">
-        <thead>
-          <tr className="border-b">
-            <th className="py-2 text-left text-sm font-medium">Item</th>
-            <th className="py-2 text-left text-sm font-medium">SKU</th>
-            <th className="py-2 text-right text-sm font-medium">Qty</th>
-            <th className="py-2 text-right text-sm font-medium">Price</th>
-            <th className="py-2 text-right text-sm font-medium">Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {invoice.items.map((it) => (
-            <tr key={it.id} className="border-b">
-              <td className="py-3">{it.item.name}</td>
-              <td className="py-3">{it.item.sku}</td>
-              <td className="py-3 text-right">{it.quantity}</td>
-              <td className="py-3 text-right">
-                {Number(it.unitPrice).toFixed(2)}
-              </td>
-              <td className="py-3 text-right">
-                {Number(it.total).toFixed(2)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <div className="mt-8 flex justify-end">
-        <div className="w-48 space-y-1 text-right">
-          <div className="flex justify-between">
-            <span>Subtotal</span>
-            <span>{Number(invoice.subtotal).toFixed(2)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Tax</span>
-            <span>{Number(invoice.taxAmount).toFixed(2)}</span>
-          </div>
-          <div className="flex justify-between border-t pt-2 font-bold">
-            <span>Total</span>
-            <span>{Number(invoice.totalAmount).toFixed(2)}</span>
-          </div>
-        </div>
-      </div>
-
-      {invoice.notes && (
-        <div className="mt-12 border-t pt-4">
-          <p className="text-sm text-muted-foreground">{invoice.notes}</p>
-        </div>
-      )}
-    </div>
-  );
-}

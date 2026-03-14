@@ -79,12 +79,14 @@ export default async function SupplierDetailPage({
               <p className="font-medium">{supplier.taxNumber ?? "-"}</p>
             </div>
             <div>
-              <span className="text-sm text-muted-foreground">
-                Default Payment Terms
-              </span>
+              <span className="text-sm text-muted-foreground">Payment Terms</span>
+              <p className="font-medium">{supplier.paymentTerms ?? "-"}</p>
+            </div>
+            <div>
+              <span className="text-sm text-muted-foreground">Default Due Days</span>
               <p className="font-medium">
                 {supplier.defaultPaymentTerms != null
-                  ? `NET ${supplier.defaultPaymentTerms} days`
+                  ? `${supplier.defaultPaymentTerms} days`
                   : "-"}
               </p>
             </div>
@@ -101,14 +103,14 @@ export default async function SupplierDetailPage({
 
         <Card>
           <CardHeader>
-            <CardTitle>Purchase Summary</CardTitle>
+            <CardTitle>Transaction Summary</CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-semibold">
-              {supplier.purchaseInvoices.length} invoice(s)
+          <CardContent className="space-y-2">
+            <p className="font-medium">
+              {supplier.purchaseOrders.length} PO(s) • {supplier.grns.length} GRN(s) • {supplier.purchaseInvoices.length} invoice(s)
             </p>
             <p className="text-sm text-muted-foreground">
-              Total:{" "}
+              Invoices total:{" "}
               {supplier.purchaseInvoices
                 .reduce(
                   (sum, inv) => sum + Number(inv.totalAmount),
@@ -122,17 +124,68 @@ export default async function SupplierDetailPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Purchase History</CardTitle>
+          <CardTitle>Transaction History</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Due dates calculated from invoice date + supplier default payment terms (
-            {supplier.defaultPaymentTerms ?? 30} days)
+            Purchase orders, GRNs, and invoices for this supplier
           </p>
         </CardHeader>
-        <CardContent>
-          {supplier.purchaseInvoices.length === 0 ? (
+        <CardContent className="space-y-6">
+          {supplier.purchaseOrders.length > 0 && (
+            <div>
+              <h3 className="text-sm font-medium mb-2">Purchase Orders</h3>
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>PO No</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead className="text-right">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {supplier.purchaseOrders.map((po) => (
+                      <TableRow key={po.id}>
+                        <TableCell className="font-medium">{po.poNo}</TableCell>
+                        <TableCell>{new Date(po.orderDate).toLocaleDateString()}</TableCell>
+                        <TableCell className="text-right">-</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+          {supplier.grns.length > 0 && (
+            <div>
+              <h3 className="text-sm font-medium mb-2">Goods Received Notes</h3>
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>GRN No</TableHead>
+                      <TableHead>Received Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {supplier.grns.map((grn) => (
+                      <TableRow key={grn.id}>
+                        <TableCell className="font-medium">{grn.grnNo}</TableCell>
+                        <TableCell>{new Date(grn.receivedDate).toLocaleDateString()}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+          <div>
+            <h3 className="text-sm font-medium mb-2">Purchase Invoices</h3>
+          {supplier.purchaseInvoices.length === 0 && supplier.purchaseOrders.length === 0 && supplier.grns.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No purchase invoices for this supplier yet.
+              No transactions for this supplier yet.
             </p>
+          ) : supplier.purchaseInvoices.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No purchase invoices yet.</p>
           ) : (
             <div className="rounded-md border">
               <Table>
@@ -185,6 +238,7 @@ export default async function SupplierDetailPage({
               </Table>
             </div>
           )}
+          </div>
         </CardContent>
       </Card>
 

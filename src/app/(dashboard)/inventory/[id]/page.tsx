@@ -2,14 +2,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { getItemById } from "../actions";
-import { getOrganizationId, getCurrentUser } from "@/lib/auth-utils";
-import { canAdjustStock } from "@/lib/permissions";
+import { getOrganizationId } from "@/lib/auth-utils";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { Pencil, ArrowLeft } from "lucide-react";
 import { DocumentSection } from "@/app/(dashboard)/documents/document-section";
-import { StockMovementDialog } from "../stock-movement-dialog";
-
 export default async function ItemDetailPage({
   params,
 }: {
@@ -22,8 +19,6 @@ export default async function ItemDetailPage({
   const item = await getItemById(id);
   if (!item) notFound();
 
-  const user = await getCurrentUser();
-  const allowAdjustment = canAdjustStock(user);
   const isLowStock = item.stockQty <= item.minStock;
 
   return (
@@ -49,7 +44,6 @@ export default async function ItemDetailPage({
           </p>
         </div>
         <div className="flex gap-2">
-          <StockMovementDialog item={item} allowAdjustment={allowAdjustment} />
           <Button asChild>
             <Link href={`/inventory/${id}/edit`}>
               <Pencil className="mr-2 h-4 w-4" />
@@ -79,6 +73,7 @@ export default async function ItemDetailPage({
           <div>
             <span className="text-sm text-muted-foreground">Stock</span>
             <p className="font-medium">{item.stockQty}</p>
+            <p className="text-xs text-muted-foreground">Updated only via GRN (receipts) and Sales (dispatch)</p>
           </div>
           <div>
             <span className="text-sm text-muted-foreground">Min stock</span>

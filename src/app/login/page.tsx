@@ -18,7 +18,7 @@ const loginSchema = z.object({
 
 type LoginForm = z.infer<typeof loginSchema>;
 
-function LoginForm() {
+function LoginForm({ showRegisterLink }: { showRegisterLink: boolean }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const registered = searchParams.get("registered") === "1";
@@ -105,7 +105,7 @@ function LoginForm() {
           </Button>
         </form>
 
-        {process.env.NEXT_PUBLIC_IS_DEV === "true" && (
+        {showRegisterLink && (
           <p className="text-center text-sm text-muted-foreground pt-2">
             Don&apos;t have an account?{" "}
             <Link href="/register" className="text-primary hover:underline">
@@ -119,6 +119,8 @@ function LoginForm() {
 }
 
 export default function LoginPage() {
+  const showRegisterLink = process.env.NEXT_PUBLIC_IS_OWNER === "true";
+
   return (
     <Suspense
       fallback={
@@ -127,7 +129,7 @@ export default function LoginPage() {
         </div>
       }
     >
-      <LoginForm />
+      <LoginForm showRegisterLink={showRegisterLink} />
     </Suspense>
   );
 }

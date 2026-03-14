@@ -7,6 +7,7 @@ import { getCurrentUser } from "@/lib/auth-utils";
 import { isSuperAdmin } from "@/lib/permissions";
 import { redirect } from "next/navigation";
 import { DeleteOrgButton } from "./delete-org-button";
+import { OrgSettingsForm } from "./org-settings-form";
 
 export default async function SettingsOrgPage() {
   const user = await getCurrentUser();
@@ -26,20 +27,22 @@ export default async function SettingsOrgPage() {
         </Button>
         <h1 className="mt-2 text-3xl font-bold tracking-tight flex items-center gap-2">
           <Building2 className="h-8 w-8" />
-          Org management
+          Organization & invoice details
         </h1>
         <p className="text-muted-foreground">
-          Organization settings. Only the super admin can delete the organization.
+          Company name, address, logo, seal (stamp), tax registration, bank details. All fields appear on sales invoices. Only super admin can delete the organization.
         </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Current organization</CardTitle>
+          <CardTitle>Organization Details</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Address, logo, and seal are used on invoices. Configure these before creating sales invoices.
+          </p>
         </CardHeader>
-        <CardContent className="space-y-2">
-          <p><span className="font-medium">Name:</span> {org.name}</p>
-          <p><span className="font-medium">Slug:</span> {org.slug}</p>
+        <CardContent>
+          <OrgSettingsForm org={org} />
         </CardContent>
       </Card>
 

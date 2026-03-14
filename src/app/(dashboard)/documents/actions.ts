@@ -30,7 +30,9 @@ type DocumentableType =
   | "Item"
   | "PurchaseInvoice"
   | "SalesInvoice"
-  | "Expense";
+  | "Expense"
+  | "Grn"
+  | "Quotation";
 
 export async function getDocumentsFor(
   documentableType: DocumentableType,
@@ -129,7 +131,9 @@ export async function uploadDocument(formData: FormData) {
   revalidatePath("/suppliers");
   revalidatePath("/clients");
   revalidatePath("/purchases");
+  revalidatePath("/purchases/grn");
   revalidatePath("/sales");
+  revalidatePath("/sales/quotations");
 
   return { success: true };
 }

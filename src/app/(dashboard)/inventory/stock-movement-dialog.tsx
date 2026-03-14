@@ -73,8 +73,9 @@ export function StockMovementDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" title="Stock movement">
-          <ArrowUpFromLine className="h-4 w-4" />
+        <Button variant="outline" size="sm" title="Manual Stock In / Stock Out">
+          <ArrowUpFromLine className="mr-2 h-4 w-4" />
+          Stock In/Out
         </Button>
       </DialogTrigger>
       <DialogContent>

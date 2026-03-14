@@ -14,6 +14,13 @@ import { createAuditLog } from "@/lib/audit";
 const quotationItemSchema = z.object({
   itemId: z.string().min(1),
   quantity: z.coerce.number().int().positive("Quantity must be positive"),
+  purchaseCost: z.coerce.number().min(0, "Cost must be ≥ 0"),
+  margin: z.coerce.number().min(0, "Margin must be ≥ 0"),
+});
+
+const invoiceItemSchema = z.object({
+  itemId: z.string().min(1),
+  quantity: z.coerce.number().int().positive("Quantity must be positive"),
   unitPrice: z.coerce.number().min(0, "Price must be ≥ 0"),
 });
 
@@ -21,7 +28,7 @@ const quotationSchema = z.object({
   clientId: z.string().min(1, "Client is required"),
   quotationDate: z.string().min(1, "Date is required"),
   quotationNo: z.string().min(1, "Quotation number is required").max(50),
-  status: z.enum(["DRAFT", "APPROVED"]).default("DRAFT"),
+  status: z.enum(["DRAFT", "PENDING_APPROVAL", "APPROVED", "REJECTED"]).default("DRAFT"),
   validUntil: z.string().optional(),
   notes: z.string().optional(),
   items: z.array(quotationItemSchema).min(1, "Add at least one item"),
@@ -37,7 +44,7 @@ const salesInvoiceSchema = z.object({
   paidAmount: z.coerce.number().min(0).default(0),
   currencyCode: z.string().min(1).max(10).default("AED"),
   notes: z.string().optional(),
-  items: z.array(quotationItemSchema).min(1, "Add at least one item"),
+  items: z.array(invoiceItemSchema).min(1, "Add at least one item"),
 });
 
 export async function getQuotations() {
@@ -84,7 +91,7 @@ export async function createQuotation(formData: FormData) {
 
   const itemsJson = formData.get("items") as string;
   const items = itemsJson
-    ? (JSON.parse(itemsJson) as { itemId: string; quantity: number; unitPrice: number }[])
+    ? (JSON.parse(itemsJson) as { itemId: string; quantity: number; purchaseCost: number; margin: number }[])
     : [];
 
   const parsed = quotationSchema.safeParse({
@@ -129,21 +136,23 @@ export async function createQuotation(formData: FormData) {
       jobId,
       quotationNo,
       quotationDate: new Date(quotationDate),
-      status: status as "DRAFT" | "APPROVED",
+      status: status as "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED",
       validUntil: validUntil ? new Date(validUntil) : null,
       notes: notes || null,
       createdById: userId ?? undefined,
       updatedById: userId ?? undefined,
       items: {
         create: quoteItems.map((it) => {
-          const up = Number(it.unitPrice);
+          const cost = Number(it.purchaseCost);
+          const marginPct = Number(it.margin);
+          const unitPrice = cost * (1 + marginPct / 100);
           return {
             itemId: it.itemId,
             quantity: it.quantity,
-            purchaseCost: up,
-            margin: 0,
-            unitPrice: up,
-            total: it.quantity * up,
+            purchaseCost: cost,
+            margin: marginPct,
+            unitPrice,
+            total: it.quantity * unitPrice,
           };
         }),
       },
@@ -220,21 +229,22 @@ export async function updateQuotation(id: string, formData: FormData) {
         clientId,
         quotationNo,
         quotationDate: new Date(quotationDate),
-        status: status as "DRAFT" | "APPROVED",
+        status: status as "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED",
         validUntil: validUntil ? new Date(validUntil) : null,
         notes: notes || null,
         updatedById: userId ?? undefined,
         items: {
           create: quoteItems.map((it) => {
-            const up = Number(it.unitPrice);
-            const total = it.quantity * up;
+            const cost = Number(it.purchaseCost);
+            const marginPct = Number(it.margin);
+            const unitPrice = cost * (1 + marginPct / 100);
             return {
               itemId: it.itemId,
               quantity: it.quantity,
-              purchaseCost: up,
-              margin: 0,
-              unitPrice: up,
-              total,
+              purchaseCost: cost,
+              margin: marginPct,
+              unitPrice,
+              total: it.quantity * unitPrice,
             };
           }),
         },
@@ -317,6 +327,7 @@ export async function convertQuotationToInvoice(quotationId: string) {
   });
 
   if (!quotation) return { error: "Quotation not found" };
+  if (quotation.status !== "APPROVED") return { error: "Quotation must be approved before converting to Sales Order / Invoice" };
   if (quotation.salesOrder?.salesInvoices?.length) return { error: "Quotation already converted to invoice" };
 
   // Validate stock availability before transaction
@@ -438,6 +449,25 @@ export type SalesInvoiceWithRelations = Prisma.SalesInvoiceGetPayload<{
     items: { include: { item: true } };
   };
 }>;
+
+export async function getOrgForInvoice() {
+  const orgId = await getOrganizationId();
+  if (!orgId) return null;
+  return prisma.organization.findFirst({
+    where: { id: orgId, deletedAt: null },
+    select: {
+      name: true,
+      address: true,
+      logoUrl: true,
+      sealUrl: true,
+      phone: true,
+      fax: true,
+      website: true,
+      taxRegistrationNo: true,
+      bankDetails: true,
+    },
+  });
+}
 
 export async function getSalesInvoiceById(
   id: string

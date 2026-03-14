@@ -1,9 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,10 +16,25 @@ import { useRouter } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
 import type { Supplier, Item } from "@prisma/client";
 
+type PurchaseOrderWithItems = {
+  id: string;
+  poNo: string;
+  supplierId: string;
+  supplier: Supplier;
+  items: Array<{
+    itemId: string;
+    quantity: number;
+    unitPrice: { toString: () => string } | number;
+    item: Item;
+  }>;
+};
+
 interface GrnFormProps {
   suppliers: Supplier[];
   items: Item[];
+  purchaseOrders: PurchaseOrderWithItems[];
   defaultGrnNo: string;
+  defaultPoId?: string;
 }
 
 type GrnItemRow = { itemId: string; quantity: number; purchasePrice: number };
@@ -30,14 +42,35 @@ type GrnItemRow = { itemId: string; quantity: number; purchasePrice: number };
 export function GrnForm({
   suppliers,
   items,
+  purchaseOrders,
   defaultGrnNo,
+  defaultPoId,
 }: GrnFormProps) {
   const router = useRouter();
+  const [poId, setPoId] = useState(defaultPoId || "");
+  const [supplierId, setSupplierId] = useState("");
   const [rows, setRows] = useState<GrnItemRow[]>([
     { itemId: "", quantity: 1, purchasePrice: 0 },
   ]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const selectedPo = purchaseOrders.find((p) => p.id === poId);
+
+  useEffect(() => {
+    if (selectedPo) {
+      setSupplierId(selectedPo.supplierId);
+      setRows(
+        selectedPo.items.map((i) => ({
+          itemId: i.itemId,
+          quantity: i.quantity,
+          purchasePrice: Number(i.unitPrice),
+        }))
+      );
+    } else {
+      setSupplierId("");
+    }
+  }, [selectedPo]);
 
   const addRow = () =>
     setRows((r) => [...r, { itemId: "", quantity: 1, purchasePrice: 0 }]);
@@ -57,7 +90,8 @@ export function GrnForm({
     const formData = new FormData(form);
     formData.set("grnNo", (form.querySelector("#grnNo") as HTMLInputElement)?.value || defaultGrnNo);
     formData.set("receivedDate", (form.querySelector("#receivedDate") as HTMLInputElement)?.value || new Date().toISOString().slice(0, 10));
-    formData.set("supplierId", (form.querySelector("#supplierId") as HTMLSelectElement)?.value || "");
+    formData.set("supplierId", supplierId);
+    if (poId) formData.set("purchaseOrderId", poId);
 
     const validRows = rows.filter((r) => r.itemId && r.quantity > 0);
     if (validRows.length === 0) {
@@ -102,11 +136,29 @@ export function GrnForm({
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="supplierId">Supplier</Label>
+          <Label htmlFor="poId">From Purchase Order (optional)</Label>
+          <Select value={poId} onValueChange={setPoId}>
+            <SelectTrigger>
+              <SelectValue placeholder="Standalone or from PO" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">Standalone GRN</SelectItem>
+              {purchaseOrders.map((po) => (
+                <SelectItem key={po.id} value={po.id}>
+                  {po.poNo} - {po.supplier.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="supplierId">Supplier *</Label>
           <select
             id="supplierId"
             name="supplierId"
             required
+            value={supplierId}
+            onChange={(e) => setSupplierId(e.target.value)}
             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
           >
             <option value="">Select supplier</option>
@@ -116,11 +168,14 @@ export function GrnForm({
               </option>
             ))}
           </select>
+          {selectedPo && (
+            <p className="text-xs text-muted-foreground">Pre-filled from PO</p>
+          )}
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="notes">Notes</Label>
-          <Input id="notes" name="notes" placeholder="Optional" />
-        </div>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="notes">Notes</Label>
+        <Input id="notes" name="notes" placeholder="Optional" />
       </div>
 
       <div>

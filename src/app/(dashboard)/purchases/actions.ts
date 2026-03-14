@@ -18,6 +18,7 @@ const grnItemSchema = z.object({
 
 const grnSchema = z.object({
   supplierId: z.string().min(1, "Supplier is required"),
+  purchaseOrderId: z.string().optional(),
   receivedDate: z.string().min(1, "Date is required"),
   grnNo: z.string().min(1, "GRN number is required").max(50),
   notes: z.string().optional(),
@@ -79,6 +80,7 @@ export async function createGrn(formData: FormData) {
 
   const parsed = grnSchema.safeParse({
     supplierId: formData.get("supplierId"),
+    purchaseOrderId: formData.get("purchaseOrderId") || undefined,
     receivedDate: formData.get("receivedDate"),
     grnNo: formData.get("grnNo"),
     notes: formData.get("notes") || undefined,
@@ -89,7 +91,7 @@ export async function createGrn(formData: FormData) {
     return { error: parsed.error.flatten().fieldErrors };
   }
 
-  const { supplierId, receivedDate, grnNo, notes, items: grnItems } = parsed.data;
+  const { supplierId, purchaseOrderId, receivedDate, grnNo, notes, items: grnItems } = parsed.data;
 
   const existing = await prisma.grn.findFirst({
     where: { organizationId: orgId, grnNo, deletedAt: null },
@@ -105,11 +107,22 @@ export async function createGrn(formData: FormData) {
     return { error: { _form: ["Supplier not found"] } };
   }
 
+  for (const it of grnItems) {
+    const item = await prisma.item.findFirst({
+      where: { id: it.itemId, organizationId: orgId, deletedAt: null },
+    });
+    if (!item) {
+      return { error: { _form: [`Item not found: ${it.itemId}`] } };
+    }
+  }
+
+  try {
   await prisma.$transaction(async (tx) => {
     const grn = await tx.grn.create({
       data: {
         organizationId: orgId,
         supplierId,
+        purchaseOrderId: purchaseOrderId || null,
         grnNo,
         receivedDate: new Date(receivedDate),
         notes: notes || null,
@@ -120,7 +133,7 @@ export async function createGrn(formData: FormData) {
       const item = await tx.item.findFirst({
         where: { id: it.itemId, organizationId: orgId, deletedAt: null },
       });
-      if (!item) throw new Error(`Item ${it.itemId} not found`);
+      if (!item) throw new Error(`Item not found`);
       const total = it.quantity * it.purchasePrice;
 
       await tx.grnItem.create({
@@ -159,12 +172,29 @@ export async function createGrn(formData: FormData) {
       });
     }
   });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Failed to create GRN";
+    return { error: { _form: [msg] } };
+  }
 
   revalidatePath("/purchases");
   revalidatePath("/purchases/grn");
   revalidatePath("/dashboard");
   revalidatePath("/inventory");
   redirect("/purchases/grn");
+}
+
+export async function getPurchaseOrdersForGrn() {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+  return prisma.purchaseOrder.findMany({
+    where: { organizationId: orgId, deletedAt: null },
+    include: {
+      supplier: true,
+      items: { include: { item: true } },
+    },
+    orderBy: { orderDate: "desc" },
+  });
 }
 
 export async function getPurchaseInvoices() {
@@ -465,4 +495,294 @@ export async function recordSupplierPayment(formData: FormData) {
   revalidatePath(`/purchases/${parsed.data.invoiceId}`);
   revalidatePath("/dashboard");
   return { success: true };
+}
+
+// ============ Purchase Requests ============
+
+export async function getPurchaseRequests() {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+  return prisma.purchaseRequest.findMany({
+    where: { organizationId: orgId, deletedAt: null },
+    include: {
+      items: { include: { item: true } },
+      salesOrder: { include: { quotation: { include: { client: true } } } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+export async function getPurchaseRequestById(id: string) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+  return prisma.purchaseRequest.findFirst({
+    where: { id, organizationId: orgId, deletedAt: null },
+    include: {
+      items: { include: { item: true } },
+      salesOrder: { include: { quotation: { include: { client: true } } } },
+      purchaseOrders: { include: { supplier: true } },
+    },
+  });
+}
+
+export async function getSalesOrdersForPr() {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+  return prisma.salesOrder.findMany({
+    where: { organizationId: orgId, deletedAt: null },
+    include: {
+      items: { include: { item: true } },
+      quotation: { include: { client: true } },
+    },
+    orderBy: { orderDate: "desc" },
+  });
+}
+
+export async function getNextPrNo() {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+  const last = await prisma.purchaseRequest.findFirst({
+    where: { organizationId: orgId, deletedAt: null },
+    orderBy: { createdAt: "desc" },
+  });
+  const n = last ? parseInt(last.prNo.replace(/\D/g, ""), 10) || 0 : 0;
+  return `PR-${String(n + 1).padStart(5, "0")}`;
+}
+
+const purchaseRequestItemSchema = z.object({
+  itemId: z.string().min(1),
+  quantity: z.coerce.number().int().positive("Quantity must be positive"),
+});
+
+export async function createPurchaseRequest(formData: FormData) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const itemsJson = formData.get("items") as string;
+  let items: { itemId: string; quantity: number }[] = [];
+  try {
+    items = itemsJson ? (JSON.parse(itemsJson) as { itemId: string; quantity: number }[]) : [];
+  } catch {
+    return { error: { _form: ["Invalid items data"] } };
+  }
+
+  const prNo = (formData.get("prNo") as string)?.trim() || (await getNextPrNo());
+  const notes = (formData.get("notes") as string)?.trim() || undefined;
+  const salesOrderId = (formData.get("salesOrderId") as string)?.trim() || undefined;
+  const jobId = (formData.get("jobId") as string)?.trim() || undefined;
+
+  const parsed = z.array(purchaseRequestItemSchema).min(1, "Add at least one item").safeParse(items);
+  if (!parsed.success) {
+    return { error: parsed.error.flatten().fieldErrors };
+  }
+
+  if (salesOrderId) {
+    const so = await prisma.salesOrder.findFirst({
+      where: { id: salesOrderId, organizationId: orgId, deletedAt: null },
+    });
+    if (!so) return { error: { _form: ["Sales order not found"] } };
+  }
+
+  // Merge duplicate items: one item per PR line (sum quantities for same itemId)
+  const mergedItems = parsed.data.reduce(
+    (acc, it) => {
+      const existing = acc.find((x) => x.itemId === it.itemId);
+      if (existing) {
+        existing.quantity += it.quantity;
+      } else {
+        acc.push({ itemId: it.itemId, quantity: it.quantity });
+      }
+      return acc;
+    },
+    [] as { itemId: string; quantity: number }[]
+  );
+
+  const existing = await prisma.purchaseRequest.findFirst({
+    where: { organizationId: orgId, prNo, deletedAt: null },
+  });
+  if (existing) return { error: { prNo: ["PR number already exists"] } };
+
+  const user = await getCurrentUser();
+  const userId = (user as { id?: string } | null)?.id ?? null;
+
+  await prisma.$transaction(async (tx) => {
+    const pr = await tx.purchaseRequest.create({
+      data: {
+        organizationId: orgId,
+        prNo,
+        salesOrderId: salesOrderId || null,
+        jobId: jobId || null,
+        status: "DRAFT",
+        notes: notes || null,
+        createdById: userId ?? undefined,
+      },
+    });
+    for (const it of mergedItems) {
+      await tx.purchaseRequestItem.create({
+        data: {
+          purchaseRequestId: pr.id,
+          itemId: it.itemId,
+          quantity: it.quantity,
+        },
+      });
+    }
+  });
+
+  revalidatePath("/purchases/purchase-requests");
+  redirect("/purchases/purchase-requests");
+}
+
+export async function approvePurchaseRequest(id: string) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const pr = await prisma.purchaseRequest.findFirst({
+    where: { id, organizationId: orgId, deletedAt: null },
+  });
+  if (!pr) return { error: "Purchase request not found" };
+  if (pr.status === "APPROVED") return { error: "Already approved" };
+
+  const user = await getCurrentUser();
+  const userId = (user as { id?: string } | null)?.id ?? null;
+
+  await prisma.purchaseRequest.update({
+    where: { id },
+    data: {
+      status: "APPROVED",
+      approvedById: userId ?? undefined,
+      approvedAt: new Date(),
+    },
+  });
+
+  revalidatePath("/purchases/purchase-requests");
+  revalidatePath(`/purchases/purchase-requests/${id}`);
+  return { success: true };
+}
+
+// ============ Purchase Orders ============
+
+export async function getPurchaseOrders() {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+  return prisma.purchaseOrder.findMany({
+    where: { organizationId: orgId, deletedAt: null },
+    include: {
+      purchaseRequest: true,
+      supplier: true,
+      items: { include: { item: true } },
+    },
+    orderBy: { orderDate: "desc" },
+  });
+}
+
+export async function getPurchaseOrderById(id: string) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+  return prisma.purchaseOrder.findFirst({
+    where: { id, organizationId: orgId, deletedAt: null },
+    include: {
+      purchaseRequest: { include: { items: { include: { item: true } } } },
+      supplier: true,
+      items: { include: { item: true } },
+    },
+  });
+}
+
+export async function getApprovedPurchaseRequests() {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+  return prisma.purchaseRequest.findMany({
+    where: { organizationId: orgId, status: "APPROVED", deletedAt: null },
+    include: { items: { include: { item: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+export async function getNextPoNo() {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+  const last = await prisma.purchaseOrder.findFirst({
+    where: { organizationId: orgId, deletedAt: null },
+    orderBy: { createdAt: "desc" },
+  });
+  const n = last ? parseInt(last.poNo.replace(/\D/g, ""), 10) || 0 : 0;
+  return `PO-${String(n + 1).padStart(5, "0")}`;
+}
+
+const purchaseOrderItemSchema = z.object({
+  itemId: z.string().min(1),
+  quantity: z.coerce.number().int().positive(),
+  unitPrice: z.coerce.number().min(0),
+});
+
+export async function createPurchaseOrder(formData: FormData) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const purchaseRequestId = formData.get("purchaseRequestId") as string;
+  const supplierId = formData.get("supplierId") as string;
+  const orderDate = formData.get("orderDate") as string;
+  const notes = (formData.get("notes") as string) || undefined;
+  const itemsJson = formData.get("items") as string;
+  const items = itemsJson ? (JSON.parse(itemsJson) as { itemId: string; quantity: number; unitPrice: number }[]) : [];
+
+  if (!purchaseRequestId || !supplierId || !orderDate) {
+    return { error: { _form: ["Missing required fields"] } };
+  }
+
+  const pr = await prisma.purchaseRequest.findFirst({
+    where: { id: purchaseRequestId, organizationId: orgId, status: "APPROVED", deletedAt: null },
+    include: { items: true },
+  });
+  if (!pr) return { error: { _form: ["Approved purchase request not found"] } };
+
+  const prItemIds = new Set(pr.items.map((i) => i.itemId));
+  const validItems = items.filter((i) => prItemIds.has(i.itemId));
+  if (validItems.length === 0) return { error: { items: ["Add at least one item from the PR"] } };
+
+  const parsed = z.array(purchaseOrderItemSchema).safeParse(validItems);
+  if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
+
+  const supplier = await prisma.supplier.findFirst({
+    where: { id: supplierId, organizationId: orgId, deletedAt: null },
+  });
+  if (!supplier) return { error: { _form: ["Supplier not found"] } };
+
+  const user = await getCurrentUser();
+  const userId = (user as { id?: string } | null)?.id ?? null;
+  const poNo = (formData.get("poNo") as string) || (await getNextPoNo());
+
+  const existingPo = await prisma.purchaseOrder.findFirst({
+    where: { organizationId: orgId, poNo, deletedAt: null },
+  });
+  if (existingPo) return { error: { poNo: ["PO number already exists"] } };
+
+  await prisma.$transaction(async (tx) => {
+    const po = await tx.purchaseOrder.create({
+      data: {
+        organizationId: orgId,
+        purchaseRequestId,
+        supplierId,
+        poNo,
+        orderDate: new Date(orderDate),
+        notes: notes || null,
+        createdById: userId ?? undefined,
+      },
+    });
+    for (const it of parsed.data) {
+      const total = it.quantity * it.unitPrice;
+      await tx.purchaseOrderItem.create({
+        data: {
+          purchaseOrderId: po.id,
+          itemId: it.itemId,
+          quantity: it.quantity,
+          unitPrice: it.unitPrice,
+          total,
+        },
+      });
+    }
+  });
+
+  revalidatePath("/purchases/purchase-orders");
+  redirect("/purchases/purchase-orders");
 }

@@ -14,15 +14,13 @@ import {
   getItemCategories,
   deleteItem,
 } from "./actions";
-import { getOrganizationId, getCurrentUser } from "@/lib/auth-utils";
-import { canAdjustStock } from "@/lib/permissions";
+import { getOrganizationId } from "@/lib/auth-utils";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Plus, Pencil, Trash2, Package, Eye } from "lucide-react";
 import { Suspense } from "react";
 import { InventoryFilters } from "./inventory-filters";
 import { DeleteItemButton } from "./delete-item-button";
-import { StockMovementDialog } from "./stock-movement-dialog";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -33,9 +31,6 @@ export default async function InventoryPage({
 }) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
-
-  const user = await getCurrentUser();
-  const allowAdjustment = canAdjustStock(user);
 
   const params = await searchParams;
   const page = Math.max(1, parseInt(params.page ?? "1", 10));
@@ -143,7 +138,6 @@ export default async function InventoryPage({
                                   <Eye className="h-4 w-4" />
                                 </Link>
                               </Button>
-                              <StockMovementDialog item={item} allowAdjustment={allowAdjustment} />
                               <Button variant="ghost" size="icon" asChild title="Edit">
                                 <Link href={`/inventory/${item.id}/edit`}>
                                   <Pencil className="h-4 w-4" />

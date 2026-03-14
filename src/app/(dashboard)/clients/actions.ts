@@ -46,6 +46,16 @@ export async function getClientById(id: string) {
   return prisma.client.findFirst({
     where: { id, organizationId: orgId, deletedAt: null },
     include: {
+      quotations: {
+        where: { deletedAt: null },
+        orderBy: { quotationDate: "desc" },
+        include: { salesOrder: true },
+      },
+      salesOrders: {
+        where: { deletedAt: null },
+        orderBy: { orderDate: "desc" },
+        include: { quotation: true, salesInvoices: true },
+      },
       salesInvoices: {
         where: { deletedAt: null },
         orderBy: { invoiceDate: "desc" },
