@@ -44,7 +44,7 @@ export default async function QuotationDetailPage({
           <h1 className="text-3xl font-bold tracking-tight">
             {quotation.quotationNo}
           </h1>
-          {quotation.status === "DRAFT" && !quotation.salesInvoice && (
+          {quotation.status === "DRAFT" && !quotation.salesOrder?.salesInvoices?.length && (
             <Button asChild size="sm" variant="outline">
               <Link href={`/sales/quotations/${quotation.id}/edit`}>
                 <Pencil className="mr-2 h-4 w-4" />
@@ -59,12 +59,12 @@ export default async function QuotationDetailPage({
           >
             {quotation.status}
           </Badge>
-          {quotation.salesInvoice && (
+          {quotation.salesOrder?.salesInvoices?.[0] && (
             <Link
-              href={`/sales/${quotation.salesInvoice.id}`}
+              href={`/sales/${quotation.salesOrder.salesInvoices[0].id}`}
               className="text-sm text-primary hover:underline"
             >
-              → Invoice {quotation.salesInvoice.invoiceNo}
+              → Invoice {quotation.salesOrder.salesInvoices[0].invoiceNo}
             </Link>
           )}
         </div>
@@ -126,17 +126,17 @@ export default async function QuotationDetailPage({
         </Card>
       )}
 
-      {quotation.status === "DRAFT" && !quotation.salesInvoice && (
+      {quotation.status === "DRAFT" && !quotation.salesOrder?.salesInvoices?.length && (
         <ApproveQuotationButton quotationId={quotation.id} />
       )}
 
-      {!quotation.salesInvoice && quotation.status === "APPROVED" && (
+      {!quotation.salesOrder?.salesInvoices?.length && quotation.status === "APPROVED" && (
         <div className="flex gap-4">
           <ConvertToInvoiceButton quotationId={quotation.id} />
         </div>
       )}
 
-      {quotation.status === "DRAFT" && !quotation.salesInvoice && (
+      {quotation.status === "DRAFT" && !quotation.salesOrder?.salesInvoices?.length && (
         <p className="text-sm text-muted-foreground">
           Approve this quotation to enable &quot;Convert to Invoice&quot;.
         </p>

@@ -89,19 +89,19 @@ export function SalesInvoiceForm({
       (document.getElementById("invoiceDate") as HTMLInputElement)?.value ||
       new Date().toISOString().slice(0, 10);
     const d = new Date(invDate);
-    d.setDate(d.getDate() + client.defaultPaymentTerms);
+    d.setDate(d.getDate() + (client.agreedDueDays ?? 30));
     setDueDatePreview(d.toLocaleDateString());
-  }, [clientId, client?.defaultPaymentTerms]);
+  }, [clientId, client?.agreedDueDays]);
 
   useEffect(() => {
     const el = document.getElementById("invoiceDate");
     const handler = () => {
-      if (client?.defaultPaymentTerms) {
+      if (client && client.agreedDueDays != null) {
         const invDate =
           (el as HTMLInputElement)?.value ||
           new Date().toISOString().slice(0, 10);
         const d = new Date(invDate);
-        d.setDate(d.getDate() + client.defaultPaymentTerms);
+        d.setDate(d.getDate() + client.agreedDueDays);
         setDueDatePreview(d.toLocaleDateString());
       }
     };

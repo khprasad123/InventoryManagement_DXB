@@ -134,7 +134,7 @@ export async function createGrn(formData: FormData) {
       });
 
       const newStock = item.stockQty + it.quantity;
-      const oldCost = Number(item.costPrice);
+      const oldCost = Number(item.defaultPurchaseCost);
       const newCost =
         item.stockQty + it.quantity > 0
           ? (oldCost * item.stockQty + it.purchasePrice * it.quantity) /
@@ -155,7 +155,7 @@ export async function createGrn(formData: FormData) {
 
       await tx.item.update({
         where: { id: it.itemId },
-        data: { stockQty: newStock, costPrice: newCost },
+        data: { stockQty: newStock, defaultPurchaseCost: newCost },
       });
     }
   });

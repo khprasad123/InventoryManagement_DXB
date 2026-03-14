@@ -27,10 +27,10 @@ export async function getDashboardData() {
   // Total stock value: sum(stockQty * costPrice) per item
   const items = await prisma.item.findMany({
     where: { organizationId: orgId, deletedAt: null },
-    select: { stockQty: true, costPrice: true },
+    select: { stockQty: true, defaultPurchaseCost: true },
   });
   const totalStockValue = items.reduce(
-    (sum, i) => sum + i.stockQty * Number(i.costPrice),
+    (sum, i) => sum + i.stockQty * Number(i.defaultPurchaseCost),
     0
   );
 
@@ -42,7 +42,7 @@ export async function getDashboardData() {
       invoiceDate: { gte: currentMonth.start, lte: currentMonth.end },
     },
     include: {
-      items: { include: { item: { select: { costPrice: true } } } },
+      items: { include: { item: { select: { defaultPurchaseCost: true } } } },
     },
   });
 
@@ -63,7 +63,7 @@ export async function getDashboardData() {
   let monthlyCogs = 0;
   for (const inv of salesInvoices) {
     for (const line of inv.items) {
-      monthlyCogs += line.quantity * Number(line.item.costPrice);
+      monthlyCogs += line.quantity * Number(line.item.defaultPurchaseCost);
     }
   }
 

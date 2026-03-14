@@ -16,13 +16,19 @@ async function clearAllDataIfDev() {
   await prisma.clientPayment.deleteMany({});
   await prisma.supplierPayment.deleteMany({});
   await prisma.salesInvoiceItem.deleteMany({});
+  await prisma.salesOrderItem.deleteMany({});
+  await prisma.salesOrder.deleteMany({});
   await prisma.purchaseInvoiceItem.deleteMany({});
+  await prisma.purchaseOrderItem.deleteMany({});
+  await prisma.purchaseOrder.deleteMany({});
+  await prisma.purchaseRequestItem.deleteMany({});
+  await prisma.purchaseRequest.deleteMany({});
   await prisma.quotationItem.deleteMany({});
+  await prisma.quotation.deleteMany({});
   await prisma.grnItem.deleteMany({});
   await prisma.stockMovement.deleteMany({});
   await prisma.salesInvoice.deleteMany({});
   await prisma.purchaseInvoice.deleteMany({});
-  await prisma.quotation.deleteMany({});
   await prisma.grn.deleteMany({});
   await prisma.client.deleteMany({});
   await prisma.supplier.deleteMany({});
@@ -98,6 +104,8 @@ async function main() {
     { code: "manage_purchases", name: "Manage purchases", description: "Purchase invoices, GRNs" },
     { code: "manage_sales", name: "Manage sales", description: "Sales invoices, quotations" },
     { code: "manage_expenses", name: "Manage expenses", description: "Expenses and categories" },
+    { code: "approve_quotation", name: "Approve quotation", description: "Approve quotations" },
+    { code: "approve_purchase_request", name: "Approve purchase request", description: "Approve purchase requests" },
     { code: "view_reports", name: "View reports", description: "Access reports" },
     { code: "view_audit", name: "View audit log", description: "Access audit log" },
   ];
@@ -152,6 +160,7 @@ async function main() {
     permByCode.manage_inventory,
     permByCode.manage_suppliers,
     permByCode.manage_purchases,
+    permByCode.approve_purchase_request,
     permByCode.view_reports,
     permByCode.view_audit,
   ]

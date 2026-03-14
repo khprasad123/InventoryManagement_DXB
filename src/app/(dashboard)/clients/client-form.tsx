@@ -18,8 +18,11 @@ const clientSchema = z.object({
     .refine((v) => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), "Invalid email"),
   phone: z.string().max(50).optional(),
   address: z.string().optional(),
+  siteLocation: z.string().max(100).optional(),
+  building: z.string().max(100).optional(),
   taxNumber: z.string().max(50).optional(),
-  defaultPaymentTerms: z.coerce.number().int().min(0).optional().nullable(),
+  defaultPaymentTerms: z.string().max(255).optional().nullable(),
+  agreedDueDays: z.coerce.number().int().min(0).optional().nullable(),
   creditLimit: z.coerce.number().min(0).optional().nullable(),
 });
 
@@ -53,14 +56,18 @@ export function ClientForm({
           email: client.email ?? "",
           phone: client.phone ?? "",
           address: client.address ?? "",
+          siteLocation: client.siteLocation ?? "",
+          building: client.building ?? "",
           taxNumber: client.taxNumber ?? "",
-          defaultPaymentTerms: client.defaultPaymentTerms ?? undefined,
+          defaultPaymentTerms: client.defaultPaymentTerms ?? "",
+          agreedDueDays: client.agreedDueDays ?? undefined,
           creditLimit: client.creditLimit
             ? Number(client.creditLimit)
             : undefined,
         }
       : {
-          defaultPaymentTerms: 30,
+          defaultPaymentTerms: "NET 30",
+          agreedDueDays: 30,
         },
   });
 
@@ -135,20 +142,47 @@ export function ClientForm({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
+          <Label htmlFor="siteLocation">Site Location</Label>
+          <Input
+            id="siteLocation"
+            {...register("siteLocation")}
+            placeholder="e.g. Ajman"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="building">Building</Label>
+          <Input
+            id="building"
+            {...register("building")}
+            placeholder="e.g. Building name"
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
           <Label htmlFor="taxNumber">Tax Number</Label>
           <Input id="taxNumber" {...register("taxNumber")} placeholder="VAT/Tax ID" />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="defaultPaymentTerms">Default Payment Terms (days)</Label>
+          <Label htmlFor="defaultPaymentTerms">Payment Terms</Label>
           <Input
             id="defaultPaymentTerms"
+            {...register("defaultPaymentTerms")}
+            placeholder="NET 30, 50% Advance & 50% After completion"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="agreedDueDays">Agreed Due Days</Label>
+          <Input
+            id="agreedDueDays"
             type="number"
             min={0}
-            {...register("defaultPaymentTerms")}
+            {...register("agreedDueDays")}
             placeholder="30"
           />
           <p className="text-xs text-muted-foreground">
-            e.g. 30 = NET 30 days (used for sales invoice due date)
+            Days for invoice due date
           </p>
         </div>
       </div>

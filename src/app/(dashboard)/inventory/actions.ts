@@ -17,8 +17,8 @@ const itemSchema = z.object({
   description: z.string().optional(),
   category: z.string().min(1, "Category is required").max(100),
   unit: z.string().min(1, "Unit is required").max(20).default("pcs"),
-  costPrice: z.coerce.number().min(0, "Cost must be ≥ 0"),
-  sellingPrice: z.coerce.number().min(0, "Selling price must be ≥ 0"),
+  defaultPurchaseCost: z.coerce.number().min(0, "Cost must be ≥ 0"),
+  defaultMargin: z.coerce.number().min(0, "Margin must be ≥ 0"),
   minStock: z.coerce.number().int().min(0, "Min stock must be ≥ 0"),
 });
 
@@ -107,8 +107,8 @@ export async function createItem(formData: FormData) {
     description: formData.get("description") || undefined,
     category: formData.get("category") || "General",
     unit: formData.get("unit") || "pcs",
-    costPrice: formData.get("costPrice"),
-    sellingPrice: formData.get("sellingPrice"),
+    defaultPurchaseCost: formData.get("defaultPurchaseCost"),
+    defaultMargin: formData.get("defaultMargin"),
     minStock: formData.get("minStock") || 0,
   });
 
@@ -116,7 +116,7 @@ export async function createItem(formData: FormData) {
     return { error: parsed.error.flatten().fieldErrors };
   }
 
-  const { sku, name, description, category, unit, costPrice, sellingPrice, minStock } =
+  const { sku, name, description, category, unit, defaultPurchaseCost, defaultMargin, minStock } =
     parsed.data;
 
   const user = await getCurrentUser();
@@ -137,8 +137,8 @@ export async function createItem(formData: FormData) {
       description: description || null,
       category: category || "General",
       unit,
-      costPrice,
-      sellingPrice,
+      defaultPurchaseCost,
+      defaultMargin,
       minStock,
       stockQty: 0,
       createdById: userId ?? undefined,
@@ -177,8 +177,8 @@ export async function updateItem(id: string, formData: FormData) {
     description: formData.get("description") || undefined,
     category: formData.get("category") || "General",
     unit: formData.get("unit") || "pcs",
-    costPrice: formData.get("costPrice"),
-    sellingPrice: formData.get("sellingPrice"),
+    defaultPurchaseCost: formData.get("defaultPurchaseCost"),
+    defaultMargin: formData.get("defaultMargin"),
     minStock: formData.get("minStock") || 0,
   });
 
@@ -196,7 +196,7 @@ export async function updateItem(id: string, formData: FormData) {
     return { error: { _form: ["Item not found"] } };
   }
 
-  const { sku, name, description, category, unit, costPrice, sellingPrice, minStock } =
+  const { sku, name, description, category, unit, defaultPurchaseCost, defaultMargin, minStock } =
     parsed.data;
 
   if (sku !== existing.sku) {
@@ -216,8 +216,8 @@ export async function updateItem(id: string, formData: FormData) {
       description: description || null,
       category: category || "General",
       unit,
-      costPrice,
-      sellingPrice,
+      defaultPurchaseCost,
+      defaultMargin,
       minStock,
       updatedById: userId ?? undefined,
     },

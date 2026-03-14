@@ -17,13 +17,11 @@ const clientSchema = z.object({
     .refine((v) => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), "Invalid email"),
   phone: z.string().max(50).optional(),
   address: z.string().optional(),
+  siteLocation: z.string().max(100).optional(),
+  building: z.string().max(100).optional(),
   taxNumber: z.string().max(50).optional(),
-  defaultPaymentTerms: z.coerce
-    .number()
-    .int()
-    .min(0, "Must be ≥ 0")
-    .optional()
-    .nullable(),
+  defaultPaymentTerms: z.string().max(255).optional().nullable(),
+  agreedDueDays: z.coerce.number().int().min(0).optional().nullable(),
   creditLimit: z.coerce
     .number()
     .min(0, "Credit limit must be ≥ 0")
@@ -66,8 +64,11 @@ export async function createClient(formData: FormData) {
     email: formData.get("email") || undefined,
     phone: formData.get("phone") || undefined,
     address: formData.get("address") || undefined,
+    siteLocation: formData.get("siteLocation") || undefined,
+    building: formData.get("building") || undefined,
     taxNumber: formData.get("taxNumber") || undefined,
     defaultPaymentTerms: formData.get("defaultPaymentTerms") || undefined,
+    agreedDueDays: formData.get("agreedDueDays") || undefined,
     creditLimit: formData.get("creditLimit") || undefined,
   });
 
@@ -87,8 +88,11 @@ export async function createClient(formData: FormData) {
       email: data.email || null,
       phone: data.phone || null,
       address: data.address || null,
+      siteLocation: data.siteLocation || null,
+      building: data.building || null,
       taxNumber: data.taxNumber || null,
       defaultPaymentTerms: data.defaultPaymentTerms ?? null,
+      agreedDueDays: data.agreedDueDays ?? null,
       creditLimit: data.creditLimit ?? null,
       createdById: userId ?? undefined,
       updatedById: userId ?? undefined,
@@ -127,8 +131,11 @@ export async function updateClient(id: string, formData: FormData) {
     email: formData.get("email") || undefined,
     phone: formData.get("phone") || undefined,
     address: formData.get("address") || undefined,
+    siteLocation: formData.get("siteLocation") || undefined,
+    building: formData.get("building") || undefined,
     taxNumber: formData.get("taxNumber") || undefined,
     defaultPaymentTerms: formData.get("defaultPaymentTerms") || undefined,
+    agreedDueDays: formData.get("agreedDueDays") || undefined,
     creditLimit: formData.get("creditLimit") || undefined,
   });
 
@@ -155,8 +162,11 @@ export async function updateClient(id: string, formData: FormData) {
       email: data.email || null,
       phone: data.phone || null,
       address: data.address || null,
+      siteLocation: data.siteLocation || null,
+      building: data.building || null,
       taxNumber: data.taxNumber || null,
       defaultPaymentTerms: data.defaultPaymentTerms ?? null,
+      agreedDueDays: data.agreedDueDays ?? null,
       creditLimit: data.creditLimit ?? null,
       updatedById: userId ?? undefined,
     },

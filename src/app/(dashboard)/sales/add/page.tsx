@@ -27,19 +27,28 @@ export default async function AddSalesInvoicePage() {
           sku: true,
           name: true,
           stockQty: true,
-          sellingPrice: true,
+          defaultPurchaseCost: true,
+          defaultMargin: true,
         },
         orderBy: { name: "asc" },
       })
       .then((rows) =>
-        rows.map((r) => ({
-          ...r,
-          sellingPrice: Number(r.sellingPrice),
-        }))
+        rows.map((r) => {
+          const cost = Number(r.defaultPurchaseCost);
+          const margin = Number(r.defaultMargin);
+          const sellingPrice = cost * (1 + margin / 100);
+          return {
+            id: r.id,
+            sku: r.sku,
+            name: r.name,
+            stockQty: r.stockQty,
+            sellingPrice,
+          };
+        })
       ),
     getQuotations().then((qs) =>
       qs
-        .filter((q) => q.status === "APPROVED" && !q.salesInvoice)
+        .filter((q) => q.status === "APPROVED" && !q.salesOrder?.salesInvoices?.length)
         .map((q) => ({
           id: q.id,
           quotationNo: q.quotationNo,

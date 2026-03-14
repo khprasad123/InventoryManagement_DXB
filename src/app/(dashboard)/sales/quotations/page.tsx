@@ -69,7 +69,7 @@ export default async function QuotationsPage() {
                 </TableHeader>
                 <TableBody>
                   {quotations.map((q) => {
-                    const canEdit = q.status === "DRAFT" && !q.salesInvoice;
+                    const canEdit = q.status === "DRAFT" && !q.salesOrder?.salesInvoices?.length;
                     return (
                       <TableRow key={q.id}>
                         <TableCell className="font-medium">

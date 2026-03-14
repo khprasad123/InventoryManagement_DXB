@@ -26,7 +26,19 @@ enum PaymentStatus {
 
 enum QuotationStatus {
   DRAFT
+  PENDING_APPROVAL
   APPROVED
+}
+
+enum PurchaseRequestStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+}
+
+enum JobStatus {
+  OPEN
+  CLOSED
 }
 
 // =============================================================================
@@ -34,13 +46,20 @@ enum QuotationStatus {
 // =============================================================================
 
 model Organization {
-  id        String    @id @default(cuid())
-  name      String
-  slug      String    @unique
-  logoUrl   String?   @map("logo_url")
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
+  id                String    @id @default(cuid())
+  name              String
+  slug              String    @unique
+  logoUrl           String?   @map("logo_url")
+  sealUrl           String?   @map("seal_url")
+  address           String?   // Full address (PO Box, city, etc.)
+  phone             String?
+  fax               String?
+  website           String?
+  taxRegistrationNo String?   @map("tax_registration_no")
+  bankDetails       String?   @map("bank_details") // Acct Name, Bank, Acct#, IBAN
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
 
   users             UserOrganization[]
   roles             Role[]
@@ -51,7 +70,10 @@ model Organization {
   stockMovements    StockMovement[]
   grns              Grn[]
   purchaseInvoices  PurchaseInvoice[]
+  purchaseRequests  PurchaseRequest[]
+  purchaseOrders    PurchaseOrder[]
   quotations        Quotation[]
+  salesOrders       SalesOrder[]
   salesInvoices     SalesInvoice[]
   expenseCategories ExpenseCategory[]
   expenses          Expense[]
@@ -185,31 +207,34 @@ model UserOrganization {
 // =============================================================================
 
 model Item {
-  id             String    @id @default(cuid())
-  organizationId String    @map("organization_id")
-  sku            String
-  name           String
-  description    String?
-  category       String?   @default("General")
-  unit           String    @default("pcs")
-  costPrice      Decimal   @default(0) @map("cost_price") @db.Decimal(12, 2)
-  sellingPrice   Decimal   @default(0) @map("selling_price") @db.Decimal(12, 2)
-  stockQty       Int       @default(0) @map("stock_qty")
-  minStock       Int       @default(0) @map("min_stock")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
-  deletedAt      DateTime? @map("deleted_at")
-  createdById    String?   @map("created_by_id")
-  updatedById    String?   @map("updated_by_id")
+  id                    String    @id @default(cuid())
+  organizationId        String    @map("organization_id")
+  sku                   String
+  name                  String
+  description           String?
+  category              String?   @default("General")
+  unit                  String    @default("pcs")
+  defaultPurchaseCost   Decimal   @default(0) @map("default_purchase_cost") @db.Decimal(12, 2)
+  defaultMargin         Decimal   @default(0) @map("default_margin") @db.Decimal(5, 2) // %
+  stockQty              Int       @default(0) @map("stock_qty")
+  minStock              Int       @default(0) @map("min_stock")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  deletedAt             DateTime? @map("deleted_at")
+  createdById           String?   @map("created_by_id")
+  updatedById           String?   @map("updated_by_id")
 
-  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdBy      User?                  @relation("ItemCreatedBy", fields: [createdById], references: [id])
-  updatedBy      User?                  @relation("ItemUpdatedBy", fields: [updatedById], references: [id])
-  stockMovements StockMovement[]
-  purchaseItems  PurchaseInvoiceItem[]
-  salesItems     SalesInvoiceItem[]
-  grnItems       GrnItem[]
-  quotationItems QuotationItem[]
+  organization       Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy          User?                  @relation("ItemCreatedBy", fields: [createdById], references: [id])
+  updatedBy          User?                  @relation("ItemUpdatedBy", fields: [updatedById], references: [id])
+  stockMovements     StockMovement[]
+  purchaseItems      PurchaseInvoiceItem[]
+  purchaseRequestItems PurchaseRequestItem[]
+  purchaseOrderItems PurchaseOrderItem[]
+  salesOrderItems    SalesOrderItem[]
+  salesItems         SalesInvoiceItem[]
+  grnItems           GrnItem[]
+  quotationItems     QuotationItem[]
 
   @@unique([organizationId, sku])
   @@index([organizationId])
@@ -256,8 +281,9 @@ model Supplier {
   email               String?
   phone               String?
   address             String?
+  paymentTerms        String?   @map("payment_terms") // e.g. NET 30, 50% advance
+  defaultPaymentTerms Int?      @map("default_payment_terms") // days for due date
   taxNumber           String?   @map("tax_number")
-  defaultPaymentTerms Int?      @map("default_payment_terms") // days, e.g. 30 = NET 30
   creditLimit         Decimal?  @map("credit_limit") @db.Decimal(12, 2)
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
@@ -269,6 +295,7 @@ model Supplier {
   createdBy        User?             @relation("SupplierCreatedBy", fields: [createdById], references: [id])
   updatedBy        User?             @relation("SupplierUpdatedBy", fields: [updatedById], references: [id])
   purchaseInvoices PurchaseInvoice[]
+  purchaseOrders   PurchaseOrder[]
   grns             Grn[]
 
   @@index([organizationId])
@@ -279,24 +306,27 @@ model Supplier {
 }
 
 model Grn {
-  id             String    @id @default(cuid())
-  organizationId String    @map("organization_id")
-  supplierId     String    @map("supplier_id")
-  grnNo          String    @map("grn_no")
-  receivedDate   DateTime  @map("received_date")
-  notes          String?
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
-  deletedAt      DateTime? @map("deleted_at")
+  id               String    @id @default(cuid())
+  organizationId   String    @map("organization_id")
+  supplierId       String    @map("supplier_id")
+  purchaseOrderId  String?   @map("purchase_order_id")
+  grnNo            String    @map("grn_no")
+  receivedDate     DateTime  @map("received_date")
+  notes            String?
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  deletedAt        DateTime? @map("deleted_at")
 
-  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  supplier         Supplier          @relation(fields: [supplierId], references: [id], onDelete: Restrict)
-  items            GrnItem[]
+  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  supplier        Supplier          @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  purchaseOrder   PurchaseOrder?    @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+  items           GrnItem[]
   purchaseInvoices PurchaseInvoice[]
 
   @@unique([organizationId, grnNo])
   @@index([organizationId])
   @@index([supplierId])
+  @@index([purchaseOrderId])
   @@index([receivedDate])
   @@index([deletedAt])
   @@map("grns")
@@ -327,8 +357,11 @@ model Client {
   email               String?
   phone               String?
   address             String?
+  siteLocation        String?   @map("site_location")
+  building            String?   @map("building")
   taxNumber           String?   @map("tax_number")
-  defaultPaymentTerms Int?      @map("default_payment_terms") // days, e.g. 30 = NET 30
+  defaultPaymentTerms String?   @map("default_payment_terms") // e.g. NET 30, 50% advance
+  agreedDueDays       Int?      @map("agreed_due_days") // days for invoice due date
   creditLimit         Decimal?  @map("credit_limit") @db.Decimal(12, 2)
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
@@ -340,6 +373,7 @@ model Client {
   createdBy     User?          @relation("ClientCreatedBy", fields: [createdById], references: [id])
   updatedBy     User?          @relation("ClientUpdatedBy", fields: [updatedById], references: [id])
   quotations    Quotation[]
+  salesOrders   SalesOrder[]
   salesInvoices SalesInvoice[]
 
   @@index([organizationId])
@@ -352,6 +386,94 @@ model Client {
 // =============================================================================
 // PURCHASES
 // =============================================================================
+
+model PurchaseRequest {
+  id             String                @id @default(cuid())
+  organizationId String                @map("organization_id")
+  prNo           String                @map("pr_no")
+  salesOrderId   String?               @map("sales_order_id")
+  jobId          String?               @map("job_id")
+  status         PurchaseRequestStatus @default(DRAFT) @map("status")
+  notes          String?
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+  deletedAt      DateTime?             @map("deleted_at")
+  createdById    String?               @map("created_by_id")
+  approvedById   String?               @map("approved_by_id")
+  approvedAt     DateTime?             @map("approved_at")
+
+  organization    Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  salesOrder      SalesOrder?          @relation(fields: [salesOrderId], references: [id], onDelete: SetNull)
+  items           PurchaseRequestItem[]
+  purchaseOrders  PurchaseOrder[]
+
+  @@unique([organizationId, prNo])
+  @@index([organizationId])
+  @@index([salesOrderId])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("purchase_requests")
+}
+
+model PurchaseRequestItem {
+  id                 String          @id @default(cuid())
+  purchaseRequestId  String          @map("purchase_request_id")
+  itemId             String          @map("item_id")
+  quantity           Int
+  fulfilledQuantity  Int             @default(0) @map("fulfilled_quantity")
+
+  purchaseRequest PurchaseRequest @relation(fields: [purchaseRequestId], references: [id], onDelete: Cascade)
+  item            Item            @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@unique([purchaseRequestId, itemId])
+  @@index([purchaseRequestId])
+  @@index([itemId])
+  @@map("purchase_request_items")
+}
+
+model PurchaseOrder {
+  id                 String   @id @default(cuid())
+  organizationId     String   @map("organization_id")
+  purchaseRequestId  String   @map("purchase_request_id")
+  supplierId         String   @map("supplier_id")
+  poNo               String   @map("po_no")
+  orderDate          DateTime @map("order_date")
+  notes              String?
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+  deletedAt          DateTime? @map("deleted_at")
+  createdById        String?  @map("created_by_id")
+
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  purchaseRequest PurchaseRequest @relation(fields: [purchaseRequestId], references: [id], onDelete: Restrict)
+  supplier       Supplier        @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  items          PurchaseOrderItem[]
+  grns           Grn[]
+
+  @@unique([organizationId, poNo])
+  @@index([organizationId])
+  @@index([purchaseRequestId])
+  @@index([supplierId])
+  @@index([deletedAt])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id              String   @id @default(cuid())
+  purchaseOrderId String   @map("purchase_order_id")
+  itemId          String   @map("item_id")
+  quantity        Int
+  unitPrice       Decimal  @map("unit_price") @db.Decimal(12, 2)
+  total           Decimal  @db.Decimal(12, 2)
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  item          Item          @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@unique([purchaseOrderId, itemId])
+  @@index([purchaseOrderId])
+  @@index([itemId])
+  @@map("purchase_order_items")
+}
 
 model PurchaseInvoice {
   id             String        @id @default(cuid())
@@ -442,6 +564,7 @@ model Quotation {
   id             String          @id @default(cuid())
   organizationId String          @map("organization_id")
   clientId       String          @map("client_id")
+  jobId          String          @map("job_id")
   quotationNo    String          @map("quotation_no")
   quotationDate  DateTime        @map("quotation_date")
   status         QuotationStatus @default(DRAFT)
@@ -452,17 +575,20 @@ model Quotation {
   deletedAt      DateTime?       @map("deleted_at")
   createdById    String?         @map("created_by_id")
   updatedById    String?         @map("updated_by_id")
+  approvedById   String?         @map("approved_by_id")
+  approvedAt     DateTime?       @map("approved_at")
 
   organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   client       Client          @relation(fields: [clientId], references: [id], onDelete: Restrict)
   createdBy    User?           @relation("QuotationCreatedBy", fields: [createdById], references: [id])
   updatedBy    User?           @relation("QuotationUpdatedBy", fields: [updatedById], references: [id])
   items        QuotationItem[]
-  salesInvoice SalesInvoice?
+  salesOrder   SalesOrder?
 
   @@unique([organizationId, quotationNo])
   @@index([organizationId])
   @@index([clientId])
+  @@index([jobId])
   @@index([status])
   @@index([deletedAt])
   @@map("quotations")
@@ -473,8 +599,10 @@ model QuotationItem {
   quotationId String  @map("quotation_id")
   itemId      String  @map("item_id")
   quantity    Int
-  unitPrice   Decimal @map("unit_price") @db.Decimal(12, 2)
-  total       Decimal @db.Decimal(12, 2)
+  purchaseCost Decimal @map("purchase_cost") @db.Decimal(12, 2)
+  margin      Decimal  @db.Decimal(5, 2) // %
+  unitPrice   Decimal  @map("unit_price") @db.Decimal(12, 2) // selling price (cost + margin)
+  total       Decimal  @db.Decimal(12, 2)
 
   quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
   item      Item      @relation(fields: [itemId], references: [id], onDelete: Restrict)
@@ -485,11 +613,59 @@ model QuotationItem {
   @@map("quotation_items")
 }
 
+model SalesOrder {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  quotationId    String   @unique @map("quotation_id")
+  clientId       String   @map("client_id")
+  jobId          String   @map("job_id")
+  orderNo        String   @map("order_no")
+  orderDate      DateTime @map("order_date")
+  notes          String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+  createdById    String?  @map("created_by_id")
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  quotation    Quotation      @relation(fields: [quotationId], references: [id], onDelete: Restrict)
+  client       Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  items        SalesOrderItem[]
+  salesInvoices SalesInvoice[]
+  purchaseRequests PurchaseRequest[]
+
+  @@unique([organizationId, orderNo])
+  @@index([organizationId])
+  @@index([quotationId])
+  @@index([clientId])
+  @@index([jobId])
+  @@index([deletedAt])
+  @@map("sales_orders")
+}
+
+model SalesOrderItem {
+  id            String   @id @default(cuid())
+  salesOrderId  String   @map("sales_order_id")
+  itemId        String   @map("item_id")
+  quantity      Int
+  unitPrice     Decimal  @map("unit_price") @db.Decimal(12, 2) // inclusive (cost + margin)
+  total         Decimal  @db.Decimal(12, 2)
+
+  salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  item       Item       @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@unique([salesOrderId, itemId])
+  @@index([salesOrderId])
+  @@index([itemId])
+  @@map("sales_order_items")
+}
+
 model SalesInvoice {
   id             String        @id @default(cuid())
   organizationId String        @map("organization_id")
+  salesOrderId   String        @map("sales_order_id")
   clientId       String        @map("client_id")
-  quotationId    String?       @unique @map("quotation_id")
+  jobId          String        @map("job_id")
   invoiceNo      String        @map("invoice_no")
   invoiceDate    DateTime      @map("invoice_date")
   dueDate        DateTime?     @map("due_date")
@@ -499,25 +675,29 @@ model SalesInvoice {
   paidAmount     Decimal       @default(0) @map("paid_amount") @db.Decimal(12, 2)
   paymentStatus  PaymentStatus @default(UNPAID) @map("payment_status")
   currencyCode   String        @default("AED") @map("currency_code")
+  defaultTaxPercent Decimal    @default(5) @map("default_tax_percent") @db.Decimal(5, 2)
+  pdfUrl         String?       @map("pdf_url")
   notes          String?
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
   deletedAt      DateTime?     @map("deleted_at")
   createdById    String?       @map("created_by_id")
   updatedById    String?       @map("updated_by_id")
+  approvedById   String?       @map("approved_by_id")
 
   organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  salesOrder   SalesOrder         @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
   client       Client             @relation(fields: [clientId], references: [id], onDelete: Restrict)
-  quotation    Quotation?         @relation(fields: [quotationId], references: [id], onDelete: SetNull)
   createdBy    User?              @relation("SalesInvoiceCreatedBy", fields: [createdById], references: [id])
   updatedBy    User?              @relation("SalesInvoiceUpdatedBy", fields: [updatedById], references: [id])
   items        SalesInvoiceItem[]
   payments     ClientPayment[]
 
   @@unique([organizationId, invoiceNo])
-  @@index([quotationId])
   @@index([organizationId])
+  @@index([salesOrderId])
   @@index([clientId])
+  @@index([jobId])
   @@index([invoiceDate])
   @@index([paymentStatus])
   @@index([deletedAt])
@@ -530,6 +710,7 @@ model SalesInvoiceItem {
   itemId         String   @map("item_id")
   quantity       Int
   unitPrice      Decimal  @map("unit_price") @db.Decimal(12, 2)
+  taxPercent     Decimal  @default(5) @map("tax_percent") @db.Decimal(5, 2)
   total          Decimal  @db.Decimal(12, 2)
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
@@ -549,6 +730,7 @@ model ClientPayment {
   salesInvoiceId String   @map("sales_invoice_id")
   amount         Decimal  @db.Decimal(12, 2)
   paymentDate    DateTime @map("payment_date")
+  paymentType    String?  @map("payment_type") // e.g. Bank Transfer, Cash, Card
   method         String?
   reference      String?
   notes          String?

@@ -16,7 +16,7 @@ export default async function EditQuotationPage({
   const { id } = await params;
   const quotation = await getQuotationById(id);
   if (!quotation) notFound();
-  if (quotation.salesInvoice) {
+  if (quotation.salesOrder?.salesInvoices?.length) {
     redirect("/sales/quotations");
   }
 
@@ -33,15 +33,24 @@ export default async function EditQuotationPage({
           sku: true,
           name: true,
           stockQty: true,
-          sellingPrice: true,
+          defaultPurchaseCost: true,
+          defaultMargin: true,
         },
         orderBy: { name: "asc" },
       })
       .then((rows) =>
-        rows.map((r) => ({
-          ...r,
-          sellingPrice: Number(r.sellingPrice),
-        }))
+        rows.map((r) => {
+          const cost = Number(r.defaultPurchaseCost);
+          const margin = Number(r.defaultMargin);
+          const sellingPrice = cost * (1 + margin / 100);
+          return {
+            id: r.id,
+            sku: r.sku,
+            name: r.name,
+            stockQty: r.stockQty,
+            sellingPrice,
+          };
+        })
       ),
     getNextQuotationNo(),
   ]);

@@ -86,11 +86,11 @@ export default async function ItemDetailPage({
           </div>
           <div>
             <span className="text-sm text-muted-foreground">Cost price</span>
-            <p className="font-medium">{Number(item.costPrice).toFixed(2)}</p>
+            <p className="font-medium">{Number(item.defaultPurchaseCost).toFixed(2)}</p>
           </div>
           <div>
             <span className="text-sm text-muted-foreground">Selling price</span>
-            <p className="font-medium">{Number(item.sellingPrice).toFixed(2)}</p>
+            <p className="font-medium">{(Number(item.defaultPurchaseCost) * (1 + Number(item.defaultMargin) / 100)).toFixed(2)}</p>
           </div>
           {item.description && (
             <div>

@@ -124,10 +124,10 @@ export default async function InventoryPage({
                             {item.stockQty}
                           </TableCell>
                           <TableCell className="text-right">
-                            {Number(item.costPrice).toFixed(2)}
+                            {Number(item.defaultPurchaseCost).toFixed(2)}
                           </TableCell>
                           <TableCell className="text-right">
-                            {Number(item.sellingPrice).toFixed(2)}
+                            {(Number(item.defaultPurchaseCost) * (1 + Number(item.defaultMargin) / 100)).toFixed(2)}
                           </TableCell>
                           <TableCell>
                             {isLowStock ? (

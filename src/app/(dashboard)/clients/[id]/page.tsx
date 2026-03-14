@@ -153,7 +153,7 @@ export default async function ClientDetailPage({
                       inv.dueDate ??
                       calculateDueDate(
                         inv.invoiceDate,
-                        client.defaultPaymentTerms
+                        client.agreedDueDays
                       );
                     return (
                       <TableRow key={inv.id}>

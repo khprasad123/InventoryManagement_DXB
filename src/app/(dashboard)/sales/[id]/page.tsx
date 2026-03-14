@@ -99,17 +99,17 @@ export default async function SalesInvoiceDetailPage({
                 {invoice.paymentStatus}
               </Badge>
             </div>
-            {invoice.quotation && (
+            {invoice.salesOrder?.quotation && (
               <div>
                 <span className="text-sm text-muted-foreground">
                   From Quotation
                 </span>
                 <p className="font-medium">
                   <Link
-                    href={`/sales/quotations/${invoice.quotation.id}`}
+                    href={`/sales/quotations/${invoice.salesOrder?.quotation.id}`}
                     className="text-primary hover:underline"
                   >
-                    {invoice.quotation.quotationNo}
+                    {invoice.salesOrder?.quotation.quotationNo}
                   </Link>
                 </p>
               </div>

@@ -111,12 +111,12 @@ export default async function SalesPage() {
                       </TableCell>
                       <TableCell>{inv.client.name}</TableCell>
                       <TableCell>
-                        {inv.quotation ? (
+                        {inv.salesOrder?.quotation ? (
                           <Link
-                            href={`/sales/quotations/${inv.quotation.id}`}
+                            href={`/sales/quotations/${inv.salesOrder?.quotation.id}`}
                             className="text-primary hover:underline"
                           >
-                            {inv.quotation.quotationNo}
+                            {inv.salesOrder?.quotation.quotationNo}
                           </Link>
                         ) : (
                           "-"

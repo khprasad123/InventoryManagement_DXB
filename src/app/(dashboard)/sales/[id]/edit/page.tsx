@@ -32,7 +32,8 @@ export default async function EditSalesInvoicePage({
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Edit Sales Invoice</h1>
         <p className="text-muted-foreground">
-          Update {invoice.invoiceNo} (client: {invoice.client.name}). Line items cannot be changed here; use payments to update paid amount.
+          Update {invoice.invoiceNo}. Line items cannot be changed here; use
+          payments to update paid amount.
         </p>
       </div>
 

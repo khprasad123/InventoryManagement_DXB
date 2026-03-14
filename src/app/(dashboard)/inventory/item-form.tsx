@@ -4,10 +4,14 @@ import { useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import type { Item } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { Item } from "@prisma/client";
+type ItemWithCost = {
+  defaultPurchaseCost: { toNumber?: () => number } | number;
+  defaultMargin: { toNumber?: () => number } | number;
+} & Record<string, unknown>;
 
 const itemSchema = z.object({
   sku: z.string().min(1, "SKU is required").max(50),
@@ -15,8 +19,8 @@ const itemSchema = z.object({
   description: z.string().optional(),
   category: z.string().min(1, "Category is required").max(100),
   unit: z.string().min(1, "Unit is required").max(20),
-  costPrice: z.coerce.number().min(0, "Cost must be ≥ 0"),
-  sellingPrice: z.coerce.number().min(0, "Selling price must be ≥ 0"),
+  defaultPurchaseCost: z.coerce.number().min(0, "Cost must be ≥ 0"),
+  defaultMargin: z.coerce.number().min(0, "Margin must be ≥ 0"),
   minStock: z.coerce.number().int().min(0, "Min stock must be ≥ 0"),
 });
 
@@ -40,20 +44,28 @@ export function ItemForm({ mode, item, categories, onSubmit }: ItemFormProps) {
     resolver: zodResolver(itemSchema),
     defaultValues: item
       ? {
-          sku: item.sku,
-          name: item.name,
-          description: item.description ?? "",
-          category: item.category ?? "General",
-          unit: item.unit,
-          costPrice: Number(item.costPrice),
-          sellingPrice: Number(item.sellingPrice),
-          minStock: item.minStock,
+          sku: (item as Record<string, unknown>).sku as string,
+          name: (item as Record<string, unknown>).name as string,
+          description: ((item as Record<string, unknown>).description as string) ?? "",
+          category: ((item as Record<string, unknown>).category as string) ?? "General",
+          unit: (item as Record<string, unknown>).unit as string,
+          defaultPurchaseCost: Number(
+            typeof item.defaultPurchaseCost === "object" && item.defaultPurchaseCost?.toNumber
+              ? item.defaultPurchaseCost.toNumber()
+              : item.defaultPurchaseCost
+          ),
+          defaultMargin: Number(
+            typeof item.defaultMargin === "object" && item.defaultMargin?.toNumber
+              ? item.defaultMargin.toNumber()
+              : item.defaultMargin
+          ),
+          minStock: (item as Record<string, unknown>).minStock as number,
         }
       : {
           category: "General",
           unit: "pcs",
-          costPrice: 0,
-          sellingPrice: 0,
+          defaultPurchaseCost: 0,
+          defaultMargin: 0,
           minStock: 0,
         },
   });
@@ -137,31 +149,29 @@ export function ItemForm({ mode, item, categories, onSubmit }: ItemFormProps) {
 
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="space-y-2">
-          <Label htmlFor="costPrice">Cost Price</Label>
+          <Label htmlFor="defaultPurchaseCost">Default Purchase Cost</Label>
           <Input
-            id="costPrice"
+            id="defaultPurchaseCost"
             type="number"
             step="0.01"
             min={0}
-            {...register("costPrice")}
+            {...register("defaultPurchaseCost")}
           />
-          {errors.costPrice && (
-            <p className="text-sm text-destructive">{errors.costPrice.message}</p>
+          {errors.defaultPurchaseCost && (
+            <p className="text-sm text-destructive">{errors.defaultPurchaseCost.message}</p>
           )}
         </div>
         <div className="space-y-2">
-          <Label htmlFor="sellingPrice">Selling Price</Label>
+          <Label htmlFor="defaultMargin">Default Margin (%)</Label>
           <Input
-            id="sellingPrice"
+            id="defaultMargin"
             type="number"
             step="0.01"
             min={0}
-            {...register("sellingPrice")}
+            {...register("defaultMargin")}
           />
-          {errors.sellingPrice && (
-            <p className="text-sm text-destructive">
-              {errors.sellingPrice.message}
-            </p>
+          {errors.defaultMargin && (
+            <p className="text-sm text-destructive">{errors.defaultMargin.message}</p>
           )}
         </div>
         <div className="space-y-2">

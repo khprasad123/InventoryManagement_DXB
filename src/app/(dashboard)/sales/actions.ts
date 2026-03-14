@@ -1,5 +1,6 @@
 "use server";
 
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getOrganizationId, getCurrentUser } from "@/lib/auth-utils";
 import { redirect } from "next/navigation";
@@ -47,7 +48,7 @@ export async function getQuotations() {
     include: {
       client: true,
       items: { include: { item: true } },
-      salesInvoice: true,
+      salesOrder: { include: { salesInvoices: true } },
     },
     orderBy: { quotationDate: "desc" },
   });
@@ -61,7 +62,7 @@ export async function getQuotationById(id: string) {
     include: {
       client: true,
       items: { include: { item: true } },
-      salesInvoice: true,
+      salesOrder: { include: { salesInvoices: true } },
     },
   });
 }
@@ -120,10 +121,12 @@ export async function createQuotation(formData: FormData) {
   const user = await getCurrentUser();
   const userId = (user as { id?: string } | null)?.id ?? null;
 
+  const jobId = `JOB-${quotationNo}`;
   const quotation = await prisma.quotation.create({
     data: {
       organizationId: orgId,
       clientId,
+      jobId,
       quotationNo,
       quotationDate: new Date(quotationDate),
       status: status as "DRAFT" | "APPROVED",
@@ -132,12 +135,17 @@ export async function createQuotation(formData: FormData) {
       createdById: userId ?? undefined,
       updatedById: userId ?? undefined,
       items: {
-        create: quoteItems.map((it) => ({
-          itemId: it.itemId,
-          quantity: it.quantity,
-          unitPrice: it.unitPrice,
-          total: it.quantity * it.unitPrice,
-        })),
+        create: quoteItems.map((it) => {
+          const up = Number(it.unitPrice);
+          return {
+            itemId: it.itemId,
+            quantity: it.quantity,
+            purchaseCost: up,
+            margin: 0,
+            unitPrice: up,
+            total: it.quantity * up,
+          };
+        }),
       },
     },
   });
@@ -160,10 +168,10 @@ export async function updateQuotation(id: string, formData: FormData) {
 
   const existing = await prisma.quotation.findFirst({
     where: { id, organizationId: orgId, deletedAt: null },
-    include: { salesInvoice: true },
+    include: { salesOrder: { include: { salesInvoices: true } } },
   });
   if (!existing) return { error: { _form: ["Quotation not found"] } };
-  if (existing.salesInvoice) return { error: { _form: ["Cannot edit: already converted to invoice"] } };
+  if (existing.salesOrder?.salesInvoices?.length) return { error: { _form: ["Cannot edit: already converted to invoice"] } };
 
   const itemsJson = formData.get("items") as string;
   const items = itemsJson
@@ -217,12 +225,18 @@ export async function updateQuotation(id: string, formData: FormData) {
         notes: notes || null,
         updatedById: userId ?? undefined,
         items: {
-          create: quoteItems.map((it) => ({
-            itemId: it.itemId,
-            quantity: it.quantity,
-            unitPrice: it.unitPrice,
-            total: it.quantity * it.unitPrice,
-          })),
+          create: quoteItems.map((it) => {
+            const up = Number(it.unitPrice);
+            const total = it.quantity * up;
+            return {
+              itemId: it.itemId,
+              quantity: it.quantity,
+              purchaseCost: up,
+              margin: 0,
+              unitPrice: up,
+              total,
+            };
+          }),
         },
       },
     }),
@@ -247,10 +261,10 @@ export async function deleteQuotation(id: string) {
 
   const q = await prisma.quotation.findFirst({
     where: { id, organizationId: orgId, deletedAt: null },
-    include: { salesInvoice: true },
+    include: { salesOrder: { include: { salesInvoices: true } } },
   });
   if (!q) return { error: "Quotation not found" };
-  if (q.salesInvoice) return { error: "Cannot delete: already converted to invoice" };
+  if (q.salesOrder?.salesInvoices?.length) return { error: "Cannot delete: already converted to invoice" };
 
   await prisma.quotation.update({
     where: { id },
@@ -298,12 +312,12 @@ export async function convertQuotationToInvoice(quotationId: string) {
     include: {
       client: true,
       items: { include: { item: true } },
-      salesInvoice: true,
+      salesOrder: { include: { salesInvoices: true } },
     },
   });
 
   if (!quotation) return { error: "Quotation not found" };
-  if (quotation.salesInvoice) return { error: "Quotation already converted to invoice" };
+  if (quotation.salesOrder?.salesInvoices?.length) return { error: "Quotation already converted to invoice" };
 
   // Validate stock availability before transaction
   for (const qi of quotation.items) {
@@ -317,18 +331,46 @@ export async function convertQuotationToInvoice(quotationId: string) {
 
   const nextInvNo = await getNextInvoiceNo();
   const invDate = new Date();
-  const dueDate = calculateDueDate(invDate, quotation.client.defaultPaymentTerms);
+  const dueDate = calculateDueDate(invDate, quotation.client.agreedDueDays);
+
+  const lastOrder = await prisma.salesOrder.findFirst({
+    where: { organizationId: orgId, deletedAt: null },
+    orderBy: { createdAt: "desc" },
+  });
+  const orderNo = `SO-${String((lastOrder ? parseInt(lastOrder.orderNo.replace(/\D/g, ""), 10) || 0 : 0) + 1).padStart(5, "0")}`;
+  const jobId = quotation.jobId || `JOB-${quotation.quotationNo}`;
 
   await prisma.$transaction(async (tx) => {
     const subtotal = quotation.items.reduce((s, i) => s + Number(i.total), 0);
     const taxAmount = 0;
     const totalAmount = subtotal + taxAmount;
 
+    const salesOrder = await tx.salesOrder.create({
+      data: {
+        organizationId: orgId,
+        quotationId: quotation.id,
+        clientId: quotation.clientId,
+        jobId,
+        orderNo,
+        orderDate: invDate,
+        notes: quotation.notes,
+        items: {
+          create: quotation.items.map((qi) => ({
+            itemId: qi.itemId,
+            quantity: qi.quantity,
+            unitPrice: qi.unitPrice,
+            total: qi.quantity * Number(qi.unitPrice),
+          })),
+        },
+      },
+    });
+
     const invoice = await tx.salesInvoice.create({
       data: {
         organizationId: orgId,
+        salesOrderId: salesOrder.id,
         clientId: quotation.clientId,
-        quotationId: quotation.id,
+        jobId,
         invoiceNo: nextInvNo,
         invoiceDate: invDate,
         dueDate,
@@ -343,7 +385,6 @@ export async function convertQuotationToInvoice(quotationId: string) {
 
     for (const qi of quotation.items) {
       const item = qi.item;
-      const total = qi.quantity * Number(qi.unitPrice);
 
       await tx.salesInvoiceItem.create({
         data: {
@@ -351,7 +392,7 @@ export async function convertQuotationToInvoice(quotationId: string) {
           itemId: qi.itemId,
           quantity: qi.quantity,
           unitPrice: qi.unitPrice,
-          total,
+          total: qi.quantity * Number(qi.unitPrice),
         },
       });
 
@@ -385,19 +426,29 @@ export async function getSalesInvoices() {
   if (!orgId) redirect("/login");
   return prisma.salesInvoice.findMany({
     where: { organizationId: orgId, deletedAt: null },
-    include: { client: true, quotation: true },
+    include: { client: true, salesOrder: { include: { quotation: true } } },
     orderBy: { invoiceDate: "desc" },
   });
 }
 
-export async function getSalesInvoiceById(id: string) {
+export type SalesInvoiceWithRelations = Prisma.SalesInvoiceGetPayload<{
+  include: {
+    client: true;
+    salesOrder: { include: { quotation: true } };
+    items: { include: { item: true } };
+  };
+}>;
+
+export async function getSalesInvoiceById(
+  id: string
+): Promise<SalesInvoiceWithRelations | null> {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
   return prisma.salesInvoice.findFirst({
     where: { id, organizationId: orgId, deletedAt: null },
     include: {
       client: true,
-      quotation: true,
+      salesOrder: { include: { quotation: true } },
       items: { include: { item: true } },
     },
   });
@@ -488,17 +539,56 @@ export async function createSalesInvoice(formData: FormData) {
   const userId = (user as { id?: string } | null)?.id ?? null;
 
   const invDate = new Date(invoiceDate);
-  const dueDate = calculateDueDate(invDate, client.defaultPaymentTerms);
+  const dueDate = calculateDueDate(invDate, client.agreedDueDays);
   const totalAmount = subtotal + taxAmount;
   const paymentStatus =
     (paidAmount ?? 0) >= totalAmount ? "PAID" : (paidAmount ?? 0) > 0 ? "PARTIAL" : "UNPAID";
 
+  if (!quotationId) {
+    return { error: { _form: ["Sales invoice must be created from an approved quotation"] } };
+  }
+
+  const quotation = await prisma.quotation.findFirst({
+    where: { id: quotationId, organizationId: orgId, deletedAt: null, status: "APPROVED" },
+    include: { items: { include: { item: true } }, salesOrder: { include: { salesInvoices: true } } },
+  });
+  if (!quotation) return { error: { _form: ["Quotation not found or not approved"] } };
+  if (quotation.salesOrder?.salesInvoices?.length) return { error: { _form: ["Quotation already converted to invoice"] } };
+
+  const jobId = quotation.jobId || `JOB-${quotation.quotationNo}`;
+  const lastOrder = await prisma.salesOrder.findFirst({
+    where: { organizationId: orgId, deletedAt: null },
+    orderBy: { createdAt: "desc" },
+  });
+  const orderNo = `SO-${String((lastOrder ? parseInt(lastOrder.orderNo.replace(/\D/g, ""), 10) || 0 : 0) + 1).padStart(5, "0")}`;
+
   await prisma.$transaction(async (tx) => {
+    const salesOrder = await tx.salesOrder.create({
+      data: {
+        organizationId: orgId,
+        quotationId: quotation.id,
+        clientId,
+        jobId,
+        orderNo,
+        orderDate: invDate,
+        notes: notes || null,
+        items: {
+          create: invItems.map((it) => ({
+            itemId: it.itemId,
+            quantity: it.quantity,
+            unitPrice: it.unitPrice,
+            total: it.quantity * it.unitPrice,
+          })),
+        },
+      },
+    });
+
     const invoice = await tx.salesInvoice.create({
       data: {
         organizationId: orgId,
+        salesOrderId: salesOrder.id,
         clientId,
-        quotationId: quotationId || null,
+        jobId,
         invoiceNo,
         invoiceDate: invDate,
         dueDate,
@@ -609,7 +699,7 @@ export async function updateSalesInvoice(id: string, formData: FormData) {
 
   const { invoiceDate, notes, paidAmount } = parsed.data;
   const invDate = new Date(invoiceDate);
-  const dueDate = calculateDueDate(invDate, existing.client.defaultPaymentTerms);
+  const dueDate = calculateDueDate(invDate, existing.client.agreedDueDays);
   const totalAmount = Number(existing.totalAmount ?? 0);
   const paymentStatus =
     paidAmount >= totalAmount ? "PAID" : paidAmount > 0 ? "PARTIAL" : "UNPAID";
