@@ -14,6 +14,7 @@ import { getOrganizationId } from "@/lib/auth-utils";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Plus, ArrowLeft, Eye } from "lucide-react";
+import { SubmitPrButton } from "./submit-pr-button";
 
 export default async function PurchaseRequestsPage() {
   const orgId = await getOrganizationId();
@@ -101,11 +102,16 @@ export default async function PurchaseRequestsPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" asChild>
-                          <Link href={`/purchases/purchase-requests/${pr.id}`}>
-                            <Eye className="h-4 w-4" />
-                          </Link>
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          {pr.status === "DRAFT" && (
+                            <SubmitPrButton prId={pr.id} size="sm" />
+                          )}
+                          <Button variant="ghost" size="icon" asChild>
+                            <Link href={`/purchases/purchase-requests/${pr.id}`}>
+                              <Eye className="h-4 w-4" />
+                            </Link>
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

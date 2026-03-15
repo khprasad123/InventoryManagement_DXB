@@ -5,7 +5,13 @@ import { Button } from "@/components/ui/button";
 import { submitPurchaseRequestForApproval } from "../actions";
 import { useRouter } from "next/navigation";
 
-export function SubmitPrButton({ prId }: { prId: string }) {
+export function SubmitPrButton({
+  prId,
+  size = "default",
+}: {
+  prId: string;
+  size?: "default" | "sm";
+}) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -24,7 +30,7 @@ export function SubmitPrButton({ prId }: { prId: string }) {
 
   return (
     <div className="flex flex-col gap-2">
-      <Button onClick={handleSubmit} disabled={loading}>
+      <Button onClick={handleSubmit} disabled={loading} size={size}>
         {loading ? "Submitting..." : "Submit for Approval"}
       </Button>
       {error && <p className="text-sm text-destructive">{error}</p>}

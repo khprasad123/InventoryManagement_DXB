@@ -58,7 +58,10 @@ export default async function PurchaseRequestDetailPage({
           </p>
         </div>
         {pr.status === "DRAFT" && (
-          <p className="text-sm text-muted-foreground">Submit for approval from PR list.</p>
+          <SubmitPrButton prId={pr.id} />
+        )}
+        {pr.status === "PENDING_APPROVAL" && (
+          <ApproveRejectPr prId={pr.id} />
         )}
         {pr.status === "APPROVED" && (
           <Button asChild>
