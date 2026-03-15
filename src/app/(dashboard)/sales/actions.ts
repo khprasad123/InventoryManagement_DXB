@@ -384,6 +384,19 @@ export async function getSalesOrders() {
   });
 }
 
+export async function getSalesOrderById(id: string) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+  return prisma.salesOrder.findFirst({
+    where: { id, organizationId: orgId, deletedAt: null },
+    include: {
+      quotation: { include: { client: true } },
+      items: { include: { item: true } },
+      salesInvoices: true,
+    },
+  });
+}
+
 export async function createSalesOrderFromQuotation(quotationId: string) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");

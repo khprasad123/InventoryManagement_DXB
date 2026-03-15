@@ -40,14 +40,16 @@ export function PoForm({
   defaultPoNo: string;
   defaultPrId?: string;
 }) {
+  const NONE_PR = "__none__";
+  const NONE_SUPPLIER = "__none__";
   const router = useRouter();
-  const [prId, setPrId] = useState(defaultPrId || "");
-  const [supplierId, setSupplierId] = useState("");
+  const [prId, setPrId] = useState(defaultPrId && prs.some((p) => p.id === defaultPrId) ? defaultPrId : NONE_PR);
+  const [supplierId, setSupplierId] = useState(NONE_SUPPLIER);
   const [rows, setRows] = useState<PoItemRow[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const selectedPr = prs.find((p) => p.id === prId);
+  const selectedPr = prId && prId !== NONE_PR ? prs.find((p) => p.id === prId) : undefined;
 
   useEffect(() => {
     if (selectedPr) {
@@ -77,7 +79,7 @@ export function PoForm({
     setError(null);
     const form = e.target as HTMLFormElement;
     const formData = new FormData();
-    formData.set("purchaseRequestId", prId);
+    formData.set("purchaseRequestId", prId === NONE_PR ? "" : prId);
     formData.set("supplierId", supplierId);
     formData.set("poNo", (form.querySelector("#poNo") as HTMLInputElement)?.value || defaultPoNo);
     formData.set("orderDate", (form.querySelector("#orderDate") as HTMLInputElement)?.value || new Date().toISOString().slice(0, 10));
@@ -88,7 +90,7 @@ export function PoForm({
       setError("Select a PR and ensure all items have valid quantity and price");
       return;
     }
-    if (!prId || !supplierId) {
+    if (!prId || prId === NONE_PR || !supplierId || supplierId === NONE_SUPPLIER) {
       setError("Select PR and supplier");
       return;
     }
@@ -115,6 +117,7 @@ export function PoForm({
               <SelectValue placeholder="Select PR" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value={NONE_PR}>Select PR</SelectItem>
               {prs.map((pr) => (
                 <SelectItem key={pr.id} value={pr.id}>
                   {pr.prNo} ({pr.items.length} items)
@@ -135,6 +138,7 @@ export function PoForm({
               <SelectValue placeholder="Select supplier" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value={NONE_SUPPLIER}>Select supplier</SelectItem>
               {suppliers.map((s) => (
                 <SelectItem key={s.id} value={s.id}>
                   {s.name}

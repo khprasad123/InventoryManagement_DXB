@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createSalesInvoice } from "./actions";
+import { createSalesInvoice, createInvoiceFromSalesOrder } from "./actions";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
 import type { Client } from "@prisma/client";
@@ -32,10 +32,19 @@ type CurrencyOption = {
   isDefault: boolean;
 };
 
+type SalesOrderOption = {
+  id: string;
+  orderNo: string;
+  clientName: string;
+  jobId: string;
+  itemCount: number;
+};
+
 interface SalesInvoiceFormProps {
   clients: Client[];
   items: ItemWithStock[];
   quotations: QuotationOption[];
+  salesOrders: SalesOrderOption[];
   defaultInvoiceNo: string;
   currencies: CurrencyOption[];
   defaultCurrencyCode: string;
@@ -47,11 +56,14 @@ export function SalesInvoiceForm({
   clients,
   items,
   quotations,
+  salesOrders,
   defaultInvoiceNo,
   currencies,
   defaultCurrencyCode,
 }: SalesInvoiceFormProps) {
   const router = useRouter();
+  const [invoiceSource, setInvoiceSource] = useState<"ad_hoc" | "sales_order">("ad_hoc");
+  const [salesOrderId, setSalesOrderId] = useState("");
   const [rows, setRows] = useState<InvoiceItemRow[]>([
     { itemId: "", quantity: 1, unitPrice: 0 },
   ]);
@@ -176,18 +188,101 @@ export function SalesInvoiceForm({
     router.refresh();
   }
 
+  async function handleCreateFromSalesOrder(e: React.FormEvent) {
+    e.preventDefault();
+    if (!salesOrderId) {
+      setError("Select a Sales Order");
+      return;
+    }
+    setError(null);
+    setSubmitting(true);
+    const result = await createInvoiceFromSalesOrder(salesOrderId);
+    setSubmitting(false);
+    if (result?.error) {
+      setError(String(result.error));
+      return;
+    }
+    router.refresh();
+  }
+
   return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap gap-4 border-b pb-4">
+        <Label className="sr-only">Invoice source</Label>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setInvoiceSource("ad_hoc");
+              setError(null);
+            }}
+            className={`rounded-md border px-3 py-1.5 text-sm ${
+              invoiceSource === "ad_hoc"
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-input bg-background hover:bg-muted/50"
+            }`}
+          >
+            Ad hoc (editable items)
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setInvoiceSource("sales_order");
+              setSalesOrderId(salesOrders[0]?.id ?? "");
+              setError(null);
+            }}
+            className={`rounded-md border px-3 py-1.5 text-sm ${
+              invoiceSource === "sales_order"
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-input bg-background hover:bg-muted/50"
+            }`}
+          >
+            From Sales Order (locked)
+          </button>
+        </div>
+      </div>
+
+      {invoiceSource === "sales_order" && (
+        <form onSubmit={handleCreateFromSalesOrder} className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Item list and quantities are locked from the Sales Order. You cannot edit them.
+          </p>
+          <div className="space-y-2">
+            <Label htmlFor="salesOrderId">Sales Order *</Label>
+            <select
+              id="salesOrderId"
+              value={salesOrderId}
+              onChange={(e) => setSalesOrderId(e.target.value)}
+              className="flex h-10 w-full max-w-md rounded-md border border-input bg-background px-3 py-2 text-sm"
+              required
+            >
+              <option value="">Select Sales Order</option>
+              {salesOrders.map((so) => (
+                <option key={so.id} value={so.id}>
+                  {so.orderNo} – {so.clientName} ({so.itemCount} items)
+                </option>
+              ))}
+            </select>
+          </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <Button type="submit" disabled={submitting || !salesOrderId}>
+            {submitting ? "Creating…" : "Create Invoice from Sales Order"}
+          </Button>
+        </form>
+      )}
+
+      {invoiceSource === "ad_hoc" && (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="quotationId">From Quotation (optional)</Label>
+          <Label htmlFor="quotationId">From Quotation (optional prefill)</Label>
           <select
             id="quotationId"
             value={quotationId}
             onChange={(e) => setQuotationId(e.target.value)}
             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
           >
-            <option value="">None - Create direct invoice</option>
+            <option value="">None - Add items manually</option>
             {quotations.map((q) => (
               <option key={q.id} value={q.id}>
                 {q.quotationNo}
@@ -410,5 +505,7 @@ export function SalesInvoiceForm({
         </Button>
       </div>
     </form>
+      )}
+    </div>
   );
 }

@@ -11,6 +11,7 @@ type DocumentableType =
   | "Item"
   | "PurchaseInvoice"
   | "SalesInvoice"
+  | "SalesOrder"
   | "Expense"
   | "Grn"
   | "Quotation";

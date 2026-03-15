@@ -77,7 +77,14 @@ export default async function SalesOrdersPage() {
                     const invoice = hasInvoice ? so.salesInvoices[0] : null;
                     return (
                       <TableRow key={so.id}>
-                        <TableCell className="font-medium">{so.orderNo}</TableCell>
+                        <TableCell className="font-medium">
+                          <Link
+                            href={`/sales/sales-orders/${so.id}`}
+                            className="text-primary hover:underline"
+                          >
+                            {so.orderNo}
+                          </Link>
+                        </TableCell>
                         <TableCell>{new Date(so.orderDate).toLocaleDateString()}</TableCell>
                         <TableCell>{so.quotation?.client?.name ?? "-"}</TableCell>
                         <TableCell>

@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SalesInvoiceForm } from "../sales-invoice-form";
-import { getNextInvoiceNo, getQuotations } from "../actions";
+import { getNextInvoiceNo, getQuotations, getSalesOrders } from "../actions";
 import { getOrganizationId } from "@/lib/auth-utils";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -13,7 +13,7 @@ export default async function AddSalesInvoicePage() {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
-  const [clients, items, quotations, defaultInvoiceNo, currencies, defaultCurrencyCode] =
+  const [clients, items, quotations, salesOrders, defaultInvoiceNo, currencies, defaultCurrencyCode] =
     await Promise.all([
     prisma.client.findMany({
       where: { organizationId: orgId, deletedAt: null },
@@ -60,6 +60,17 @@ export default async function AddSalesInvoicePage() {
           })),
         }))
     ),
+    getSalesOrders().then((orders) =>
+      orders
+        .filter((so) => !so.salesInvoices?.length)
+        .map((so) => ({
+          id: so.id,
+          orderNo: so.orderNo,
+          clientName: so.quotation?.client?.name ?? "—",
+          jobId: so.jobId ?? "—",
+          itemCount: so.items.length,
+        }))
+    ),
     getNextInvoiceNo(),
     getOrganizationCurrencies(orgId),
     getDefaultCurrencyCodeForOrg(orgId),
@@ -72,7 +83,7 @@ export default async function AddSalesInvoicePage() {
           Create Sales Invoice
         </h1>
         <p className="text-muted-foreground">
-          Create from quotation or add items directly
+          From Sales Order (locked items) or Ad hoc (manual entry, editable items)
         </p>
       </div>
 
@@ -85,6 +96,7 @@ export default async function AddSalesInvoicePage() {
             clients={clients}
             items={items}
             quotations={quotations}
+            salesOrders={salesOrders}
             defaultInvoiceNo={defaultInvoiceNo}
             currencies={currencies}
             defaultCurrencyCode={defaultCurrencyCode}

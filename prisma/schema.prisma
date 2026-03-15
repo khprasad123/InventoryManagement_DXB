@@ -720,7 +720,6 @@ model SalesInvoiceItem {
   salesInvoice SalesInvoice @relation(fields: [salesInvoiceId], references: [id], onDelete: Cascade)
   item         Item         @relation(fields: [itemId], references: [id], onDelete: Restrict)
 
-  @@unique([salesInvoiceId, itemId])
   @@index([salesInvoiceId])
   @@index([itemId])
   @@map("sales_invoice_items")
