@@ -5,7 +5,10 @@ export default function RegisterLayout({
 }: {
   children: React.ReactNode;
 }) {
-  if (process.env.IS_OWNER !== "true") {
+  const allowRegister =
+    process.env.IS_OWNER === "true" ||
+    process.env.NEXT_PUBLIC_IS_OWNER === "true";
+  if (!allowRegister) {
     redirect("/login");
   }
   return <>{children}</>;
