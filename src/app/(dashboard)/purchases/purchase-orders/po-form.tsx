@@ -23,7 +23,8 @@ type PrWithItems = {
     id: string;
     itemId: string;
     quantity: number;
-    item: { id: string; name: string; sku: string };
+    fulfilledQuantity: number;
+    item: { id: string; name: string; sku: string; defaultPurchaseCost: unknown };
   }>;
 };
 
@@ -53,12 +54,20 @@ export function PoForm({
 
   useEffect(() => {
     if (selectedPr) {
+      const fulfilled = (i: { quantity: number; fulfilledQuantity?: number | null }) =>
+        i.fulfilledQuantity ?? 0;
       setRows(
-        selectedPr.items.map((i) => ({
-          itemId: i.itemId,
-          quantity: i.quantity,
-          unitPrice: 0,
-        }))
+        selectedPr.items
+          .filter((i) => i.quantity > fulfilled(i))
+          .map((i) => {
+            const remaining = i.quantity - fulfilled(i);
+            const unitPrice = Number(i.item.defaultPurchaseCost ?? 0);
+            return {
+              itemId: i.itemId,
+              quantity: remaining,
+              unitPrice: unitPrice >= 0 ? unitPrice : 0,
+            };
+          })
       );
     } else {
       setRows([]);

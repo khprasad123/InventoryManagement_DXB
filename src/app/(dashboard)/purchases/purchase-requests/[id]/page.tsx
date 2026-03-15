@@ -13,9 +13,10 @@ import { getPurchaseRequestById } from "@/app/(dashboard)/purchases/actions";
 import { getOrganizationId } from "@/lib/auth-utils";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Pencil } from "lucide-react";
 import { SubmitPrButton } from "../submit-pr-button";
 import { ApproveRejectPr } from "../approve-reject-pr";
+import { DeletePrButton } from "../delete-pr-button";
 
 export default async function PurchaseRequestDetailPage({
   params,
@@ -30,6 +31,9 @@ export default async function PurchaseRequestDetailPage({
   if (!pr) notFound();
 
   const items = pr.items.filter((it) => it.item != null);
+  const hasRemaining = items.some(
+    (i) => i.quantity > (i.fulfilledQuantity ?? 0)
+  );
 
   return (
     <div className="space-y-6">
@@ -58,7 +62,16 @@ export default async function PurchaseRequestDetailPage({
           </p>
         </div>
         {pr.status === "DRAFT" && (
-          <SubmitPrButton prId={pr.id} />
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/purchases/purchase-requests/${pr.id}/edit`}>
+                <Pencil className="mr-2 h-4 w-4" />
+                Edit
+              </Link>
+            </Button>
+            <SubmitPrButton prId={pr.id} />
+            <DeletePrButton prId={pr.id} prNo={pr.prNo} />
+          </div>
         )}
         {pr.status === "PENDING_APPROVAL" && (
           <ApproveRejectPr prId={pr.id} />
@@ -84,6 +97,7 @@ export default async function PurchaseRequestDetailPage({
                   <TableHead>Item</TableHead>
                   <TableHead>SKU</TableHead>
                   <TableHead className="text-right">Qty</TableHead>
+                  <TableHead className="text-right">Fulfilled</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -92,6 +106,9 @@ export default async function PurchaseRequestDetailPage({
                     <TableCell>{it.item?.name ?? "-"}</TableCell>
                     <TableCell>{it.item?.sku ?? "-"}</TableCell>
                     <TableCell className="text-right">{it.quantity}</TableCell>
+                    <TableCell className="text-right">
+                      {it.fulfilledQuantity ?? 0} / {it.quantity}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

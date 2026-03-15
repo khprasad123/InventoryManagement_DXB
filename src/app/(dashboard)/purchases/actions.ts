@@ -631,6 +631,100 @@ export async function createPurchaseRequest(formData: FormData) {
   return { success: true };
 }
 
+export async function updatePurchaseRequest(prId: string, formData: FormData) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const pr = await prisma.purchaseRequest.findFirst({
+    where: { id: prId, organizationId: orgId, deletedAt: null },
+  });
+  if (!pr) return { error: "Purchase request not found" };
+  if (pr.status !== "DRAFT") return { error: "Only draft PRs can be edited" };
+
+  const itemsJson = formData.get("items") as string;
+  let items: { itemId: string; quantity: number }[] = [];
+  try {
+    items = itemsJson ? (JSON.parse(itemsJson) as { itemId: string; quantity: number }[]) : [];
+  } catch {
+    return { error: { _form: ["Invalid items data"] } };
+  }
+
+  const prNo = (formData.get("prNo") as string)?.trim();
+  const notes = (formData.get("notes") as string)?.trim() || null;
+  const salesOrderId = (formData.get("salesOrderId") as string)?.trim() || null;
+  const jobId = (formData.get("jobId") as string)?.trim() || null;
+
+  const parsed = z.array(purchaseRequestItemSchema).min(1, "Add at least one item").safeParse(items);
+  if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
+  if (!prNo) return { error: { prNo: ["PR number is required"] } };
+
+  const mergedItems = parsed.data.reduce(
+    (acc, it) => {
+      const existing = acc.find((x) => x.itemId === it.itemId);
+      if (existing) existing.quantity += it.quantity;
+      else acc.push({ itemId: it.itemId, quantity: it.quantity });
+      return acc;
+    },
+    [] as { itemId: string; quantity: number }[]
+  );
+
+  const existing = await prisma.purchaseRequest.findFirst({
+    where: { organizationId: orgId, prNo, deletedAt: null, id: { not: prId } },
+  });
+  if (existing) return { error: { prNo: ["PR number already exists"] } };
+
+  if (salesOrderId) {
+    const so = await prisma.salesOrder.findFirst({
+      where: { id: salesOrderId, organizationId: orgId, deletedAt: null },
+    });
+    if (!so) return { error: { _form: ["Sales order not found"] } };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.purchaseRequest.update({
+      where: { id: prId },
+      data: {
+        prNo,
+        notes: notes || undefined,
+        salesOrderId: salesOrderId || null,
+        jobId: jobId || null,
+      },
+    });
+    await tx.purchaseRequestItem.deleteMany({ where: { purchaseRequestId: prId } });
+    for (const it of mergedItems) {
+      await tx.purchaseRequestItem.create({
+        data: { purchaseRequestId: prId, itemId: it.itemId, quantity: it.quantity },
+      });
+    }
+  });
+
+  revalidatePath("/purchases/purchase-requests");
+  revalidatePath(`/purchases/purchase-requests/${prId}`);
+  return { success: true };
+}
+
+export async function deletePurchaseRequest(id: string) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const pr = await prisma.purchaseRequest.findFirst({
+    where: { id, organizationId: orgId, deletedAt: null },
+    include: { purchaseOrders: true },
+  });
+  if (!pr) return { error: "Purchase request not found" };
+  if (pr.status !== "DRAFT") return { error: "Only draft PRs can be deleted" };
+  if (pr.purchaseOrders?.length) return { error: "Cannot delete: PR already has purchase orders" };
+
+  await prisma.purchaseRequest.update({
+    where: { id },
+    data: { deletedAt: new Date() },
+  });
+
+  revalidatePath("/purchases/purchase-requests");
+  revalidatePath(`/purchases/purchase-requests/${id}`);
+  return { success: true };
+}
+
 export async function submitPurchaseRequestForApproval(id: string) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
@@ -737,11 +831,15 @@ export async function getPurchaseOrderById(id: string) {
 export async function getApprovedPurchaseRequests() {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
-  return prisma.purchaseRequest.findMany({
+  const prs = await prisma.purchaseRequest.findMany({
     where: { organizationId: orgId, status: "APPROVED", deletedAt: null },
     include: { items: { include: { item: true } } },
     orderBy: { createdAt: "desc" },
   });
+  // Only return PRs that have at least one item with remaining quantity to fulfill
+  return prs.filter((pr) =>
+    pr.items.some((i) => i.quantity > (i.fulfilledQuantity ?? 0))
+  );
 }
 
 export async function getNextPoNo() {
@@ -782,9 +880,17 @@ export async function createPurchaseOrder(formData: FormData) {
   });
   if (!pr) return { error: { _form: ["Approved purchase request not found"] } };
 
-  const prItemIds = new Set(pr.items.map((i) => i.itemId));
-  const validItems = items.filter((i) => prItemIds.has(i.itemId));
+  const prItemMap = new Map(pr.items.map((i) => [i.itemId, i]));
+  const validItems = items.filter((i) => prItemMap.has(i.itemId));
   if (validItems.length === 0) return { error: { items: ["Add at least one item from the PR"] } };
+
+  for (const it of validItems) {
+    const prItem = prItemMap.get(it.itemId)!;
+    const remaining = prItem.quantity - (prItem.fulfilledQuantity ?? 0);
+    if (it.quantity > remaining) {
+      return { error: { items: [`Quantity exceeds remaining PR quantity (max ${remaining})`] } };
+    }
+  }
 
   const parsed = z.array(purchaseOrderItemSchema).safeParse(validItems);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
@@ -826,6 +932,16 @@ export async function createPurchaseOrder(formData: FormData) {
           total,
         },
       });
+      // Update PR item fulfilled quantity so PR can be fulfilled by multiple POs
+      const prItem = await tx.purchaseRequestItem.findFirst({
+        where: { purchaseRequestId, itemId: it.itemId },
+      });
+      if (prItem) {
+        await tx.purchaseRequestItem.update({
+          where: { id: prItem.id },
+          data: { fulfilledQuantity: prItem.fulfilledQuantity + it.quantity },
+        });
+      }
     }
   });
 

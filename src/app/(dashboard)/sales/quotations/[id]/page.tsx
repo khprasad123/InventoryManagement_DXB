@@ -18,6 +18,7 @@ import { CreateSalesOrderButton } from "../../create-sales-order-button";
 import { CreateInvoiceFromSoButton } from "../../create-invoice-from-so-button";
 import { SubmitQuotationButton } from "../../submit-quotation-button";
 import { ApproveRejectQuotation } from "../../approve-reject-quotation";
+import { DeleteQuotationButton } from "../../delete-quotation-button";
 
 export default async function QuotationDetailPage({
   params,
@@ -47,12 +48,18 @@ export default async function QuotationDetailPage({
             {quotation.quotationNo}
           </h1>
           {quotation.status === "DRAFT" && !quotation.salesOrder?.salesInvoices?.length && (
-            <Button asChild size="sm" variant="outline">
-              <Link href={`/sales/quotations/${quotation.id}/edit`}>
-                <Pencil className="mr-2 h-4 w-4" />
-                Edit
-              </Link>
-            </Button>
+            <>
+              <Button asChild size="sm" variant="outline">
+                <Link href={`/sales/quotations/${quotation.id}/edit`}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Edit
+                </Link>
+              </Button>
+              <DeleteQuotationButton
+                quotationId={quotation.id}
+                quotationNo={quotation.quotationNo}
+              />
+            </>
           )}
           <Badge
             variant={

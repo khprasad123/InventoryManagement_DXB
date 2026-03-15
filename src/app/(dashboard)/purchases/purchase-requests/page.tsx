@@ -13,8 +13,9 @@ import { getPurchaseRequests } from "../actions";
 import { getOrganizationId } from "@/lib/auth-utils";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Plus, ArrowLeft, Eye } from "lucide-react";
+import { Plus, ArrowLeft, Eye, Pencil } from "lucide-react";
 import { SubmitPrButton } from "./submit-pr-button";
+import { DeletePrButton } from "./delete-pr-button";
 
 export default async function PurchaseRequestsPage() {
   const orgId = await getOrganizationId();
@@ -104,9 +105,17 @@ export default async function PurchaseRequestsPage() {
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
                           {pr.status === "DRAFT" && (
-                            <SubmitPrButton prId={pr.id} size="sm" />
+                            <>
+                              <Button variant="ghost" size="icon" asChild title="Edit">
+                                <Link href={`/purchases/purchase-requests/${pr.id}/edit`}>
+                                  <Pencil className="h-4 w-4" />
+                                </Link>
+                              </Button>
+                              <SubmitPrButton prId={pr.id} size="sm" />
+                              <DeletePrButton prId={pr.id} prNo={pr.prNo} size="icon" />
+                            </>
                           )}
-                          <Button variant="ghost" size="icon" asChild>
+                          <Button variant="ghost" size="icon" asChild title="View">
                             <Link href={`/purchases/purchase-requests/${pr.id}`}>
                               <Eye className="h-4 w-4" />
                             </Link>

@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { createPurchaseRequest } from "../actions";
+import { createPurchaseRequest, updatePurchaseRequest } from "../actions";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
 import type { Item } from "@prisma/client";
@@ -26,21 +26,36 @@ type SalesOrderWithItems = {
   items: Array<{ itemId: string; quantity: number; item: { sku: string; name: string } }>;
 };
 
+type InitialPr = {
+  id: string;
+  prNo: string;
+  notes: string | null;
+  salesOrderId: string | null;
+  jobId: string | null;
+  items: Array<{ itemId: string; quantity: number }>;
+};
+
 export function PrForm({
   items,
   salesOrders = [],
   defaultPrNo,
+  initialPr,
 }: {
   items: Item[];
   salesOrders?: SalesOrderWithItems[];
   defaultPrNo: string;
+  initialPr?: InitialPr;
 }) {
   const router = useRouter();
   const NONE_SO_VALUE = "__none__";
-  const [salesOrderId, setSalesOrderId] = useState(NONE_SO_VALUE);
-  const [rows, setRows] = useState<PrItemRow[]>([
-    { itemId: "", quantity: 1 },
-  ]);
+  const [salesOrderId, setSalesOrderId] = useState(
+    initialPr?.salesOrderId && initialPr.salesOrderId !== "" ? initialPr.salesOrderId : NONE_SO_VALUE
+  );
+  const [rows, setRows] = useState<PrItemRow[]>(
+    initialPr?.items?.length
+      ? initialPr.items.map((i) => ({ itemId: i.itemId, quantity: i.quantity }))
+      : [{ itemId: "", quantity: 1 }]
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,6 +63,7 @@ export function PrForm({
   const isLocked = salesOrderId !== NONE_SO_VALUE && Boolean(salesOrderId);
 
   useEffect(() => {
+    if (initialPr) return;
     if (selectedSo && selectedSo.items.length > 0) {
       setRows(
         selectedSo.items.map((i) => ({
@@ -58,7 +74,7 @@ export function PrForm({
     } else if (salesOrderId === NONE_SO_VALUE) {
       setRows([{ itemId: "", quantity: 1 }]);
     }
-  }, [salesOrderId, selectedSo]);
+  }, [salesOrderId, selectedSo, initialPr]);
 
   const addRow = () => setRows((r) => [...r, { itemId: "", quantity: 1 }]);
   const removeRow = (i: number) =>
@@ -78,14 +94,13 @@ export function PrForm({
     formData.set("prNo", (form.querySelector("#prNo") as HTMLInputElement)?.value || defaultPrNo);
     formData.set("notes", (form.querySelector("#notes") as HTMLInputElement)?.value || "");
     if (salesOrderId && salesOrderId !== NONE_SO_VALUE) formData.set("salesOrderId", salesOrderId);
-    if (selectedSo?.jobId) formData.set("jobId", selectedSo.jobId);
+    formData.set("jobId", (form.querySelector("#jobId") as HTMLInputElement)?.value || "");
 
     const validRows = rows.filter((r) => r.itemId && r.quantity > 0);
     if (validRows.length === 0) {
       setError("Add at least one item with quantity");
       return;
     }
-    // Merge duplicate items: one item per PR line (sum quantities for same item)
     const merged = validRows.reduce(
       (acc, r) => {
         const existing = acc.find((x) => x.itemId === r.itemId);
@@ -98,7 +113,9 @@ export function PrForm({
     formData.set("items", JSON.stringify(merged));
 
     setSubmitting(true);
-    const result = await createPurchaseRequest(formData);
+    const result = initialPr
+      ? await updatePurchaseRequest(initialPr.id, formData)
+      : await createPurchaseRequest(formData);
     setSubmitting(false);
     if (result?.error) {
       const err = result.error as Record<string, string[]>;
@@ -113,7 +130,7 @@ export function PrForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="prNo">PR Number</Label>
-          <Input id="prNo" name="prNo" defaultValue={defaultPrNo} required />
+          <Input id="prNo" name="prNo" defaultValue={initialPr?.prNo ?? defaultPrNo} required />
         </div>
         <div className="space-y-2">
           <Label>Tag Sales Order (optional)</Label>
@@ -149,7 +166,7 @@ export function PrForm({
       </div>
       <div className="space-y-2">
         <Label htmlFor="notes">Notes</Label>
-        <Input id="notes" name="notes" placeholder="Optional" />
+        <Input id="notes" name="notes" placeholder="Optional" defaultValue={initialPr?.notes ?? ""} />
       </div>
 
       <div>
@@ -240,7 +257,7 @@ export function PrForm({
       {error && <p className="text-sm text-destructive">{error}</p>}
       <div className="flex gap-4">
         <Button type="submit" disabled={submitting}>
-          {submitting ? "Saving..." : "Create PR"}
+          {submitting ? "Saving..." : initialPr ? "Update PR" : "Create PR"}
         </Button>
         <Button type="button" variant="outline" asChild>
           <a href="/purchases/purchase-requests">Cancel</a>
