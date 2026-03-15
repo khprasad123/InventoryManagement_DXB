@@ -96,7 +96,8 @@ export default async function SalesPage() {
                     <TableHead>Client</TableHead>
                     <TableHead>Quotation</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>Approval</TableHead>
+                    <TableHead>Payment</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -137,6 +138,19 @@ export default async function SalesPage() {
                       </TableCell>
                       <TableCell>
                         <Badge
+                          variant={
+                            inv.status === "APPROVED"
+                              ? "default"
+                              : inv.status === "REJECTED"
+                                ? "danger"
+                                : "secondary"
+                          }
+                        >
+                          {inv.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
                           className={
                             inv.paymentStatus === "PAID"
                               ? "bg-emerald-100 text-emerald-800 border-emerald-200"
@@ -155,15 +169,21 @@ export default async function SalesPage() {
                               <Eye className="h-4 w-4" />
                             </Link>
                           </Button>
-                          <Button variant="ghost" size="icon" asChild title="Edit">
-                            <Link href={`/sales/${inv.id}/edit`}>
-                              <Pencil className="h-4 w-4" />
-                            </Link>
-                          </Button>
+                          {inv.status === "DRAFT" && (
+                            <Button variant="ghost" size="icon" asChild title="Edit">
+                              <Link href={`/sales/${inv.id}/edit`}>
+                                <Pencil className="h-4 w-4" />
+                              </Link>
+                            </Button>
+                          )}
                           <DeleteSalesInvoiceButton
                             invoiceId={inv.id}
                             invoiceNo={inv.invoiceNo}
-                            canDelete={inv.paymentStatus !== "PAID" && Number(inv.paidAmount) < Number(inv.totalAmount)}
+                            canDelete={
+                              inv.status === "DRAFT" &&
+                              inv.paymentStatus !== "PAID" &&
+                              Number(inv.paidAmount) < Number(inv.totalAmount)
+                            }
                           />
                         </div>
                       </TableCell>

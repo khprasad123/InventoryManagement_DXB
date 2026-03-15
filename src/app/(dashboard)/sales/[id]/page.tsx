@@ -14,11 +14,14 @@ import { getOrganizationId, getCurrentUser } from "@/lib/auth-utils";
 import { canRecordPayments } from "@/lib/permissions";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Printer } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { PrintInvoiceButton } from "../print-invoice-button";
 import { InvoicePrintLayout } from "../invoice-print-layout";
 import { RecordClientPaymentDialog } from "../record-client-payment-dialog";
 import { DocumentSection } from "@/app/(dashboard)/documents/document-section";
+import { SubmitInvoiceButton } from "../submit-invoice-button";
+import { ApproveRejectInvoice } from "../approve-reject-invoice";
+import { DeleteSalesInvoiceButton } from "../delete-sales-invoice-button";
 
 export default async function SalesInvoiceDetailPage({
   params,
@@ -118,6 +121,27 @@ export default async function SalesInvoiceDetailPage({
                 </p>
               </div>
             )}
+            <div>
+              <span className="text-sm text-muted-foreground">Prepared by</span>
+              <p className="font-medium">{invoice.createdBy?.name ?? "—"}</p>
+            </div>
+            {invoice.status === "APPROVED" && invoice.approvedBy && (
+              <div>
+                <span className="text-sm text-muted-foreground">Approved by</span>
+                <p className="font-medium">{invoice.approvedBy.name}</p>
+                {invoice.approvedAt && (
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(invoice.approvedAt).toLocaleString()}
+                  </p>
+                )}
+              </div>
+            )}
+            {invoice.status === "REJECTED" && invoice.approvalRemarks && (
+              <div>
+                <span className="text-sm text-muted-foreground">Rejection reason</span>
+                <p className="text-sm">{invoice.approvalRemarks}</p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -199,10 +223,12 @@ export default async function SalesInvoiceDetailPage({
         <InvoicePrintLayout invoice={invoice} org={org} />
       </div>
 
-      <DocumentSection
-        documentableType="SalesInvoice"
-        documentableId={invoice.id}
-      />
+      <div className="print:hidden">
+        <DocumentSection
+          documentableType="SalesInvoice"
+          documentableId={invoice.id}
+        />
+      </div>
     </>
   );
 }

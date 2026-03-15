@@ -485,6 +485,9 @@ export async function createInvoiceFromSalesOrder(salesOrderId: string) {
   const taxAmount = 0;
   const totalAmount = subtotal + taxAmount;
 
+  const user = await getCurrentUser();
+  const userId = (user as { id?: string } | null)?.id ?? null;
+
   await prisma.$transaction(async (tx) => {
     const invoice = await tx.salesInvoice.create({
       data: {
@@ -501,6 +504,9 @@ export async function createInvoiceFromSalesOrder(salesOrderId: string) {
         paidAmount: 0,
         paymentStatus: "UNPAID",
         notes: salesOrder.notes,
+        status: "DRAFT",
+        createdById: userId ?? undefined,
+        updatedById: userId ?? undefined,
       },
     });
 
@@ -544,7 +550,12 @@ export async function getSalesInvoices() {
   if (!orgId) redirect("/login");
   return prisma.salesInvoice.findMany({
     where: { organizationId: orgId, deletedAt: null },
-    include: { client: true, salesOrder: { include: { quotation: true } } },
+    include: {
+      client: true,
+      salesOrder: { include: { quotation: true } },
+      createdBy: { select: { name: true } },
+      approvedBy: { select: { name: true } },
+    },
     orderBy: { invoiceDate: "desc" },
   });
 }
@@ -554,6 +565,8 @@ export type SalesInvoiceWithRelations = Prisma.SalesInvoiceGetPayload<{
     client: true;
     salesOrder: { include: { quotation: true } };
     items: { include: { item: true } };
+    createdBy: { select: { name: true } };
+    approvedBy: { select: { name: true } };
   };
 }>;
 
@@ -581,14 +594,91 @@ export async function getSalesInvoiceById(
 ): Promise<SalesInvoiceWithRelations | null> {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
-  return prisma.salesInvoice.findFirst({
+  const inv = await prisma.salesInvoice.findFirst({
     where: { id, organizationId: orgId, deletedAt: null },
     include: {
       client: true,
       salesOrder: { include: { quotation: true } },
       items: { include: { item: true } },
+      createdBy: { select: { name: true } },
+      approvedBy: { select: { name: true } },
     },
   });
+  return inv as SalesInvoiceWithRelations | null;
+}
+
+export async function submitSalesInvoiceForApproval(id: string) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const inv = await prisma.salesInvoice.findFirst({
+    where: { id, organizationId: orgId, deletedAt: null },
+  });
+  if (!inv) return { error: "Invoice not found" };
+  if (inv.status !== "DRAFT") return { error: "Only draft invoices can be submitted for approval" };
+
+  await prisma.salesInvoice.update({
+    where: { id },
+    data: { status: "PENDING_APPROVAL" },
+  });
+
+  revalidatePath("/sales");
+  revalidatePath(`/sales/${id}`);
+  return { success: true };
+}
+
+export async function approveSalesInvoice(id: string, remarks?: string) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const inv = await prisma.salesInvoice.findFirst({
+    where: { id, organizationId: orgId, deletedAt: null },
+  });
+  if (!inv) return { error: "Invoice not found" };
+  if (inv.status !== "PENDING_APPROVAL") return { error: "Only pending approval invoices can be approved" };
+
+  const user = await getCurrentUser();
+  const userId = (user as { id?: string } | null)?.id ?? null;
+
+  await prisma.salesInvoice.update({
+    where: { id },
+    data: {
+      status: "APPROVED",
+      approvedById: userId ?? undefined,
+      approvedAt: new Date(),
+      approvalRemarks: remarks?.trim() || null,
+    },
+  });
+
+  revalidatePath("/sales");
+  revalidatePath(`/sales/${id}`);
+  return { success: true };
+}
+
+export async function rejectSalesInvoice(id: string, remarks: string) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const trimmed = remarks?.trim();
+  if (!trimmed) return { error: "Rejection reason (remarks) is required" };
+
+  const inv = await prisma.salesInvoice.findFirst({
+    where: { id, organizationId: orgId, deletedAt: null },
+  });
+  if (!inv) return { error: "Invoice not found" };
+  if (inv.status !== "PENDING_APPROVAL") return { error: "Only pending approval invoices can be rejected" };
+
+  await prisma.salesInvoice.update({
+    where: { id },
+    data: {
+      status: "REJECTED",
+      approvalRemarks: trimmed,
+    },
+  });
+
+  revalidatePath("/sales");
+  revalidatePath(`/sales/${id}`);
+  return { success: true };
 }
 
 export async function getNextInvoiceNo() {
@@ -736,6 +826,7 @@ export async function createSalesInvoice(formData: FormData) {
         paymentStatus,
         currencyCode,
         notes: notes || null,
+        status: "DRAFT",
         createdById: userId ?? undefined,
         updatedById: userId ?? undefined,
       },
@@ -820,6 +911,7 @@ export async function updateSalesInvoice(id: string, formData: FormData) {
     include: { client: true },
   });
   if (!existing) return { error: { _form: ["Invoice not found"] } };
+  if (existing.status !== "DRAFT") return { error: { _form: ["Only draft invoices can be edited"] } };
 
   const parsed = updateSalesInvoiceSchema.safeParse({
     invoiceDate: formData.get("invoiceDate"),
@@ -874,6 +966,7 @@ export async function deleteSalesInvoice(id: string) {
     where: { id, organizationId: orgId, deletedAt: null },
   });
   if (!inv) return { error: "Invoice not found" };
+  if (inv.status !== "DRAFT") return { error: "Only draft invoices can be deleted. Submit for approval first." };
 
   const total = Number(inv.totalAmount);
   const paid = Number(inv.paidAmount);

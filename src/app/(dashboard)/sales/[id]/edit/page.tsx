@@ -15,6 +15,7 @@ export default async function EditSalesInvoicePage({
   const { id } = await params;
   const invoice = await getSalesInvoiceById(id);
   if (!invoice) notFound();
+  if (invoice.status !== "DRAFT") notFound();
 
   const defaultValues = {
     invoiceDate: new Date(invoice.invoiceDate).toISOString().slice(0, 10),

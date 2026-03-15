@@ -43,6 +43,13 @@ enum JobStatus {
   CLOSED
 }
 
+enum SalesInvoiceStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
 // =============================================================================
 // CORE: ORGANIZATION (TENANT) & AUTH
 // =============================================================================
@@ -172,6 +179,7 @@ model User {
   updatedPurchaseInvoices  PurchaseInvoice[]  @relation("PurchaseInvoiceUpdatedBy")
   createdSalesInvoices     SalesInvoice[]     @relation("SalesInvoiceCreatedBy")
   updatedSalesInvoices     SalesInvoice[]     @relation("SalesInvoiceUpdatedBy")
+  approvedSalesInvoices    SalesInvoice[]     @relation("SalesInvoiceApprovedBy")
   createdQuotations        Quotation[]        @relation("QuotationCreatedBy")
   updatedQuotations        Quotation[]        @relation("QuotationUpdatedBy")
   createdExpenses          Expense[]          @relation("ExpenseCreatedBy")
@@ -683,15 +691,19 @@ model SalesInvoice {
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
   deletedAt      DateTime?     @map("deleted_at")
-  createdById    String?       @map("created_by_id")
-  updatedById    String?       @map("updated_by_id")
-  approvedById   String?       @map("approved_by_id")
+  status         SalesInvoiceStatus @default(DRAFT) @map("status")
+  approvedAt      DateTime?         @map("approved_at")
+  approvalRemarks String?           @map("approval_remarks")
+  createdById    String?           @map("created_by_id")
+  updatedById    String?           @map("updated_by_id")
+  approvedById   String?           @map("approved_by_id")
 
   organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   salesOrder   SalesOrder         @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
   client       Client             @relation(fields: [clientId], references: [id], onDelete: Restrict)
   createdBy    User?              @relation("SalesInvoiceCreatedBy", fields: [createdById], references: [id])
   updatedBy    User?              @relation("SalesInvoiceUpdatedBy", fields: [updatedById], references: [id])
+  approvedBy   User?              @relation("SalesInvoiceApprovedBy", fields: [approvedById], references: [id])
   items        SalesInvoiceItem[]
   payments     ClientPayment[]
 
@@ -702,6 +714,7 @@ model SalesInvoice {
   @@index([jobId])
   @@index([invoiceDate])
   @@index([paymentStatus])
+  @@index([status])
   @@index([deletedAt])
   @@map("sales_invoices")
 }

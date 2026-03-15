@@ -39,6 +39,9 @@ type InvoiceForPrint = {
   notes: string | null;
   currencyCode: string;
   defaultTaxPercent?: { toString: () => string } | number;
+  createdBy?: { name: string | null } | null;
+  approvedBy?: { name: string | null; signatureUrl?: string | null } | null;
+  approvedAt?: Date | null;
 };
 
 export function InvoicePrintLayout({
@@ -66,7 +69,7 @@ export function InvoicePrintLayout({
         .invoice-container .no-border td { border: none !important; }
       `}</style>
 
-      {/* Header: Logo + Org name | Org address, TRN, Tel, Fax, website */}
+      {/* Header: Logo + Org name | Org address, TRN, Tel, Fax, website (no stamp here) */}
       <div className="flex justify-between items-start border-b border-gray-300 pb-4 mb-4">
         <div className="flex gap-4">
           {org?.logoUrl && (
@@ -102,16 +105,6 @@ export function InvoicePrintLayout({
             </div>
           </div>
         </div>
-        {org?.sealUrl && (
-          <div className="h-16 w-16 flex-shrink-0">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={org.sealUrl}
-              alt="Seal"
-              className="h-full w-full object-contain"
-            />
-          </div>
-        )}
       </div>
 
       {/* Title bar */}
@@ -259,15 +252,43 @@ export function InvoicePrintLayout({
         )}
       </div>
 
-      {/* Signature section */}
+      {/* Signature section: Prepared by, Approved by + stamp */}
       <div className="mt-12 grid grid-cols-3 gap-8 text-xs">
         <div className="border-t border-gray-400 pt-2">
           <p className="font-medium">Prepared By</p>
-          <p className="text-gray-500 mt-4">________________</p>
+          <p className="mt-2 font-medium">{invoice.createdBy?.name ?? "—"}</p>
         </div>
-        <div className="border-t border-gray-400 pt-2">
+        <div className="border-t border-gray-400 pt-2 flex flex-col items-start">
           <p className="font-medium">Approved By</p>
-          <p className="text-gray-500 mt-4">________________</p>
+          <p className="mt-2 font-medium">{invoice.approvedBy?.name ?? "—"}</p>
+          {invoice.approvedAt && (
+            <p className="text-gray-500 mt-0.5">
+              {new Date(invoice.approvedAt).toLocaleDateString()}
+            </p>
+          )}
+          {invoice.approvedBy?.signatureUrl && (
+            <div className="mt-2 h-12 w-24">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={invoice.approvedBy.signatureUrl}
+                alt="Approver signature"
+                className="h-full w-full object-contain"
+              />
+            </div>
+          )}
+          {org?.sealUrl && (
+            <div className="mt-2 flex items-center gap-2">
+              <div className="h-10 w-10">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={org.sealUrl}
+                  alt="Stamp"
+                  className="h-full w-full object-contain"
+                />
+              </div>
+              <span className="text-gray-500">Stamp</span>
+            </div>
+          )}
         </div>
         <div className="border-t border-gray-400 pt-2">
           <p className="font-medium">Customer Acknowledgement</p>
