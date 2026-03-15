@@ -103,7 +103,7 @@ export function SalesInvoiceForm({
     const d = new Date(invDate);
     d.setDate(d.getDate() + (client.agreedDueDays ?? 30));
     setDueDatePreview(d.toLocaleDateString());
-  }, [clientId, client?.agreedDueDays]);
+  }, [clientId, client?.agreedDueDays, client?.defaultPaymentTerms]);
 
   useEffect(() => {
     const el = document.getElementById("invoiceDate");
@@ -119,7 +119,7 @@ export function SalesInvoiceForm({
     };
     el?.addEventListener("change", handler);
     return () => el?.removeEventListener("change", handler);
-  }, [client?.defaultPaymentTerms]);
+  }, [client]);
 
   const addRow = () =>
     setRows((r) => [...r, { itemId: "", quantity: 1, unitPrice: 0 }]);

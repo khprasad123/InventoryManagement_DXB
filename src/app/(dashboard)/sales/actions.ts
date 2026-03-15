@@ -274,7 +274,7 @@ export async function deleteQuotation(id: string) {
     include: { salesOrder: { include: { salesInvoices: true } } },
   });
   if (!q) return { error: "Quotation not found" };
-  if (q.status !== "DRAFT") return { error: "Only draft quotations can be deleted" };
+  if (q.status !== "DRAFT") return { error: "Only draft quotations can be deleted. Approved or submitted quotations cannot be deleted." };
   if (q.salesOrder?.salesInvoices?.length) return { error: "Cannot delete: already converted to invoice" };
 
   await prisma.quotation.update({
@@ -874,6 +874,12 @@ export async function deleteSalesInvoice(id: string) {
     where: { id, organizationId: orgId, deletedAt: null },
   });
   if (!inv) return { error: "Invoice not found" };
+
+  const total = Number(inv.totalAmount);
+  const paid = Number(inv.paidAmount);
+  if (inv.paymentStatus === "PAID" || (total > 0 && paid >= total)) {
+    return { error: "Cannot delete: invoice is fully paid (job finished)." };
+  }
 
   await prisma.salesInvoice.update({
     where: { id },

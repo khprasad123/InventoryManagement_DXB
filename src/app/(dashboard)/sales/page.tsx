@@ -160,7 +160,11 @@ export default async function SalesPage() {
                               <Pencil className="h-4 w-4" />
                             </Link>
                           </Button>
-                          <DeleteSalesInvoiceButton invoiceId={inv.id} invoiceNo={inv.invoiceNo} />
+                          <DeleteSalesInvoiceButton
+                            invoiceId={inv.id}
+                            invoiceNo={inv.invoiceNo}
+                            canDelete={inv.paymentStatus !== "PAID" && Number(inv.paidAmount) < Number(inv.totalAmount)}
+                          />
                         </div>
                       </TableCell>
                     </TableRow>

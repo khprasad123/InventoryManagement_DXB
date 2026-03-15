@@ -713,7 +713,7 @@ export async function deletePurchaseRequest(id: string) {
   });
   if (!pr) return { error: "Purchase request not found" };
   if (pr.status !== "DRAFT") return { error: "Only draft PRs can be deleted" };
-  if (pr.purchaseOrders?.length) return { error: "Cannot delete: PR already has purchase orders" };
+  if (pr.purchaseOrders?.length) return { error: "Cannot delete: PR has purchase orders (job in progress or fulfilled)." };
 
   await prisma.purchaseRequest.update({
     where: { id },

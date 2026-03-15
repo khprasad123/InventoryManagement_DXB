@@ -18,9 +18,12 @@ import { Trash2 } from "lucide-react";
 export function DeleteSalesInvoiceButton({
   invoiceId,
   invoiceNo,
+  canDelete = true,
 }: {
   invoiceId: string;
   invoiceNo: string;
+  /** Hide when invoice is fully paid (job finished) */
+  canDelete?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -37,6 +40,8 @@ export function DeleteSalesInvoiceButton({
     setOpen(false);
     router.refresh();
   }
+
+  if (!canDelete) return null;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
