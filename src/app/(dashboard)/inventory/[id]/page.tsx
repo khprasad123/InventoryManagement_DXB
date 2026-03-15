@@ -7,15 +7,16 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { Pencil, ArrowLeft } from "lucide-react";
 import { DocumentSection } from "@/app/(dashboard)/documents/document-section";
+import { StockMovementDialog } from "../stock-movement-dialog";
 export default async function ItemDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ id: string }> | { id: string };
 }) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
-  const { id } = await params;
+  const { id } = await Promise.resolve(params);
   const item = await getItemById(id);
   if (!item) notFound();
 
@@ -44,6 +45,7 @@ export default async function ItemDetailPage({
           </p>
         </div>
         <div className="flex gap-2">
+          <StockMovementDialog item={item} allowAdjustment />
           <Button asChild>
             <Link href={`/inventory/${id}/edit`}>
               <Pencil className="mr-2 h-4 w-4" />
@@ -73,7 +75,7 @@ export default async function ItemDetailPage({
           <div>
             <span className="text-sm text-muted-foreground">Stock</span>
             <p className="font-medium">{item.stockQty}</p>
-            <p className="text-xs text-muted-foreground">Updated only via GRN (receipts) and Sales (dispatch)</p>
+            <p className="text-xs text-muted-foreground">Updated via GRN, Sales, or manual Stock In/Out above</p>
           </div>
           <div>
             <span className="text-sm text-muted-foreground">Min stock</span>

@@ -292,7 +292,28 @@ export async function deleteQuotation(id: string) {
   revalidatePath("/sales/quotations");
 }
 
-export async function approveQuotation(id: string) {
+export async function submitQuotationForApproval(id: string) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const q = await prisma.quotation.findFirst({
+    where: { id, organizationId: orgId, deletedAt: null },
+  });
+  if (!q) return { error: "Quotation not found" };
+  if (q.status !== "DRAFT") return { error: "Only draft quotations can be submitted for approval" };
+
+  await prisma.quotation.update({
+    where: { id },
+    data: { status: "PENDING_APPROVAL" },
+  });
+
+  revalidatePath("/sales");
+  revalidatePath("/sales/quotations");
+  revalidatePath(`/sales/quotations/${id}`);
+  return { success: true };
+}
+
+export async function approveQuotation(id: string, remarks?: string) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -301,19 +322,69 @@ export async function approveQuotation(id: string) {
     include: { items: { include: { item: true } } },
   });
   if (!q) return { error: "Quotation not found" };
-  if (q.status === "APPROVED") return { error: "Quotation already approved" };
+  if (q.status !== "PENDING_APPROVAL") return { error: "Only pending approval quotations can be approved" };
+
+  const user = await getCurrentUser();
+  const userId = (user as { id?: string } | null)?.id ?? null;
 
   await prisma.quotation.update({
     where: { id },
-    data: { status: "APPROVED" },
+    data: {
+      status: "APPROVED",
+      approvedById: userId ?? undefined,
+      approvedAt: new Date(),
+      approvalRemarks: remarks?.trim() || null,
+    },
   });
 
   revalidatePath("/sales");
   revalidatePath("/sales/quotations");
   revalidatePath(`/sales/quotations/${id}`);
+  return { success: true };
 }
 
-export async function convertQuotationToInvoice(quotationId: string) {
+export async function rejectQuotation(id: string, remarks: string) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const trimmed = remarks?.trim();
+  if (!trimmed) return { error: "Rejection reason (remarks) is required" };
+
+  const q = await prisma.quotation.findFirst({
+    where: { id, organizationId: orgId, deletedAt: null },
+  });
+  if (!q) return { error: "Quotation not found" };
+  if (q.status !== "PENDING_APPROVAL") return { error: "Only pending approval quotations can be rejected" };
+
+  await prisma.quotation.update({
+    where: { id },
+    data: {
+      status: "REJECTED",
+      approvalRemarks: trimmed,
+    },
+  });
+
+  revalidatePath("/sales");
+  revalidatePath("/sales/quotations");
+  revalidatePath(`/sales/quotations/${id}`);
+  return { success: true };
+}
+
+export async function getSalesOrders() {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+  return prisma.salesOrder.findMany({
+    where: { organizationId: orgId, deletedAt: null },
+    include: {
+      quotation: { include: { client: true } },
+      items: { include: { item: true } },
+      salesInvoices: true,
+    },
+    orderBy: { orderDate: "desc" },
+  });
+}
+
+export async function createSalesOrderFromQuotation(quotationId: string) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -327,23 +398,10 @@ export async function convertQuotationToInvoice(quotationId: string) {
   });
 
   if (!quotation) return { error: "Quotation not found" };
-  if (quotation.status !== "APPROVED") return { error: "Quotation must be approved before converting to Sales Order / Invoice" };
-  if (quotation.salesOrder?.salesInvoices?.length) return { error: "Quotation already converted to invoice" };
+  if (quotation.status !== "APPROVED") return { error: "Quotation must be approved first" };
+  if (quotation.salesOrder) return { error: "Sales Order already created for this quotation" };
 
-  // Validate stock availability before transaction
-  for (const qi of quotation.items) {
-    const item = qi.item;
-    if (item.stockQty < qi.quantity) {
-      return {
-        error: `Insufficient stock for ${item.sku} - ${item.name}. Available: ${item.stockQty}, required: ${qi.quantity}`,
-      };
-    }
-  }
-
-  const nextInvNo = await getNextInvoiceNo();
   const invDate = new Date();
-  const dueDate = calculateDueDate(invDate, quotation.client.agreedDueDays);
-
   const lastOrder = await prisma.salesOrder.findFirst({
     where: { organizationId: orgId, deletedAt: null },
     orderBy: { createdAt: "desc" },
@@ -351,37 +409,75 @@ export async function convertQuotationToInvoice(quotationId: string) {
   const orderNo = `SO-${String((lastOrder ? parseInt(lastOrder.orderNo.replace(/\D/g, ""), 10) || 0 : 0) + 1).padStart(5, "0")}`;
   const jobId = quotation.jobId || `JOB-${quotation.quotationNo}`;
 
-  await prisma.$transaction(async (tx) => {
-    const subtotal = quotation.items.reduce((s, i) => s + Number(i.total), 0);
-    const taxAmount = 0;
-    const totalAmount = subtotal + taxAmount;
-
-    const salesOrder = await tx.salesOrder.create({
-      data: {
-        organizationId: orgId,
-        quotationId: quotation.id,
-        clientId: quotation.clientId,
-        jobId,
-        orderNo,
-        orderDate: invDate,
-        notes: quotation.notes,
-        items: {
-          create: quotation.items.map((qi) => ({
-            itemId: qi.itemId,
-            quantity: qi.quantity,
-            unitPrice: qi.unitPrice,
-            total: qi.quantity * Number(qi.unitPrice),
-          })),
-        },
+  await prisma.salesOrder.create({
+    data: {
+      organizationId: orgId,
+      quotationId: quotation.id,
+      clientId: quotation.clientId,
+      jobId,
+      orderNo,
+      orderDate: invDate,
+      notes: quotation.notes,
+      items: {
+        create: quotation.items.map((qi) => ({
+          itemId: qi.itemId,
+          quantity: qi.quantity,
+          unitPrice: qi.unitPrice,
+          total: qi.quantity * Number(qi.unitPrice),
+        })),
       },
-    });
+    },
+  });
 
+  revalidatePath("/sales");
+  revalidatePath("/sales/quotations");
+  revalidatePath("/sales/sales-orders");
+  revalidatePath(`/sales/quotations/${quotationId}`);
+  return { success: true };
+}
+
+export async function createInvoiceFromSalesOrder(salesOrderId: string) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const salesOrder = await prisma.salesOrder.findFirst({
+    where: { id: salesOrderId, organizationId: orgId, deletedAt: null },
+    include: {
+      quotation: { include: { client: true } },
+      items: { include: { item: true } },
+      salesInvoices: true,
+    },
+  });
+
+  if (!salesOrder) return { error: "Sales order not found" };
+  if (salesOrder.salesInvoices?.length) return { error: "Invoice already created for this sales order" };
+
+  const quotation = salesOrder.quotation;
+  if (!quotation) return { error: "Sales order has no quotation" };
+
+  for (const soi of salesOrder.items) {
+    const item = soi.item;
+    if (item.stockQty < soi.quantity) {
+      return {
+        error: `Insufficient stock for ${item.sku} - ${item.name}. Available: ${item.stockQty}, required: ${soi.quantity}`,
+      };
+    }
+  }
+
+  const nextInvNo = await getNextInvoiceNo();
+  const invDate = new Date();
+  const dueDate = calculateDueDate(invDate, quotation.client.agreedDueDays);
+  const subtotal = salesOrder.items.reduce((s, i) => s + Number(i.total), 0);
+  const taxAmount = 0;
+  const totalAmount = subtotal + taxAmount;
+
+  await prisma.$transaction(async (tx) => {
     const invoice = await tx.salesInvoice.create({
       data: {
         organizationId: orgId,
         salesOrderId: salesOrder.id,
-        clientId: quotation.clientId,
-        jobId,
+        clientId: salesOrder.clientId,
+        jobId: salesOrder.jobId,
         invoiceNo: nextInvNo,
         invoiceDate: invDate,
         dueDate,
@@ -390,46 +486,43 @@ export async function convertQuotationToInvoice(quotationId: string) {
         totalAmount,
         paidAmount: 0,
         paymentStatus: "UNPAID",
-        notes: quotation.notes,
+        notes: salesOrder.notes,
       },
     });
 
-    for (const qi of quotation.items) {
-      const item = qi.item;
-
+    for (const soi of salesOrder.items) {
+      const item = soi.item;
       await tx.salesInvoiceItem.create({
         data: {
           salesInvoiceId: invoice.id,
-          itemId: qi.itemId,
-          quantity: qi.quantity,
-          unitPrice: qi.unitPrice,
-          total: qi.quantity * Number(qi.unitPrice),
+          itemId: soi.itemId,
+          quantity: soi.quantity,
+          unitPrice: soi.unitPrice,
+          total: soi.quantity * Number(soi.unitPrice),
         },
       });
-
       await tx.stockMovement.create({
         data: {
           organizationId: orgId,
-          itemId: qi.itemId,
+          itemId: soi.itemId,
           type: "OUT",
-          quantity: qi.quantity,
+          quantity: soi.quantity,
           referenceType: "SalesInvoice",
           referenceId: invoice.id,
           notes: `Sales Invoice ${nextInvNo}`,
         },
       });
-
       await tx.item.update({
-        where: { id: qi.itemId },
-        data: { stockQty: item.stockQty - qi.quantity },
+        where: { id: soi.itemId },
+        data: { stockQty: item.stockQty - soi.quantity },
       });
     }
   });
 
   revalidatePath("/sales");
-  revalidatePath("/sales/quotations");
-  revalidatePath(`/sales/quotations/${quotationId}`);
-  redirect("/sales");
+  revalidatePath("/sales/sales-orders");
+  revalidatePath(`/sales/quotations/${quotation.id}`);
+  return { success: true };
 }
 
 export async function getSalesInvoices() {

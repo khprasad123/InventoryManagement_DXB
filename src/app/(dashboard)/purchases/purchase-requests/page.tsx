@@ -92,9 +92,9 @@ export default async function PurchaseRequestsPage() {
                           variant={
                             pr.status === "APPROVED"
                               ? "default"
-                              : pr.status === "PENDING_APPROVAL"
-                              ? "secondary"
-                              : "secondary"
+                              : pr.status === "REJECTED"
+                                ? "danger"
+                                : "secondary"
                           }
                         >
                           {pr.status}

@@ -46,8 +46,9 @@ export function GrnForm({
   defaultGrnNo,
   defaultPoId,
 }: GrnFormProps) {
+  const STANDALONE_PO = "__standalone__";
   const router = useRouter();
-  const [poId, setPoId] = useState(defaultPoId || "");
+  const [poId, setPoId] = useState(defaultPoId || STANDALONE_PO);
   const [supplierId, setSupplierId] = useState("");
   const [rows, setRows] = useState<GrnItemRow[]>([
     { itemId: "", quantity: 1, purchasePrice: 0 },
@@ -91,7 +92,7 @@ export function GrnForm({
     formData.set("grnNo", (form.querySelector("#grnNo") as HTMLInputElement)?.value || defaultGrnNo);
     formData.set("receivedDate", (form.querySelector("#receivedDate") as HTMLInputElement)?.value || new Date().toISOString().slice(0, 10));
     formData.set("supplierId", supplierId);
-    if (poId) formData.set("purchaseOrderId", poId);
+    if (poId && poId !== STANDALONE_PO) formData.set("purchaseOrderId", poId);
 
     const validRows = rows.filter((r) => r.itemId && r.quantity > 0);
     if (validRows.length === 0) {
@@ -142,7 +143,7 @@ export function GrnForm({
               <SelectValue placeholder="Standalone or from PO" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Standalone GRN</SelectItem>
+              <SelectItem value="__standalone__">Standalone GRN</SelectItem>
               {purchaseOrders.map((po) => (
                 <SelectItem key={po.id} value={po.id}>
                   {po.poNo} - {po.supplier.name}

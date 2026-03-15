@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getOrganizationId } from "@/lib/auth-utils";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { getNextPrNo, getSalesOrdersForPr } from "../../actions";
+import { getNextPrNo, getSalesOrdersForPr } from "@/app/(dashboard)/purchases/actions";
 import { PrForm } from "../pr-form";
 
 export default async function AddPurchaseRequestPage() {

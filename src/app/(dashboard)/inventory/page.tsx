@@ -21,6 +21,7 @@ import { Plus, Pencil, Trash2, Package, Eye } from "lucide-react";
 import { Suspense } from "react";
 import { InventoryFilters } from "./inventory-filters";
 import { DeleteItemButton } from "./delete-item-button";
+import { StockMovementDialog } from "./stock-movement-dialog";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -133,6 +134,7 @@ export default async function InventoryPage({
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
+                              <StockMovementDialog item={item} />
                               <Button variant="ghost" size="icon" asChild title="View details & documents">
                                 <Link href={`/inventory/${item.id}`}>
                                   <Eye className="h-4 w-4" />

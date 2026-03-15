@@ -519,7 +519,6 @@ export async function getPurchaseRequestById(id: string) {
     where: { id, organizationId: orgId, deletedAt: null },
     include: {
       items: { include: { item: true } },
-      salesOrder: { include: { quotation: { include: { client: true } } } },
       purchaseOrders: { include: { supplier: true } },
     },
   });
@@ -629,10 +628,10 @@ export async function createPurchaseRequest(formData: FormData) {
   });
 
   revalidatePath("/purchases/purchase-requests");
-  redirect("/purchases/purchase-requests");
+  return { success: true };
 }
 
-export async function approvePurchaseRequest(id: string) {
+export async function submitPurchaseRequestForApproval(id: string) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -640,7 +639,27 @@ export async function approvePurchaseRequest(id: string) {
     where: { id, organizationId: orgId, deletedAt: null },
   });
   if (!pr) return { error: "Purchase request not found" };
-  if (pr.status === "APPROVED") return { error: "Already approved" };
+  if (pr.status !== "DRAFT") return { error: "Only draft PRs can be submitted for approval" };
+
+  await prisma.purchaseRequest.update({
+    where: { id },
+    data: { status: "PENDING_APPROVAL" },
+  });
+
+  revalidatePath("/purchases/purchase-requests");
+  revalidatePath(`/purchases/purchase-requests/${id}`);
+  return { success: true };
+}
+
+export async function approvePurchaseRequest(id: string, remarks?: string) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const pr = await prisma.purchaseRequest.findFirst({
+    where: { id, organizationId: orgId, deletedAt: null },
+  });
+  if (!pr) return { error: "Purchase request not found" };
+  if (pr.status !== "PENDING_APPROVAL") return { error: "Only pending approval PRs can be approved" };
 
   const user = await getCurrentUser();
   const userId = (user as { id?: string } | null)?.id ?? null;
@@ -651,6 +670,33 @@ export async function approvePurchaseRequest(id: string) {
       status: "APPROVED",
       approvedById: userId ?? undefined,
       approvedAt: new Date(),
+      approvalRemarks: remarks?.trim() || null,
+    },
+  });
+
+  revalidatePath("/purchases/purchase-requests");
+  revalidatePath(`/purchases/purchase-requests/${id}`);
+  return { success: true };
+}
+
+export async function rejectPurchaseRequest(id: string, remarks: string) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const trimmed = remarks?.trim();
+  if (!trimmed) return { error: "Rejection reason (remarks) is required" };
+
+  const pr = await prisma.purchaseRequest.findFirst({
+    where: { id, organizationId: orgId, deletedAt: null },
+  });
+  if (!pr) return { error: "Purchase request not found" };
+  if (pr.status !== "PENDING_APPROVAL") return { error: "Only pending approval PRs can be rejected" };
+
+  await prisma.purchaseRequest.update({
+    where: { id },
+    data: {
+      status: "REJECTED",
+      approvalRemarks: trimmed,
     },
   });
 

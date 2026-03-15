@@ -403,6 +403,7 @@ model PurchaseRequest {
   createdById    String?               @map("created_by_id")
   approvedById   String?               @map("approved_by_id")
   approvedAt     DateTime?             @map("approved_at")
+  approvalRemarks String?              @map("approval_remarks")
 
   organization    Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   salesOrder      SalesOrder?          @relation(fields: [salesOrderId], references: [id], onDelete: SetNull)
@@ -579,6 +580,7 @@ model Quotation {
   updatedById    String?         @map("updated_by_id")
   approvedById   String?         @map("approved_by_id")
   approvedAt     DateTime?       @map("approved_at")
+  approvalRemarks String?        @map("approval_remarks")
 
   organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   client       Client          @relation(fields: [clientId], references: [id], onDelete: Restrict)
@@ -655,7 +657,6 @@ model SalesOrderItem {
   salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
   item       Item       @relation(fields: [itemId], references: [id], onDelete: Restrict)
 
-  @@unique([salesOrderId, itemId])
   @@index([salesOrderId])
   @@index([itemId])
   @@map("sales_order_items")

@@ -87,7 +87,11 @@ export default async function QuotationsPage() {
                         <TableCell>
                           <Badge
                             variant={
-                              q.status === "APPROVED" ? "default" : "secondary"
+                              q.status === "APPROVED"
+                                ? "default"
+                                : q.status === "REJECTED"
+                                  ? "danger"
+                                  : "secondary"
                             }
                           >
                             {q.status}

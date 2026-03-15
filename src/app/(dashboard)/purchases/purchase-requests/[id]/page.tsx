@@ -13,20 +13,23 @@ import { getPurchaseRequestById } from "@/app/(dashboard)/purchases/actions";
 import { getOrganizationId } from "@/lib/auth-utils";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Check } from "lucide-react";
-import { ApprovePrButton } from "../approve-pr-button";
+import { ArrowLeft } from "lucide-react";
+import { SubmitPrButton } from "../submit-pr-button";
+import { ApproveRejectPr } from "../approve-reject-pr";
 
 export default async function PurchaseRequestDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ id: string }> | { id: string };
 }) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
-  const { id } = await params;
+  const { id } = await Promise.resolve(params);
   const pr = await getPurchaseRequestById(id);
   if (!pr) notFound();
+
+  const items = pr.items.filter((it) => it.item != null);
 
   return (
     <div className="space-y-6">
@@ -40,14 +43,22 @@ export default async function PurchaseRequestDetailPage({
           </Button>
           <h1 className="mt-2 text-3xl font-bold tracking-tight">{pr.prNo}</h1>
           <p className="text-muted-foreground">
-            <Badge variant={pr.status === "APPROVED" ? "default" : "secondary"}>
+            <Badge
+              variant={
+                pr.status === "APPROVED"
+                  ? "default"
+                  : pr.status === "REJECTED"
+                    ? "danger"
+                    : "secondary"
+              }
+            >
               {pr.status}
             </Badge>
             {pr.jobId && ` • Job: ${pr.jobId}`}
           </p>
         </div>
         {pr.status === "DRAFT" && (
-          <ApprovePrButton prId={pr.id} />
+          <p className="text-sm text-muted-foreground">Submit for approval from PR list.</p>
         )}
         {pr.status === "APPROVED" && (
           <Button asChild>
@@ -73,10 +84,10 @@ export default async function PurchaseRequestDetailPage({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {pr.items.map((it) => (
+                {items.map((it) => (
                   <TableRow key={it.id}>
-                    <TableCell>{it.item.name}</TableCell>
-                    <TableCell>{it.item.sku}</TableCell>
+                    <TableCell>{it.item?.name ?? "-"}</TableCell>
+                    <TableCell>{it.item?.sku ?? "-"}</TableCell>
                     <TableCell className="text-right">{it.quantity}</TableCell>
                   </TableRow>
                 ))}
@@ -85,6 +96,29 @@ export default async function PurchaseRequestDetailPage({
           </div>
         </CardContent>
       </Card>
+
+      {pr.status === "REJECTED" && pr.approvalRemarks && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Rejection reason</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">{pr.approvalRemarks}</p>
+            <p className="mt-2 text-xs text-muted-foreground">Rejected PRs cannot be amended.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {pr.status === "APPROVED" && pr.approvalRemarks && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Approval remarks</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">{pr.approvalRemarks}</p>
+          </CardContent>
+        </Card>
+      )}
 
       {pr.purchaseOrders && pr.purchaseOrders.length > 0 && (
         <Card>

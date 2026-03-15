@@ -14,19 +14,20 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { ConvertToInvoiceButton } from "../../convert-to-invoice-button";
-import { ApproveQuotationButton } from "../../approve-quotation-button";
-import { DocumentSection } from "@/app/(dashboard)/documents/document-section";
+import { CreateSalesOrderButton } from "../../create-sales-order-button";
+import { CreateInvoiceFromSoButton } from "../../create-invoice-from-so-button";
+import { SubmitQuotationButton } from "../../submit-quotation-button";
+import { ApproveRejectQuotation } from "../../approve-reject-quotation";
 
 export default async function QuotationDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ id: string }> | { id: string };
 }) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
-  const { id } = await params;
+  const { id } = await Promise.resolve(params);
   const quotation = await getQuotationById(id);
   if (!quotation) notFound();
 
@@ -55,7 +56,11 @@ export default async function QuotationDetailPage({
           )}
           <Badge
             variant={
-              quotation.status === "APPROVED" ? "default" : "secondary"
+              quotation.status === "APPROVED"
+                ? "default"
+                : quotation.status === "REJECTED"
+                  ? "danger"
+                  : "secondary"
             }
           >
             {quotation.status}
@@ -86,6 +91,8 @@ export default async function QuotationDetailPage({
                 <TableRow>
                   <TableHead>Item</TableHead>
                   <TableHead className="text-right">Qty</TableHead>
+                  <TableHead className="text-right">Purchase (cost)</TableHead>
+                  <TableHead className="text-right">Margin %</TableHead>
                   <TableHead className="text-right">Price</TableHead>
                   <TableHead className="text-right">Total</TableHead>
                 </TableRow>
@@ -98,6 +105,12 @@ export default async function QuotationDetailPage({
                     </TableCell>
                     <TableCell className="text-right">
                       {qi.quantity}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {Number(qi.purchaseCost).toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {Number(qi.margin).toFixed(2)}%
                     </TableCell>
                     <TableCell className="text-right">
                       {Number(qi.unitPrice).toFixed(2)}
@@ -128,20 +141,64 @@ export default async function QuotationDetailPage({
       )}
 
       {quotation.status === "DRAFT" && !quotation.salesOrder?.salesInvoices?.length && (
-        <ApproveQuotationButton quotationId={quotation.id} />
+        <>
+          <SubmitQuotationButton quotationId={quotation.id} />
+          <p className="text-sm text-muted-foreground">
+            Submit for approval. Only Pending Approval can be approved or rejected (reject requires remarks).
+          </p>
+        </>
       )}
 
-      {!quotation.salesOrder?.salesInvoices?.length && quotation.status === "APPROVED" && (
-        <div className="flex gap-4">
-          <ConvertToInvoiceButton quotationId={quotation.id} />
-        </div>
+      {quotation.status === "PENDING_APPROVAL" && !quotation.salesOrder?.salesInvoices?.length && (
+        <>
+          <ApproveRejectQuotation quotationId={quotation.id} />
+          <p className="text-sm text-muted-foreground">
+            Approve (optional remarks) or Reject (remarks required). Once rejected, this quotation cannot be amended.
+          </p>
+        </>
       )}
 
-      {quotation.status === "DRAFT" && !quotation.salesOrder?.salesInvoices?.length && (
-        <p className="text-sm text-muted-foreground">
-          Approve this quotation to enable &quot;Convert to Invoice&quot;.
-        </p>
+      {quotation.status === "REJECTED" && quotation.approvalRemarks && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Rejection reason</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">{quotation.approvalRemarks}</p>
+            <p className="mt-2 text-xs text-muted-foreground">Rejected quotations cannot be amended.</p>
+          </CardContent>
+        </Card>
       )}
+
+      {quotation.status === "APPROVED" && quotation.approvalRemarks && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Approval remarks</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">{quotation.approvalRemarks}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {quotation.status === "APPROVED" && !quotation.salesOrder && (
+        <>
+          <CreateSalesOrderButton quotationId={quotation.id} />
+          <p className="text-sm text-muted-foreground">
+            Next: Create Sales Order (price with margin), then create Invoice from Sales Order.
+          </p>
+        </>
+      )}
+
+      {quotation.status === "APPROVED" && quotation.salesOrder && !quotation.salesOrder.salesInvoices?.length && (
+        <>
+          <CreateInvoiceFromSoButton salesOrderId={quotation.salesOrder.id} />
+          <p className="text-sm text-muted-foreground">
+            Sales Order created. Create invoice to complete sale and update stock.
+          </p>
+        </>
+      )}
+
     </div>
   );
 }

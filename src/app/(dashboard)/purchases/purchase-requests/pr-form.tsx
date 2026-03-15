@@ -36,7 +36,8 @@ export function PrForm({
   defaultPrNo: string;
 }) {
   const router = useRouter();
-  const [salesOrderId, setSalesOrderId] = useState("");
+  const NONE_SO_VALUE = "__none__";
+  const [salesOrderId, setSalesOrderId] = useState(NONE_SO_VALUE);
   const [rows, setRows] = useState<PrItemRow[]>([
     { itemId: "", quantity: 1 },
   ]);
@@ -44,7 +45,7 @@ export function PrForm({
   const [error, setError] = useState<string | null>(null);
 
   const selectedSo = salesOrders.find((s) => s.id === salesOrderId);
-  const isLocked = Boolean(salesOrderId);
+  const isLocked = salesOrderId !== NONE_SO_VALUE && Boolean(salesOrderId);
 
   useEffect(() => {
     if (selectedSo && selectedSo.items.length > 0) {
@@ -54,7 +55,7 @@ export function PrForm({
           quantity: i.quantity,
         }))
       );
-    } else if (!salesOrderId) {
+    } else if (salesOrderId === NONE_SO_VALUE) {
       setRows([{ itemId: "", quantity: 1 }]);
     }
   }, [salesOrderId, selectedSo]);
@@ -76,7 +77,7 @@ export function PrForm({
     const formData = new FormData(form);
     formData.set("prNo", (form.querySelector("#prNo") as HTMLInputElement)?.value || defaultPrNo);
     formData.set("notes", (form.querySelector("#notes") as HTMLInputElement)?.value || "");
-    if (salesOrderId) formData.set("salesOrderId", salesOrderId);
+    if (salesOrderId && salesOrderId !== NONE_SO_VALUE) formData.set("salesOrderId", salesOrderId);
     if (selectedSo?.jobId) formData.set("jobId", selectedSo.jobId);
 
     const validRows = rows.filter((r) => r.itemId && r.quantity > 0);
@@ -104,7 +105,7 @@ export function PrForm({
       setError(err.prNo?.[0] || err.items?.[0] || err._form?.[0] || "Validation failed");
       return;
     }
-    router.refresh();
+    router.push("/purchases/purchase-requests");
   }
 
   return (
@@ -121,7 +122,7 @@ export function PrForm({
               <SelectValue placeholder="None – manual items" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">None – manual items</SelectItem>
+              <SelectItem value={NONE_SO_VALUE}>None – manual items</SelectItem>
               {salesOrders.map((so) => (
                 <SelectItem key={so.id} value={so.id}>
                   {so.orderNo} – {so.jobId || "—"} ({so.quotation?.client?.name || "—"})

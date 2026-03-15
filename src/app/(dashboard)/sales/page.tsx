@@ -30,10 +30,10 @@ export default async function SalesPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Sales</h1>
           <p className="text-muted-foreground">
-            Quotations, invoices, and sales tracking
+            Flow: Quotation (cost, margin) → Approval → Sales Order (price) → Invoice → Payment
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" asChild>
             <Link href="/sales/quotations">
               <FileSignature className="mr-2 h-4 w-4" />
@@ -41,15 +41,21 @@ export default async function SalesPage() {
             </Link>
           </Button>
           <Button variant="outline" asChild>
+            <Link href="/sales/sales-orders">
+              <FileText className="mr-2 h-4 w-4" />
+              Sales Orders
+            </Link>
+          </Button>
+          <Button asChild>
             <Link href="/sales/quotations/add">
               <Plus className="mr-2 h-4 w-4" />
               New Quotation
             </Link>
           </Button>
-          <Button asChild>
+          <Button variant="outline" asChild>
             <Link href="/sales/add">
               <FileText className="mr-2 h-4 w-4" />
-              New Invoice
+              Direct Invoice
             </Link>
           </Button>
         </div>
@@ -58,6 +64,9 @@ export default async function SalesPage() {
       <Card>
         <CardHeader>
           <CardTitle>Sales Invoices</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Invoices from Sales Orders (or create direct). Record payments to close jobs.
+          </p>
         </CardHeader>
         <CardContent>
           {invoices.length === 0 ? (
@@ -69,6 +78,7 @@ export default async function SalesPage() {
               <div className="mt-4 flex gap-2">
                 <Button asChild variant="outline">
                   <Link href="/sales/quotations/add">Create Quotation</Link>
+
                 </Button>
                 <Button asChild>
                   <Link href="/sales/add">Create Invoice</Link>
