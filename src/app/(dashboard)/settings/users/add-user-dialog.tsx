@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,28 +20,56 @@ type Role = { id: string; name: string };
 
 interface AddUserDialogProps {
   roles: Role[];
+  currentUserIsSuperAdmin?: boolean;
 }
 
-export function AddUserDialog({ roles }: AddUserDialogProps) {
+function getErrorMessage(err: unknown): string {
+  if (typeof err === "string") return err;
+  if (err instanceof Error) return err.message || "Something went wrong.";
+  if (err && typeof err === "object") {
+    const o = err as Record<string, unknown>;
+    if (String(o.digest ?? "").startsWith("NEXT_REDIRECT")) return "Redirecting...";
+    if (Array.isArray(o._form) && o._form[0]) return String(o._form[0]);
+    if (Array.isArray(o.email) && o.email[0]) return String(o.email[0]);
+    if (Array.isArray(o.password) && o.password[0]) return String(o.password[0]);
+    if (Array.isArray(o.roleId) && o.roleId[0]) return String(o.roleId[0]);
+    if (o.message) return String(o.message);
+  }
+  return "Something went wrong.";
+}
+
+export function AddUserDialog({ roles, currentUserIsSuperAdmin }: AddUserDialogProps) {
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     setPending(true);
-    const form = e.currentTarget;
-    const formData = new FormData(form);
-    const result = await createOrgUser(formData);
-    setPending(false);
-    if (result?.error) {
-      const err = result.error as Record<string, string[]>;
-      setError(err._form?.[0] ?? err.email?.[0] ?? err.password?.[0] ?? "Something went wrong.");
-      return;
+    try {
+      const form = e.currentTarget;
+      const formData = new FormData();
+      formData.set("email", (form.elements.namedItem("email") as HTMLInputElement)?.value ?? "");
+      formData.set("password", (form.elements.namedItem("password") as HTMLInputElement)?.value ?? "");
+      formData.set("roleId", (form.elements.namedItem("roleId") as HTMLSelectElement)?.value ?? "");
+      formData.set("name", (form.elements.namedItem("name") as HTMLInputElement)?.value ?? "");
+      const isSuperAdminEl = form.elements.namedItem("isSuperAdmin") as HTMLInputElement | null;
+      if (isSuperAdminEl?.checked) formData.set("isSuperAdmin", "true");
+      const result = await createOrgUser(formData);
+      if (result?.error) {
+        setError(getErrorMessage(result.error));
+        return;
+      }
+      setOpen(false);
+      form.reset();
+      router.refresh();
+    } catch (err: unknown) {
+      setError(getErrorMessage(err));
+    } finally {
+      setPending(false);
     }
-    setOpen(false);
-    form.reset();
   }
 
   return (
@@ -96,6 +125,7 @@ export function AddUserDialog({ roles }: AddUserDialogProps) {
               id="roleId"
               name="roleId"
               required
+              defaultValue={roles.length === 1 ? roles[0].id : ""}
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             >
               <option value="">Select role</option>
@@ -105,7 +135,24 @@ export function AddUserDialog({ roles }: AddUserDialogProps) {
                 </option>
               ))}
             </select>
+            {roles.length === 0 && (
+              <p className="text-xs text-destructive">No roles found. Create roles in Settings first.</p>
+            )}
           </div>
+          {currentUserIsSuperAdmin && (
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="isSuperAdmin"
+                name="isSuperAdmin"
+                value="true"
+                className="rounded border-input"
+              />
+              <Label htmlFor="isSuperAdmin" className="font-normal cursor-pointer">
+                Add as organization super admin
+              </Label>
+            </div>
+          )}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel

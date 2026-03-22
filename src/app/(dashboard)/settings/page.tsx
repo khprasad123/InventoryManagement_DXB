@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth-utils";
 import { canManageUsers, canManageRoles, hasPermission, isSuperAdmin } from "@/lib/permissions";
-import { Users, Coins, ClipboardList, Shield, Building2 } from "lucide-react";
+import { Users, Coins, ClipboardList, Shield, Building2, KeyRound } from "lucide-react";
 
 export default async function SettingsPage() {
   const user = await getCurrentUser();
@@ -52,6 +52,12 @@ export default async function SettingsPage() {
             Application settings and preferences.
           </p>
           <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/settings/profile">
+                <KeyRound className="mr-2 h-4 w-4" />
+                Change password
+              </Link>
+            </Button>
             <Button variant="outline" size="sm" asChild>
               <Link href="/settings/currencies">
                 <Coins className="mr-2 h-4 w-4" />

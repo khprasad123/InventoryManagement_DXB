@@ -57,6 +57,7 @@ export const authOptions: NextAuthOptions = {
           id: uo.organizationId,
           name: uo.organization.name,
           slug: uo.organization.slug,
+          logoUrl: uo.organization.logoUrl,
           role: uo.role.name,
           permissions: uo.role.permissions.map((rp) => rp.permission.code),
           isSuperAdmin: uo.isSuperAdmin,
@@ -116,10 +117,10 @@ export const authOptions: NextAuthOptions = {
         token.organizationName = user.organizationName;
         token.permissions = (user as { permissions?: string[] }).permissions ?? [];
         token.isSuperAdmin = (user as { isSuperAdmin?: boolean }).isSuperAdmin ?? false;
-        token.organizations = (user as { organizations?: { id: string; name: string; slug: string; role: string; permissions: string[]; isSuperAdmin: boolean }[] }).organizations ?? [];
+        token.organizations = (user as { organizations?: { id: string; name: string; slug: string; logoUrl?: string | null; role: string; permissions: string[]; isSuperAdmin: boolean }[] }).organizations ?? [];
       }
       if (trigger === "update" && session?.organizationId) {
-        const orgs = (token.organizations ?? []) as { id: string; name: string; slug: string; role: string; permissions: string[]; isSuperAdmin: boolean }[];
+        const orgs = (token.organizations ?? []) as { id: string; name: string; slug: string; logoUrl?: string | null; role: string; permissions: string[]; isSuperAdmin: boolean }[];
         const org = orgs.find((o) => o.id === session.organizationId);
         if (org) {
           token.organizationId = org.id;
@@ -139,7 +140,7 @@ export const authOptions: NextAuthOptions = {
         session.user.organizationName = token.organizationName;
         session.user.permissions = (token.permissions as string[]) ?? [];
         session.user.isSuperAdmin = (token.isSuperAdmin as boolean) ?? false;
-        session.user.organizations = (token.organizations as { id: string; name: string; slug: string }[]) ?? [];
+        session.user.organizations = (token.organizations as { id: string; name: string; slug: string; logoUrl?: string | null }[]) ?? [];
       }
       return session;
     },

@@ -1,7 +1,7 @@
 "use server";
 
 import { randomBytes } from "crypto";
-import { hash } from "bcryptjs";
+import { hash, compare } from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { redirect } from "next/navigation";
@@ -62,12 +62,15 @@ export async function registerUser(formData: FormData) {
   const logoFile = formData.get("logo") as File | null;
   const sealFile = formData.get("seal") as File | null;
 
-  const existing = await prisma.user.findUnique({
-    where: { email },
+  const existingUser = await prisma.user.findFirst({
+    where: { email, deletedAt: null },
   });
 
-  if (existing) {
-    return { error: { email: ["Email already registered"] } };
+  if (existingUser) {
+    const validPassword = await compare(password, existingUser.passwordHash);
+    if (!validPassword) {
+      return { error: { email: ["This email is already registered. Enter your existing password to add a new organization."] } };
+    }
   }
 
   let slug = slugFromCompanyName(companyName);
@@ -78,7 +81,9 @@ export async function registerUser(formData: FormData) {
     slug = `${slug}-${randomBytes(4).toString("hex")}`;
   }
 
-  const passwordHash = await hash(password, 12);
+  const passwordHash = existingUser
+    ? undefined
+    : await hash(password, 12);
 
   // Create org first to get org ID for blob paths
   const org = await prisma.organization.create({
@@ -196,9 +201,22 @@ export async function registerUser(formData: FormData) {
       data: { organizationId: org.id, name: "General" },
     });
 
-    const user = await tx.user.create({
-      data: { name, email, passwordHash },
-    });
+    let user: { id: string };
+    if (existingUser) {
+      user = existingUser;
+      // Optional: update name if provided and different
+      if (name && name !== existingUser.name) {
+        await tx.user.update({
+          where: { id: existingUser.id },
+          data: { name },
+        });
+      }
+    } else {
+      if (!passwordHash) throw new Error("Password required for new user");
+      user = await tx.user.create({
+        data: { name, email, passwordHash },
+      });
+    }
 
     await tx.userOrganization.create({
       data: {

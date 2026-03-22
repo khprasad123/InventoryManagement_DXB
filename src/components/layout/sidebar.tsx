@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 import {
   LayoutDashboard,
   Package,
@@ -36,6 +37,11 @@ const navItems = [
 export function Sidebar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const { data: session } = useSession();
+  const orgId = (session?.user as { organizationId?: string })?.organizationId;
+  const orgs = (session?.user as { organizations?: { id: string; logoUrl?: string | null }[] })?.organizations ?? [];
+  const currentOrg = orgs.find((o) => o.id === orgId);
+  const logoUrl = currentOrg?.logoUrl;
 
   return (
     <>
@@ -56,14 +62,25 @@ export function Sidebar() {
         <div className="flex h-full flex-col">
           <div className="flex h-16 min-h-16 items-center justify-between border-b border-sidebar-border px-4">
             <Link href="/dashboard" className="flex shrink-0 items-center">
-              <Image
-                src={logoDark}
-                alt="KaHa Enterprise Cloud"
-                width={220}
-                height={56}
-                className="h-12 w-auto max-w-[220px] object-contain object-left"
-                priority
-              />
+              {logoUrl ? (
+                <Image
+                  src={logoUrl}
+                  alt="Organization logo"
+                  width={220}
+                  height={56}
+                  className="h-12 w-auto max-w-[220px] object-contain object-left"
+                  unoptimized
+                />
+              ) : (
+                <Image
+                  src={logoDark}
+                  alt="KaHa Enterprise Cloud"
+                  width={220}
+                  height={56}
+                  className="h-12 w-auto max-w-[220px] object-contain object-left"
+                  priority
+                />
+              )}
             </Link>
             <Button
               variant="ghost"

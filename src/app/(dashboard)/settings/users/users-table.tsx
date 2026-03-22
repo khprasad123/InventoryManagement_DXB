@@ -13,6 +13,7 @@ import { Shield } from "lucide-react";
 import { EditUserRoleForm } from "./edit-user-role-form";
 import { RemoveUserButton } from "./remove-user-button";
 import { SetSuperAdminButton } from "./set-super-admin-button";
+import { ResetPasswordButton } from "./reset-password-button";
 
 type OrgUser = {
   id: string;
@@ -27,12 +28,14 @@ interface UsersTableProps {
   orgUsers: OrgUser[];
   roles: Role[];
   currentUserIsSuperAdmin: boolean;
+  currentUserId?: string;
 }
 
 export function UsersTable({
   orgUsers,
   roles,
   currentUserIsSuperAdmin,
+  currentUserId,
 }: UsersTableProps) {
   return (
     <div className="rounded-md border">
@@ -42,7 +45,7 @@ export function UsersTable({
             <TableHead>User</TableHead>
             <TableHead>Role</TableHead>
             <TableHead className="w-[120px]">Super admin</TableHead>
-            <TableHead className="w-[180px] text-right">Actions</TableHead>
+            <TableHead className="w-[220px] text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -87,11 +90,19 @@ export function UsersTable({
                   )}
                 </TableCell>
                 <TableCell className="text-right">
-                  <RemoveUserButton
-                    userOrgId={ou.id}
-                    userName={ou.user.name || ou.user.email}
-                    disabled={ou.isSuperAdmin}
-                  />
+                  <div className="flex items-center justify-end gap-2">
+                    {currentUserIsSuperAdmin && (
+                      <ResetPasswordButton
+                        userId={ou.user.id}
+                        userName={ou.user.name || ou.user.email}
+                      />
+                    )}
+                    <RemoveUserButton
+                      userOrgId={ou.id}
+                      userName={ou.user.name || ou.user.email}
+                      disabled={ou.isSuperAdmin || ou.user.id === currentUserId}
+                    />
+                  </div>
                 </TableCell>
               </TableRow>
             ))

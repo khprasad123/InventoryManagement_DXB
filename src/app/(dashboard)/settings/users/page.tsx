@@ -38,7 +38,7 @@ export default async function SettingsUsersPage() {
             Add org users, assign roles, and manage access. Only the org super admin can edit or remove other super admins.
           </p>
         </div>
-        <AddUserDialog roles={roles} />
+        <AddUserDialog roles={roles} currentUserIsSuperAdmin={currentUserIsSuperAdmin} />
       </div>
 
       <Card>
@@ -53,6 +53,7 @@ export default async function SettingsUsersPage() {
             orgUsers={orgUsers}
             roles={roles}
             currentUserIsSuperAdmin={currentUserIsSuperAdmin}
+            currentUserId={(user as { id?: string })?.id}
           />
         </CardContent>
       </Card>

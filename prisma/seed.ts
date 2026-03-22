@@ -16,6 +16,7 @@ async function clearAllDataIfDev() {
   await prisma.clientPayment.deleteMany({});
   await prisma.supplierPayment.deleteMany({});
   await prisma.salesInvoiceItem.deleteMany({});
+  await prisma.salesInvoice.deleteMany({});
   await prisma.salesOrderItem.deleteMany({});
   await prisma.salesOrder.deleteMany({});
   await prisma.purchaseInvoiceItem.deleteMany({});
@@ -27,7 +28,6 @@ async function clearAllDataIfDev() {
   await prisma.quotation.deleteMany({});
   await prisma.grnItem.deleteMany({});
   await prisma.stockMovement.deleteMany({});
-  await prisma.salesInvoice.deleteMany({});
   await prisma.purchaseInvoice.deleteMany({});
   await prisma.grn.deleteMany({});
   await prisma.client.deleteMany({});
