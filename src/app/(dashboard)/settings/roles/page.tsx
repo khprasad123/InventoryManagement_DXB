@@ -7,6 +7,7 @@ import { getCurrentUser } from "@/lib/auth-utils";
 import { canManageRoles } from "@/lib/permissions";
 import { redirect } from "next/navigation";
 import { RolesTable } from "./roles-table";
+import { CreateRoleDialog } from "./create-role-dialog";
 
 export default async function SettingsRolesPage() {
   const user = await getCurrentUser();
@@ -37,10 +38,15 @@ export default async function SettingsRolesPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Organization roles</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Assign permissions to roles. Users get access based on their role.
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Organization roles</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Create roles and assign menu permissions (Create, Read, Edit, Delete per module). Super administrator has access to all.
+              </p>
+            </div>
+            <CreateRoleDialog />
+          </div>
         </CardHeader>
         <CardContent>
           <RolesTable roles={roles} allPermissions={allPermissions} />

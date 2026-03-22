@@ -72,3 +72,55 @@ export async function updateRolePermissions(
   revalidatePath("/settings/roles");
   return { success: true };
 }
+
+export async function createRole(formData: FormData) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const user = await getCurrentUser();
+  if (!canManageRoles(user)) {
+    return { error: "You do not have permission to manage roles." };
+  }
+
+  const name = (formData.get("name") as string)?.trim();
+  if (!name) return { error: "Role name is required." };
+
+  const existing = await prisma.role.findFirst({
+    where: { name, organizationId: orgId, deletedAt: null },
+  });
+  if (existing) return { error: "A role with this name already exists." };
+
+  await prisma.role.create({
+    data: { name, organizationId: orgId },
+  });
+
+  revalidatePath("/settings/roles");
+  return { success: true };
+}
+
+export async function deleteRole(roleId: string) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const user = await getCurrentUser();
+  if (!canManageRoles(user)) {
+    return { error: "You do not have permission to manage roles." };
+  }
+
+  const role = await prisma.role.findFirst({
+    where: { id: roleId, organizationId: orgId, deletedAt: null },
+    include: { userOrganizations: true },
+  });
+  if (!role) return { error: "Role not found." };
+  if (role.userOrganizations?.length) {
+    return { error: "Cannot delete role: users are assigned to it. Reassign users first." };
+  }
+
+  await prisma.role.update({
+    where: { id: roleId },
+    data: { deletedAt: new Date() },
+  });
+
+  revalidatePath("/settings/roles");
+  return { success: true };
+}
