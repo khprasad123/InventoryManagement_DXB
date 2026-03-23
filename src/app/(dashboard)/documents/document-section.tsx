@@ -2,8 +2,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { getDocumentsFor, uploadDocument, deleteDocument } from "./actions";
-import { getCurrentUser } from "@/lib/auth-utils";
+import { getCurrentUser, getOrgTimezone } from "@/lib/auth-utils";
 import { canManageUsers } from "@/lib/permissions";
+import { formatDateTimeInTimezone } from "@/lib/date-utils";
 
 type DocumentableType =
   | "Supplier"
@@ -72,7 +73,7 @@ export async function DocumentSection({
         ) : (
           <ul className="space-y-2 text-sm">
             {docs.map((doc) => {
-              const created = new Date(doc.createdAt).toLocaleString();
+              const created = formatDateTimeInTimezone(doc.createdAt, tz);
               const sizeKb = Math.round(doc.sizeBytes / 1024);
               return (
                 <li

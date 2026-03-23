@@ -9,15 +9,20 @@ import {
   ArrowUpCircle,
   BarChart3,
 } from "lucide-react";
-import { requireAuth } from "@/lib/auth-utils";
+import { requireAuth, getOrgTimezone } from "@/lib/auth-utils";
+import { formatInTimezone } from "@/lib/date-utils";
 import { getDashboardData } from "./actions";
 import { RevenueExpenseChart } from "./revenue-expense-chart";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 
 export default async function DashboardPage() {
-  const user = await requireAuth();
-  const data = await getDashboardData();
+  const [user, data, timezone] = await Promise.all([
+    requireAuth(),
+    getDashboardData(),
+    getOrgTimezone(),
+  ]);
+  const tz = timezone ?? "UTC";
 
   const kpiCards = [
     {
@@ -242,7 +247,7 @@ export default async function DashboardPage() {
                       <p className="truncate text-xs text-muted-foreground">
                         {inv.name} · Due{" "}
                         {inv.dueDate
-                          ? new Date(inv.dueDate).toLocaleDateString()
+                          ? formatInTimezone(inv.dueDate, tz)
                           : "-"}
                       </p>
                     </div>

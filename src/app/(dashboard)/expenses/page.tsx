@@ -9,7 +9,8 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { getExpenses } from "./actions";
-import { getOrganizationId } from "@/lib/auth-utils";
+import { getOrganizationId, getOrgTimezone } from "@/lib/auth-utils";
+import { formatInTimezone } from "@/lib/date-utils";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Plus, Pencil, Trash2, FolderTree, FileText, Eye } from "lucide-react";
@@ -82,7 +83,7 @@ export default async function ExpensesPage() {
                   {expenses.map((expense) => (
                     <TableRow key={expense.id}>
                       <TableCell>
-                        {new Date(expense.expenseDate).toLocaleDateString()}
+                        {formatInTimezone(expense.expenseDate, tz)}
                       </TableCell>
                       <TableCell>{expense.category.name}</TableCell>
                       <TableCell className="max-w-[200px] truncate text-muted-foreground">
@@ -108,7 +109,7 @@ export default async function ExpensesPage() {
                           </Button>
                           <DeleteExpenseButton
                             expenseId={expense.id}
-                            expenseLabel={`${expense.category.name} - ${Number(expense.amount).toFixed(2)} on ${new Date(expense.expenseDate).toLocaleDateString()}`}
+                            expenseLabel={`${expense.category.name} - ${Number(expense.amount).toFixed(2)} on ${formatInTimezone(expense.expenseDate, tz)}`}
                           />
                         </div>
                       </TableCell>

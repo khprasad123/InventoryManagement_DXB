@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/auth-utils";
+import { getCurrentUser, getOrgTimezone } from "@/lib/auth-utils";
 import { hasPermission } from "@/lib/permissions";
 import { AuditLogTable } from "./audit-log-table";
 import { getAuditLogs, getAuditActions, getAuditEntityTypes } from "./actions";
@@ -19,7 +19,7 @@ export default async function AuditLogPage({
   const params = await searchParams;
   const page = params.page ? parseInt(params.page, 10) : 1;
 
-  const [result, actions, entityTypes] = await Promise.all([
+  const [result, actions, entityTypes, timezone] = await Promise.all([
     getAuditLogs({
       from: params.from,
       to: params.to,
@@ -29,6 +29,7 @@ export default async function AuditLogPage({
     }),
     getAuditActions(),
     getAuditEntityTypes(),
+    getOrgTimezone(),
   ]);
 
   return (
@@ -74,6 +75,7 @@ export default async function AuditLogPage({
             currentPage={result.currentPage}
             totalPages={result.totalPages}
             searchParams={params}
+            timezone={timezone ?? "UTC"}
           />
         </CardContent>
       </Card>

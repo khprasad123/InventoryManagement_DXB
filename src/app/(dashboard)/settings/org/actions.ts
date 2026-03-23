@@ -109,6 +109,7 @@ export async function getCurrentOrgInfo() {
       website: true,
       taxRegistrationNo: true,
       bankDetails: true,
+      timezone: true,
     },
   });
 }
@@ -121,6 +122,7 @@ const updateOrgSchema = z.object({
   website: z.string().max(200).optional(),
   taxRegistrationNo: z.string().max(100).optional(),
   bankDetails: z.string().max(500).optional(),
+  timezone: z.string().max(50).optional(),
 });
 
 export async function updateOrgSettings(formData: FormData) {
@@ -140,6 +142,7 @@ export async function updateOrgSettings(formData: FormData) {
     website: formData.get("website") || undefined,
     taxRegistrationNo: formData.get("taxRegistrationNo") || undefined,
     bankDetails: formData.get("bankDetails") || undefined,
+    timezone: formData.get("timezone") || undefined,
   });
 
   if (!parsed.success) {
@@ -156,6 +159,7 @@ export async function updateOrgSettings(formData: FormData) {
       website: parsed.data.website || null,
       taxRegistrationNo: parsed.data.taxRegistrationNo ?? null,
       bankDetails: parsed.data.bankDetails ?? null,
+      timezone: parsed.data.timezone ?? "UTC",
     },
   });
 

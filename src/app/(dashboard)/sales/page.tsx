@@ -8,7 +8,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getSalesInvoices } from "./actions";
-import { getOrganizationId } from "@/lib/auth-utils";
+import { getOrganizationId, getOrgTimezone } from "@/lib/auth-utils";
+import { formatInTimezone } from "@/lib/date-utils";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,11 @@ export default async function SalesPage() {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
-  const invoices = await getSalesInvoices();
+  const [invoices, timezone] = await Promise.all([
+    getSalesInvoices(),
+    getOrgTimezone(),
+  ]);
+  const tz = timezone ?? "UTC";
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -113,11 +118,11 @@ export default async function SalesPage() {
                         </Link>
                       </TableCell>
                       <TableCell>
-                        {new Date(inv.invoiceDate).toLocaleDateString()}
+                        {formatInTimezone(inv.invoiceDate, tz)}
                       </TableCell>
                       <TableCell>
                         {inv.dueDate
-                          ? new Date(inv.dueDate).toLocaleDateString()
+                          ? formatInTimezone(inv.dueDate, tz)
                           : "-"}
                       </TableCell>
                       <TableCell>{inv.client.name}</TableCell>

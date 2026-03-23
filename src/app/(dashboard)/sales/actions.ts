@@ -585,6 +585,7 @@ export async function getOrgForInvoice() {
       website: true,
       taxRegistrationNo: true,
       bankDetails: true,
+      timezone: true,
     },
   });
 }

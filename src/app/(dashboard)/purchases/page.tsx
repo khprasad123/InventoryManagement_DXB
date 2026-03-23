@@ -10,7 +10,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getPurchaseInvoices } from "./actions";
-import { getOrganizationId } from "@/lib/auth-utils";
+import { getOrganizationId, getOrgTimezone } from "@/lib/auth-utils";
+import { formatInTimezone } from "@/lib/date-utils";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Plus, Package, FileText, Eye, Pencil } from "lucide-react";
@@ -105,11 +106,11 @@ export default async function PurchasesPage() {
                         </Link>
                       </TableCell>
                       <TableCell>
-                        {new Date(inv.invoiceDate).toLocaleDateString()}
+                        {formatInTimezone(inv.invoiceDate, tz)}
                       </TableCell>
                       <TableCell>
                         {inv.dueDate
-                          ? new Date(inv.dueDate).toLocaleDateString()
+                          ? formatInTimezone(inv.dueDate, tz)
                           : "-"}
                       </TableCell>
                       <TableCell>{inv.supplier.name}</TableCell>

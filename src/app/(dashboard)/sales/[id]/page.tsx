@@ -22,6 +22,7 @@ import { DocumentSection } from "@/app/(dashboard)/documents/document-section";
 import { SubmitInvoiceButton } from "../submit-invoice-button";
 import { ApproveRejectInvoice } from "../approve-reject-invoice";
 import { DeleteSalesInvoiceButton } from "../delete-sales-invoice-button";
+import { formatInTimezone, formatDateTimeInTimezone } from "@/lib/date-utils";
 
 export default async function SalesInvoiceDetailPage({
   params,
@@ -38,6 +39,7 @@ export default async function SalesInvoiceDetailPage({
   ]);
   if (!invoice) notFound();
 
+  const tz = org?.timezone ?? "UTC";
   const user = await getCurrentUser();
   const canRecord = canRecordPayments(user);
   const total = Number(invoice.totalAmount);
@@ -61,7 +63,7 @@ export default async function SalesInvoiceDetailPage({
             </h1>
             <p className="text-muted-foreground">
               {invoice.client.name} •{" "}
-              {new Date(invoice.invoiceDate).toLocaleDateString()}
+              {formatInTimezone(invoice.invoiceDate, tz)}
             </p>
           </div>
           <PrintInvoiceButton invoice={invoice} />
@@ -81,14 +83,14 @@ export default async function SalesInvoiceDetailPage({
             <div>
               <span className="text-sm text-muted-foreground">Invoice Date</span>
               <p className="font-medium">
-                {new Date(invoice.invoiceDate).toLocaleDateString()}
+                {formatInTimezone(invoice.invoiceDate, tz)}
               </p>
             </div>
             <div>
               <span className="text-sm text-muted-foreground">Due Date</span>
               <p className="font-medium">
                 {invoice.dueDate
-                  ? new Date(invoice.dueDate).toLocaleDateString()
+                  ? formatInTimezone(invoice.dueDate, tz)
                   : "-"}
               </p>
             </div>
@@ -131,7 +133,7 @@ export default async function SalesInvoiceDetailPage({
                 <p className="font-medium">{invoice.approvedBy.name}</p>
                 {invoice.approvedAt && (
                   <p className="text-xs text-muted-foreground">
-                    {new Date(invoice.approvedAt).toLocaleString()}
+                    {formatDateTimeInTimezone(invoice.approvedAt, tz)}
                   </p>
                 )}
               </div>

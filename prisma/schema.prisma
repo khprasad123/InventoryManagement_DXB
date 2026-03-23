@@ -66,6 +66,7 @@ model Organization {
   website           String?
   taxRegistrationNo String?   @map("tax_registration_no")
   bankDetails       String?   @map("bank_details") // Acct Name, Bank, Acct#, IBAN
+  timezone          String?   @default("UTC") @map("timezone") // IANA timezone for display (e.g. Asia/Dubai)
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
   deletedAt         DateTime? @map("deleted_at")

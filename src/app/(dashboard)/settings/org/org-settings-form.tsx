@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { updateOrgSettings, uploadOrgLogo, uploadOrgSeal } from "./actions";
+import { TIMEZONES } from "@/lib/timezones";
 
 const orgSchema = z.object({
   name: z.string().min(1, "Name is required").max(200),
@@ -18,6 +19,7 @@ const orgSchema = z.object({
   website: z.string().max(200).optional(),
   taxRegistrationNo: z.string().max(100).optional(),
   bankDetails: z.string().max(500).optional(),
+  timezone: z.string().max(50).optional(),
 });
 
 type OrgFormValues = z.infer<typeof orgSchema>;
@@ -34,6 +36,7 @@ type Org = {
   website: string | null;
   taxRegistrationNo: string | null;
   bankDetails: string | null;
+  timezone: string | null;
 };
 
 export function OrgSettingsForm({ org }: { org: Org }) {
@@ -59,6 +62,7 @@ export function OrgSettingsForm({ org }: { org: Org }) {
       website: org.website ?? "",
       taxRegistrationNo: org.taxRegistrationNo ?? "",
       bankDetails: org.bankDetails ?? "",
+      timezone: org.timezone ?? "UTC",
     },
   });
 
@@ -263,6 +267,23 @@ export function OrgSettingsForm({ org }: { org: Org }) {
               placeholder="Account Name, Bank, Account#, IBAN"
               rows={3}
             />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="timezone">Time Zone</Label>
+            <select
+              id="timezone"
+              {...register("timezone")}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              {TIMEZONES.map((tz) => (
+                <option key={tz.value} value={tz.value}>
+                  {tz.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Used for displaying dates and times (transactions, audit, invoices, reports). Database stores UTC.
+            </p>
           </div>
         </div>
       </div>

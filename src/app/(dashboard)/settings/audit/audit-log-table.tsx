@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { formatDateTimeInTimezone } from "@/lib/date-utils";
 import {
   Table,
   TableBody,
@@ -21,13 +22,7 @@ interface AuditLogTableProps {
   currentPage: number;
   totalPages: number;
   searchParams: { from?: string; to?: string; action?: string; entityType?: string; page?: string };
-}
-
-function formatDate(d: Date) {
-  return new Date(d).toLocaleString(undefined, {
-    dateStyle: "short",
-    timeStyle: "medium",
-  });
+  timezone?: string;
 }
 
 export function AuditLogTable({
@@ -35,6 +30,7 @@ export function AuditLogTable({
   currentPage,
   totalPages,
   searchParams,
+  timezone = "UTC",
 }: AuditLogTableProps) {
   const params = new URLSearchParams();
   if (searchParams.from) params.set("from", searchParams.from);
@@ -68,7 +64,7 @@ export function AuditLogTable({
               logs.map((log) => (
                 <TableRow key={log.id}>
                   <TableCell className="whitespace-nowrap text-muted-foreground">
-                    {formatDate(log.createdAt)}
+                    {formatDateTimeInTimezone(log.createdAt, timezone)}
                   </TableCell>
                   <TableCell className="font-medium">{log.action}</TableCell>
                   <TableCell>

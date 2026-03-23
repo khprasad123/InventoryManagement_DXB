@@ -1,4 +1,5 @@
 import { numberToWords } from "@/lib/number-to-words";
+import { formatInTimezone, formatDateTimeInTimezone } from "@/lib/date-utils";
 
 type OrgForInvoice = {
   name: string;
@@ -10,6 +11,7 @@ type OrgForInvoice = {
   website: string | null;
   taxRegistrationNo: string | null;
   bankDetails: string | null;
+  timezone: string | null;
 } | null;
 
 type InvoiceForPrint = {
@@ -53,6 +55,7 @@ export function InvoicePrintLayout({
 }) {
   if (!invoice) return null;
 
+  const tz = org?.timezone ?? "UTC";
   const total = Number(invoice.totalAmount);
   const amountWords = numberToWords(total);
 
@@ -138,7 +141,7 @@ export function InvoicePrintLayout({
                 <tbody>
                   <tr>
                     <td className="font-medium text-gray-600 w-32 py-0.5">Invoice Date</td>
-                    <td>{new Date(invoice.invoiceDate).toLocaleDateString()}</td>
+                    <td>{formatInTimezone(invoice.invoiceDate, tz)}</td>
                   </tr>
                   <tr>
                     <td className="font-medium text-gray-600 py-0.5">Ref No</td>
@@ -156,7 +159,7 @@ export function InvoicePrintLayout({
                     <td className="font-medium text-gray-600 py-0.5">Due Date</td>
                     <td>
                       {invoice.dueDate
-                        ? new Date(invoice.dueDate).toLocaleDateString()
+                        ? formatInTimezone(invoice.dueDate, tz)
                         : "-"}
                     </td>
                   </tr>
@@ -263,7 +266,7 @@ export function InvoicePrintLayout({
           <p className="mt-2 font-medium">{invoice.approvedBy?.name ?? "—"}</p>
           {invoice.approvedAt && (
             <p className="text-gray-500 mt-0.5">
-              {new Date(invoice.approvedAt).toLocaleDateString()}
+              {formatInTimezone(invoice.approvedAt, tz)}
             </p>
           )}
           {invoice.approvedBy?.signatureUrl && (
@@ -298,7 +301,7 @@ export function InvoicePrintLayout({
 
       {/* Footer */}
       <div className="mt-12 pt-4 border-t text-xs text-gray-500 text-center">
-        <p>Generated on {new Date().toLocaleString()}</p>
+        <p>Generated on {formatDateTimeInTimezone(new Date(), tz)}</p>
         {invoice.jobId && <p>Job ID: {invoice.jobId}</p>}
       </div>
     </div>
