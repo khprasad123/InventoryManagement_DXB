@@ -14,8 +14,14 @@ export function PrintQuotationButton({ quotation }: PrintQuotationButtonProps) {
     const el = document.querySelector(".invoice-container");
     if (!el) return window.print();
 
-    const printWindow = window.open("", "_blank", "noopener,noreferrer");
-    if (!printWindow) return window.print();
+    // Print using an offscreen iframe to avoid opening a blank new tab.
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
 
     // Clone existing styles so the printed markup renders correctly.
     const linkStyles = Array.from(
@@ -38,15 +44,31 @@ export function PrintQuotationButton({ quotation }: PrintQuotationButtonProps) {
   </body>
 </html>`;
 
-    printWindow.document.open();
-    printWindow.document.write(pageHtml);
-    printWindow.document.close();
-    printWindow.focus();
+    document.body.appendChild(iframe);
+    const doc = iframe.contentWindow?.document;
+    if (!doc) {
+      try {
+        if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+      } catch {
+        // ignore cleanup errors
+      }
+      return window.print();
+    }
+
+    doc.open();
+    doc.write(pageHtml);
+    doc.close();
+
+    iframe.contentWindow?.focus();
 
     setTimeout(() => {
-      printWindow.print();
-      printWindow.close();
-    }, 0);
+      iframe.contentWindow?.print();
+      try {
+        if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+      } catch {
+        // ignore cleanup errors (e.g. double-click race)
+      }
+    }, 100);
   }
 
   return (
