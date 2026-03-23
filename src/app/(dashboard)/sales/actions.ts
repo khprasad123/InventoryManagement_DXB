@@ -72,7 +72,7 @@ export async function getQuotationById(id: string) {
       client: true,
       items: { include: { item: true } },
       salesOrder: { include: { salesInvoices: true } },
-      createdBy: { select: { name: true } },
+      createdBy: { select: { name: true, signatureUrl: true } },
     },
   });
   if (!quotation) return null;
@@ -80,18 +80,22 @@ export async function getQuotationById(id: string) {
   // Quotation has `approvedById` but no `approvedBy` relation field in Prisma.
   // Fetch approver name separately for UI + print rendering.
   let approvedByName: string | null = null;
+  let approvedBySignatureUrl: string | null = null;
   if (quotation.approvedById) {
     const approver = await prisma.user.findFirst({
       where: { id: quotation.approvedById, deletedAt: null },
-      select: { name: true },
+      select: { name: true, signatureUrl: true },
     });
     approvedByName = approver?.name ?? null;
+    approvedBySignatureUrl = approver?.signatureUrl ?? null;
   }
 
   return {
     ...quotation,
     approvedByName,
+    approvedBySignatureUrl,
     preparedByName: quotation.createdBy?.name ?? null,
+    preparedBySignatureUrl: quotation.createdBy?.signatureUrl ?? null,
   };
 }
 
@@ -717,8 +721,8 @@ export async function getSalesInvoices() {
     include: {
       client: true,
       salesOrder: { include: { quotation: true } },
-      createdBy: { select: { name: true } },
-      approvedBy: { select: { name: true } },
+      createdBy: { select: { name: true, signatureUrl: true } },
+      approvedBy: { select: { name: true, signatureUrl: true } },
     },
     orderBy: { invoiceDate: "desc" },
   });
@@ -729,8 +733,8 @@ export type SalesInvoiceWithRelations = Prisma.SalesInvoiceGetPayload<{
     client: true;
     salesOrder: { include: { quotation: true } };
     items: { include: { item: true } };
-    createdBy: { select: { name: true } };
-    approvedBy: { select: { name: true } };
+    createdBy: { select: { name: true; signatureUrl: true } };
+    approvedBy: { select: { name: true; signatureUrl: true } };
   };
 }>;
 
@@ -772,8 +776,8 @@ export async function getSalesInvoiceById(
       client: true,
       salesOrder: { include: { quotation: true } },
       items: { include: { item: true } },
-      createdBy: { select: { name: true } },
-      approvedBy: { select: { name: true } },
+      createdBy: { select: { name: true, signatureUrl: true } },
+      approvedBy: { select: { name: true, signatureUrl: true } },
     },
   });
   return inv as SalesInvoiceWithRelations | null;

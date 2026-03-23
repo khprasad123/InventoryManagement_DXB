@@ -41,7 +41,7 @@ type InvoiceForPrint = {
   notes: string | null;
   currencyCode: string;
   defaultTaxPercent?: { toString: () => string } | number;
-  createdBy?: { name: string | null } | null;
+  createdBy?: { name: string | null; signatureUrl?: string | null } | null;
   approvedBy?: { name: string | null; signatureUrl?: string | null } | null;
   approvedAt?: Date | null;
   taxRegistrationNo?: string | null;
@@ -278,9 +278,19 @@ export function InvoicePrintLayout({
 
       {/* Signature section: Prepared by, Approved by + stamp */}
       <div className="mt-8 grid grid-cols-3 gap-8 text-xs">
-        <div className="border-t border-gray-400 pt-2">
+        <div className="border-t border-gray-400 pt-2 flex flex-col items-start">
           <p className="font-medium">Prepared By</p>
           <p className="mt-2 font-medium">{invoice.createdBy?.name ?? "—"}</p>
+          {invoice.createdBy?.signatureUrl && (
+            <div className="mt-2 h-12 w-24">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={invoice.createdBy.signatureUrl}
+                alt="Prepared signature"
+                className="h-full w-full object-contain"
+              />
+            </div>
+          )}
         </div>
         <div className="border-t border-gray-400 pt-2 flex flex-col items-start">
           <p className="font-medium">Approved By</p>

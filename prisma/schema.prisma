@@ -197,6 +197,7 @@ model User {
   email         String
   passwordHash  String    @map("password_hash")
   name          String?
+  signatureUrl String?   @map("signature_url")
   emailVerified DateTime? @map("email_verified")
   sessionToken  String?   @map("session_token") // For single-session: invalidates other logins
   createdAt     DateTime  @default(now()) @map("created_at")

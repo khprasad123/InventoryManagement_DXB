@@ -6,6 +6,10 @@ import { revalidatePath } from "next/cache";
 import { hash, compare } from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { getOrganizationId } from "@/lib/auth-utils";
+
+const IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
+const MAX_SIZE = 2 * 1024 * 1024; // 2MB
 
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, "Current password is required"),
@@ -50,6 +54,56 @@ export async function changeOwnPassword(formData: FormData): Promise<{ error?: s
   await prisma.user.update({
     where: { id: dbUser.id },
     data: { passwordHash },
+  });
+
+  revalidatePath("/settings/profile");
+  return {};
+}
+
+export async function uploadOwnSignature(
+  formData: FormData
+): Promise<{ error?: string; url?: string }> {
+  const sessionUser = await getCurrentUser();
+  if (!sessionUser) redirect("/login");
+
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const file = formData.get("file") as File | null;
+  if (!file || file.size === 0) return { error: "File is required." };
+  if (file.size > MAX_SIZE) return { error: "File must be under 2MB." };
+  if (!IMAGE_TYPES.includes(file.type)) return { error: "Allowed: PNG, JPEG, WebP." };
+
+  const { put } = await import("@vercel/blob");
+  const ext = file.name.includes(".") ? file.name.split(".").pop()!.toLowerCase() : "png";
+  const key = `org-${orgId}/user-signatures/${Date.now()}.${ext}`;
+  const blob = await put(key, file, {
+    access: "public",
+    token: process.env.BLOB_READ_WRITE_TOKEN,
+  });
+
+  const userId = (sessionUser as { id?: string }).id;
+  if (!userId) return { error: "Invalid user session." };
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { signatureUrl: blob.url },
+  });
+
+  revalidatePath("/settings/profile");
+  return { url: blob.url };
+}
+
+export async function removeOwnSignature(): Promise<{ error?: string }> {
+  const sessionUser = await getCurrentUser();
+  if (!sessionUser) redirect("/login");
+
+  const userId = (sessionUser as { id?: string }).id;
+  if (!userId) return { error: "Invalid user session." };
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { signatureUrl: null },
   });
 
   revalidatePath("/settings/profile");

@@ -42,7 +42,9 @@ type QuotationForPrint = {
   notes: string | null;
   status: string;
   preparedByName?: string | null;
+  preparedBySignatureUrl?: string | null;
   approvedByName?: string | null;
+  approvedBySignatureUrl?: string | null;
   approvedAt?: Date | null;
 };
 
@@ -277,8 +279,18 @@ export function QuotationPrintLayout({
         <div className="border-t border-gray-400 pt-2">
           <p className="font-medium">Prepared By</p>
           <p className="mt-2 font-medium">{quotation.preparedByName ?? "—"}</p>
+          {quotation.preparedBySignatureUrl && (
+            <div className="mt-2 h-12 w-24">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={quotation.preparedBySignatureUrl}
+                alt="Prepared signature"
+                className="h-full w-full object-contain"
+              />
+            </div>
+          )}
         </div>
-        <div className="border-t border-gray-400 pt-2">
+        <div className="border-t border-gray-400 pt-2 flex flex-col items-start">
           <p className="font-medium">Approved By</p>
           <p className="mt-2 font-medium">
             {quotation.approvedByName ?? "—"}
@@ -287,6 +299,16 @@ export function QuotationPrintLayout({
             <p className="text-gray-500 mt-0.5">
               {formatInTimezone(quotation.approvedAt, tz)}
             </p>
+          )}
+          {quotation.approvedBySignatureUrl && (
+            <div className="mt-2 h-12 w-24">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={quotation.approvedBySignatureUrl}
+                alt="Approver signature"
+                className="h-full w-full object-contain"
+              />
+            </div>
           )}
           {(quotation.sealUrl ?? org?.sealUrl) && quotation.approvedAt && (
             <div className="mt-2 h-24 w-36">

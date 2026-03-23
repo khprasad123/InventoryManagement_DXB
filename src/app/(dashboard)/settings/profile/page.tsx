@@ -4,9 +4,19 @@ import Link from "next/link";
 import { ArrowLeft, KeyRound } from "lucide-react";
 import { requireAuth } from "@/lib/auth-utils";
 import { ChangePasswordForm } from "./change-password-form";
+import { SignatureUploadForm } from "./signature-upload-form";
+import { prisma } from "@/lib/prisma";
 
 export default async function ProfilePage() {
-  await requireAuth();
+  const user = await requireAuth();
+  const userId = (user as { id?: string } | null)?.id;
+  const dbUser = userId
+    ? await prisma.user.findFirst({
+        where: { id: userId, deletedAt: null },
+        select: { signatureUrl: true },
+      })
+    : null;
+  const signatureUrl = dbUser?.signatureUrl ?? null;
 
   return (
     <div className="space-y-6">
@@ -19,12 +29,24 @@ export default async function ProfilePage() {
         </Button>
         <h1 className="mt-2 text-3xl font-bold tracking-tight flex items-center gap-2">
           <KeyRound className="h-8 w-8" />
-          Change password
+          Profile
         </h1>
         <p className="text-muted-foreground">
-          Update your account password. You will need to enter your current password.
+          Update your account password and upload your signature for printed quotations and invoices.
         </p>
       </div>
+
+      <Card className="max-w-md">
+        <CardHeader>
+          <CardTitle>Signature</CardTitle>
+          <CardDescription>
+            Upload your signature. It will be shown on printed quotations and invoices for documents you created or approved.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SignatureUploadForm signatureUrl={signatureUrl} />
+        </CardContent>
+      </Card>
 
       <Card className="max-w-md">
         <CardHeader>
