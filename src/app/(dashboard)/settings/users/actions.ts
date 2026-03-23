@@ -83,32 +83,10 @@ export async function createOrgUser(formData: FormData) {
 
   const canSetSuperAdmin = isSuperAdmin(currentUser);
   const newUserIsSuperAdmin = canSetSuperAdmin && addAsSuperAdmin;
-
-  // Check org plan max users (excluding super admin)
-  const plan = await prisma.orgPlan.findUnique({
-    where: { organizationId: orgId },
-  });
-  if (plan) {
-    const nonSuperAdminCount = await prisma.userOrganization.count({
-      where: {
-        organizationId: orgId,
-        isSuperAdmin: false,
-      },
-    });
-    const willExceed = !newUserIsSuperAdmin && nonSuperAdminCount >= plan.maxUsers;
-    if (willExceed) {
-      return {
-        error: {
-          _form: [
-            `Organization plan allows max ${plan.maxUsers} users (excluding super admin). You have ${nonSuperAdminCount}. Upgrade the plan in Settings > Plan to add more users.`,
-          ],
-        },
-      };
-    }
-  }
-
+  
+  let existingLink: { id: string } | null = null;
   if (existingUser) {
-    const existingLink = await prisma.userOrganization.findUnique({
+    existingLink = await prisma.userOrganization.findUnique({
       where: {
         userId_organizationId: { userId: existingUser.id, organizationId: orgId },
       },
@@ -116,12 +94,37 @@ export async function createOrgUser(formData: FormData) {
     if (existingLink) {
       return { error: { email: ["This user is already in your organization."] } };
     }
+  }
+
+  // Enforce org plan max users (excluding super admin) only when we are about to create a new membership
+  const plan = await prisma.orgPlan.findUnique({
+    where: { organizationId: orgId },
+  });
+  if (plan && !newUserIsSuperAdmin) {
+    const nonSuperAdminCount = await prisma.userOrganization.count({
+      where: {
+        organizationId: orgId,
+        isSuperAdmin: false,
+      },
+    });
+    if (nonSuperAdminCount >= plan.maxUsers) {
+      return {
+        error: {
+          _form: [
+            `Organization plan allows max ${plan.maxUsers} users (excluding super admin). You currently have ${nonSuperAdminCount}. Upgrade the plan in Settings > Plan to add more users.`,
+          ],
+        },
+      };
+    }
+  }
+
+  if (existingUser) {
     await prisma.userOrganization.create({
       data: {
         userId: existingUser.id,
         organizationId: orgId,
         roleId: role.id,
-        isSuperAdmin: canSetSuperAdmin && addAsSuperAdmin ? true : false,
+        isSuperAdmin: newUserIsSuperAdmin,
       },
     });
   } else {

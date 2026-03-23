@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowLeft, CreditCard } from "lucide-react";
-import { getOrgPlan } from "./actions";
+import { getOrgPlan, getOrgPlanUserUsage } from "./actions";
 import { getCurrentUser } from "@/lib/auth-utils";
 import { isSuperAdmin } from "@/lib/permissions";
 import { redirect } from "next/navigation";
@@ -12,7 +12,7 @@ export default async function PlanSettingsPage() {
   const user = await getCurrentUser();
   if (!isSuperAdmin(user)) redirect("/settings");
 
-  const plan = await getOrgPlan();
+  const [plan, usage] = await Promise.all([getOrgPlan(), getOrgPlanUserUsage()]);
 
   return (
     <div className="space-y-6">
@@ -38,6 +38,11 @@ export default async function PlanSettingsPage() {
           <p className="text-sm text-muted-foreground">
             Set the monthly billing amount, maximum number of users (excluding super admin), and contract period.
           </p>
+          {plan && (
+            <p className="text-sm font-medium mt-2">
+              {usage.usedUsers}/{usage.maxUsers} users registered (excluding super admin)
+            </p>
+          )}
         </CardHeader>
         <CardContent>
           <PlanForm plan={plan} />

@@ -79,7 +79,7 @@ export function PlanForm({ plan }: { plan: OrgPlan | null }) {
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 max-w-md">
       <div className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="monthlyAmount">Monthly Amount</Label>
+          <Label htmlFor="monthlyAmount">Monthly Amount (USD)</Label>
           <Input
             id="monthlyAmount"
             type="number"
@@ -91,7 +91,9 @@ export function PlanForm({ plan }: { plan: OrgPlan | null }) {
           {errors.monthlyAmount && (
             <p className="text-sm text-destructive">{errors.monthlyAmount.message}</p>
           )}
-          <p className="text-xs text-muted-foreground">Billing amount per month for this organization.</p>
+          <p className="text-xs text-muted-foreground">
+            Billing amount per month in USD (always USD).
+          </p>
         </div>
         <div className="space-y-2">
           <Label htmlFor="maxUsers">Max Users (excluding super admin)</Label>

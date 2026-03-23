@@ -70,3 +70,28 @@ export async function updateOrgPlan(formData: FormData) {
   revalidatePath("/settings/org");
   return { success: true };
 }
+
+export async function getOrgPlanUserUsage() {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const user = await import("@/lib/auth-utils").then((m) => m.getCurrentUser());
+  if (!isSuperAdmin(user)) redirect("/settings");
+
+  const plan = await prisma.orgPlan.findUnique({
+    where: { organizationId: orgId },
+    select: { maxUsers: true },
+  });
+
+  const usedUsers = await prisma.userOrganization.count({
+    where: {
+      organizationId: orgId,
+      isSuperAdmin: false, // super admin is excluded from the cap
+    },
+  });
+
+  return {
+    usedUsers,
+    maxUsers: plan?.maxUsers ?? 0,
+  };
+}
