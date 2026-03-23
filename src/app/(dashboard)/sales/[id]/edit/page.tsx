@@ -21,6 +21,7 @@ export default async function EditSalesInvoicePage({
     invoiceDate: new Date(invoice.invoiceDate).toISOString().slice(0, 10),
     notes: invoice.notes ?? "",
     paidAmount: Number(invoice.paidAmount).toString(),
+    taxPercent: Number(invoice.defaultTaxPercent ?? 5),
   };
 
   async function updateAction(formData: FormData) {
