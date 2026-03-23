@@ -8,18 +8,28 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { getExpenseCategories } from "../actions";
+import { getExpenseCategoriesPaginated } from "../actions";
 import { getOrganizationId } from "@/lib/auth-utils";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { DeleteExpenseCategoryButton } from "../delete-category-button";
+import { PaginationLinks } from "@/components/ui/pagination-links";
+import { SearchInput } from "@/components/ui/search-input";
 
-export default async function ExpenseCategoriesPage() {
+export default async function ExpenseCategoriesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; search?: string }>;
+}) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
-  const categories = await getExpenseCategories();
+  const params = await searchParams;
+  const page = Math.max(1, parseInt(params.page ?? "1", 10));
+  const search = params.search ?? "";
+
+  const { categories, total, pageSize, totalPages, currentPage } = await getExpenseCategoriesPaginated(page, search);
 
   return (
     <div className="space-y-6">
@@ -32,12 +42,17 @@ export default async function ExpenseCategoriesPage() {
             Manage categories for expense entries
           </p>
         </div>
-        <Button asChild>
-          <Link href="/expenses/categories/add">
-            <Plus className="mr-2 h-4 w-4" />
-            Add Category
-          </Link>
-        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="w-full sm:w-[240px]">
+            <SearchInput value={search} placeholder="Search categories..." />
+          </div>
+          <Button asChild>
+            <Link href="/expenses/categories/add">
+              <Plus className="mr-2 h-4 w-4" />
+              Add Category
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -45,7 +60,7 @@ export default async function ExpenseCategoriesPage() {
           <CardTitle>Categories</CardTitle>
         </CardHeader>
         <CardContent>
-          {categories.length === 0 ? (
+          {total === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <p className="text-sm text-muted-foreground">
                 No categories yet. Add a category to organize expenses.
@@ -88,6 +103,24 @@ export default async function ExpenseCategoriesPage() {
                   ))}
                 </TableBody>
               </Table>
+
+              <PaginationLinks
+                page={currentPage}
+                totalPages={totalPages}
+                total={total}
+                showingFrom={(currentPage - 1) * pageSize + 1}
+                showingTo={Math.min(currentPage * pageSize, total)}
+                prevHref={
+                  currentPage <= 1
+                    ? undefined
+                    : `/expenses/categories?page=${currentPage - 1}${search ? `&search=${encodeURIComponent(search)}` : ""}`
+                }
+                nextHref={
+                  currentPage >= totalPages
+                    ? undefined
+                    : `/expenses/categories?page=${currentPage + 1}${search ? `&search=${encodeURIComponent(search)}` : ""}`
+                }
+              />
             </div>
           )}
         </CardContent>

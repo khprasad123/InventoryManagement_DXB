@@ -2,21 +2,33 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowLeft, Shield } from "lucide-react";
-import { getRolesWithPermissions, getAllPermissions } from "./actions";
+import { getRolesWithPermissionsPaginated, getAllPermissions } from "./actions";
 import { getCurrentUser } from "@/lib/auth-utils";
 import { canManageRoles } from "@/lib/permissions";
 import { redirect } from "next/navigation";
 import { RolesTable } from "./roles-table";
 import { CreateRoleDialog } from "./create-role-dialog";
+import { PaginationLinks } from "@/components/ui/pagination-links";
+import { SearchInput } from "@/components/ui/search-input";
 
-export default async function SettingsRolesPage() {
+export default async function SettingsRolesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; search?: string }>;
+}) {
   const user = await getCurrentUser();
   if (!canManageRoles(user)) redirect("/settings");
 
-  const [roles, allPermissions] = await Promise.all([
-    getRolesWithPermissions(),
+  const params = await searchParams;
+  const page = Math.max(1, parseInt(params.page ?? "1", 10));
+  const search = params.search ?? "";
+
+  const [rolesResult, allPermissions] = await Promise.all([
+    getRolesWithPermissionsPaginated(page, search),
     getAllPermissions(),
   ]);
+  const roles = rolesResult.roles;
+  const { total, pageSize, totalPages, currentPage } = rolesResult;
 
   return (
     <div className="space-y-6">
@@ -47,9 +59,30 @@ export default async function SettingsRolesPage() {
             </div>
             <CreateRoleDialog />
           </div>
+          <div className="mt-3 w-full sm:w-[320px]">
+            <SearchInput value={search} placeholder="Search roles..." />
+          </div>
         </CardHeader>
         <CardContent>
           <RolesTable roles={roles} allPermissions={allPermissions} />
+
+          <PaginationLinks
+            page={currentPage}
+            totalPages={totalPages}
+            total={total}
+            showingFrom={(currentPage - 1) * pageSize + 1}
+            showingTo={Math.min(currentPage * pageSize, total)}
+            prevHref={
+              currentPage <= 1
+                ? undefined
+                : `/settings/roles?page=${currentPage - 1}${search ? `&search=${encodeURIComponent(search)}` : ""}`
+            }
+            nextHref={
+              currentPage >= totalPages
+                ? undefined
+                : `/settings/roles?page=${currentPage + 1}${search ? `&search=${encodeURIComponent(search)}` : ""}`
+            }
+          />
         </CardContent>
       </Card>
     </div>

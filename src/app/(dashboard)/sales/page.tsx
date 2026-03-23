@@ -7,7 +7,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getSalesInvoices } from "./actions";
+import { getSalesInvoicesPaginated } from "./actions";
 import { getOrganizationId, getOrgTimezone } from "@/lib/auth-utils";
 import { formatInTimezone } from "@/lib/date-utils";
 import { redirect } from "next/navigation";
@@ -16,15 +16,27 @@ import { Button } from "@/components/ui/button";
 import { Plus, FileText, FileSignature, Eye, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { DeleteSalesInvoiceButton } from "./delete-sales-invoice-button";
+import { PaginationLinks } from "@/components/ui/pagination-links";
+import { SearchInput } from "@/components/ui/search-input";
 
-export default async function SalesPage() {
+export default async function SalesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; search?: string }>;
+}) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
-  const [invoices, timezone] = await Promise.all([
-    getSalesInvoices(),
+  const params = await searchParams;
+  const page = Math.max(1, parseInt(params.page ?? "1", 10));
+  const search = params.search ?? "";
+
+  const [invoiceResult, timezone] = await Promise.all([
+    getSalesInvoicesPaginated(page, search),
     getOrgTimezone(),
   ]);
+  const invoices = invoiceResult.invoices;
+  const { total, pageSize, totalPages, currentPage } = invoiceResult;
   const tz = timezone ?? "UTC";
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -38,7 +50,10 @@ export default async function SalesPage() {
             Flow: Quotation (cost, margin) → Approval → Sales Order (price) → Invoice → Payment
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 items-center">
+          <div className="w-full sm:w-[240px]">
+            <SearchInput value={search} placeholder="Search invoices / clients..." />
+          </div>
           <Button variant="outline" asChild>
             <Link href="/sales/quotations">
               <FileSignature className="mr-2 h-4 w-4" />
@@ -74,7 +89,7 @@ export default async function SalesPage() {
           </p>
         </CardHeader>
         <CardContent>
-          {invoices.length === 0 ? (
+          {total === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <FileText className="h-12 w-12 text-muted-foreground" />
               <p className="mt-2 text-sm text-muted-foreground">
@@ -196,6 +211,24 @@ export default async function SalesPage() {
                   ))}
                 </TableBody>
               </Table>
+
+              <PaginationLinks
+                page={currentPage}
+                totalPages={totalPages}
+                total={total}
+                showingFrom={(currentPage - 1) * pageSize + 1}
+                showingTo={Math.min(currentPage * pageSize, total)}
+                prevHref={
+                  currentPage <= 1
+                    ? undefined
+                    : `/sales?page=${currentPage - 1}${search ? `&search=${encodeURIComponent(search)}` : ""}`
+                }
+                nextHref={
+                  currentPage >= totalPages
+                    ? undefined
+                    : `/sales?page=${currentPage + 1}${search ? `&search=${encodeURIComponent(search)}` : ""}`
+                }
+              />
             </div>
           )}
         </CardContent>

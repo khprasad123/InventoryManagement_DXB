@@ -25,6 +25,53 @@ export async function getOrgUsers() {
   });
 }
 
+const PAGE_SIZE = 10;
+const searchMode = "insensitive" as const;
+
+export async function getOrgUsersPaginated(page: number, search?: string) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const user = await getCurrentUser();
+  if (!canManageUsers(user)) redirect("/settings");
+
+  const currentPage = Math.max(1, page);
+  const q = (search ?? "").trim();
+
+  const where = {
+    organizationId: orgId,
+    ...(q
+      ? {
+          OR: [
+            { user: { name: { contains: q, mode: searchMode } } },
+            { user: { email: { contains: q, mode: searchMode } } },
+          ],
+        }
+      : {}),
+  };
+
+  const total = await prisma.userOrganization.count({ where });
+
+  const orgUsers = await prisma.userOrganization.findMany({
+    where,
+    include: {
+      user: { select: { id: true, email: true, name: true } },
+      role: { select: { id: true, name: true } },
+    },
+    orderBy: { user: { name: "asc" } },
+    skip: (currentPage - 1) * PAGE_SIZE,
+    take: PAGE_SIZE,
+  });
+
+  return {
+    orgUsers,
+    total,
+    pageSize: PAGE_SIZE,
+    totalPages: Math.ceil(total / PAGE_SIZE) || 1,
+    currentPage,
+  };
+}
+
 export async function getRolesForOrg() {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");

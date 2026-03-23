@@ -26,6 +26,47 @@ export async function getRolesWithPermissions() {
   return roles;
 }
 
+const PAGE_SIZE = 10;
+const searchMode = "insensitive" as const;
+
+export async function getRolesWithPermissionsPaginated(page: number, search?: string) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const user = await getCurrentUser();
+  if (!canManageRoles(user)) redirect("/settings");
+
+  const currentPage = Math.max(1, page);
+  const q = (search ?? "").trim();
+  const where = {
+    organizationId: orgId,
+    deletedAt: null,
+    ...(q ? { name: { contains: q, mode: searchMode } } : {}),
+  };
+
+  const total = await prisma.role.count({ where });
+
+  const roles = await prisma.role.findMany({
+    where,
+    include: {
+      permissions: {
+        include: { permission: true },
+      },
+    },
+    orderBy: { name: "asc" },
+    skip: (currentPage - 1) * PAGE_SIZE,
+    take: PAGE_SIZE,
+  });
+
+  return {
+    roles,
+    total,
+    pageSize: PAGE_SIZE,
+    totalPages: Math.ceil(total / PAGE_SIZE) || 1,
+    currentPage,
+  };
+}
+
 export async function getAllPermissions() {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");

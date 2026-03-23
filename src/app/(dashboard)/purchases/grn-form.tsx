@@ -55,8 +55,25 @@ export function GrnForm({
   ]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [supplierSearch, setSupplierSearch] = useState("");
+  const [itemSearch, setItemSearch] = useState("");
 
   const selectedPo = purchaseOrders.find((p) => p.id === poId);
+
+  const supplier = suppliers.find((s) => s.id === supplierId);
+  const filteredSuppliers = supplierSearch.trim()
+    ? suppliers.filter((s) => s.name.toLowerCase().includes(supplierSearch.trim().toLowerCase()))
+    : suppliers;
+  const optionSuppliers =
+    supplier &&
+    supplierSearch.trim() &&
+    !filteredSuppliers.some((s) => s.id === supplier.id)
+      ? [supplier, ...filteredSuppliers]
+      : filteredSuppliers;
+
+  const filteredItems = itemSearch.trim()
+    ? items.filter((it) => `${it.sku} ${it.name}`.toLowerCase().includes(itemSearch.trim().toLowerCase()))
+    : items;
 
   useEffect(() => {
     if (selectedPo) {
@@ -154,6 +171,12 @@ export function GrnForm({
         </div>
         <div className="space-y-2">
           <Label htmlFor="supplierId">Supplier *</Label>
+          <Input
+            id="supplierSearch"
+            value={supplierSearch}
+            onChange={(e) => setSupplierSearch(e.target.value)}
+            placeholder="Search supplier..."
+          />
           <select
             id="supplierId"
             name="supplierId"
@@ -163,7 +186,7 @@ export function GrnForm({
             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
           >
             <option value="">Select supplier</option>
-            {suppliers.map((s) => (
+            {optionSuppliers.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
               </option>
@@ -187,6 +210,13 @@ export function GrnForm({
             Add Item
           </Button>
         </div>
+        <div className="mt-2">
+          <Input
+            value={itemSearch}
+            onChange={(e) => setItemSearch(e.target.value)}
+            placeholder="Search items by SKU or name..."
+          />
+        </div>
         <div className="mt-2 rounded-md border overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -201,18 +231,29 @@ export function GrnForm({
               {rows.map((row, i) => (
                 <tr key={i} className="border-b last:border-0">
                   <td className="px-4 py-2">
+                    {(() => {
+                      const selectedItem = row.itemId ? items.find((it) => it.id === row.itemId) : undefined;
+                      const optionItems =
+                        selectedItem &&
+                        itemSearch.trim() &&
+                        !filteredItems.some((it) => it.id === selectedItem.id)
+                          ? [selectedItem, ...filteredItems]
+                          : filteredItems;
+                      return (
                     <select
                       value={row.itemId}
                       onChange={(e) => updateRow(i, "itemId", e.target.value)}
                       className="flex h-9 w-full rounded border border-input bg-background px-2 text-sm"
                     >
                       <option value="">Select item</option>
-                      {items.map((it) => (
+                      {optionItems.map((it) => (
                         <option key={it.id} value={it.id}>
                           {it.sku} - {it.name}
                         </option>
                       ))}
                     </select>
+                      );
+                    })()}
                   </td>
                   <td className="px-4 py-2">
                     <Input

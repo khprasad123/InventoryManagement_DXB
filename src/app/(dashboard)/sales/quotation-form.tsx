@@ -70,6 +70,7 @@ export function QuotationForm({
   updateAction,
 }: QuotationFormProps) {
   const router = useRouter();
+  const [clientId, setClientId] = useState(defaultValues?.clientId ?? "");
   const [rows, setRows] = useState<QuotationItemRow[]>(
     defaultValues?.items?.length
       ? defaultValues.items.map((i) => {
@@ -86,6 +87,25 @@ export function QuotationForm({
   );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [clientSearch, setClientSearch] = useState("");
+  const [itemSearch, setItemSearch] = useState("");
+
+  const filteredClients = clientSearch.trim()
+    ? clients.filter((c) => c.name.toLowerCase().includes(clientSearch.trim().toLowerCase()))
+    : clients;
+  const selectedClient =
+    clientId ? clients.find((c) => c.id === clientId) : undefined;
+  const optionClients =
+    selectedClient && clientSearch.trim() && !filteredClients.some((c) => c.id === selectedClient.id)
+      ? [selectedClient, ...filteredClients]
+      : filteredClients;
+
+  const filteredItems = itemSearch.trim()
+    ? items.filter((it) => {
+        const q = itemSearch.trim().toLowerCase();
+        return `${it.sku} ${it.name}`.toLowerCase().includes(q);
+      })
+    : items;
 
   const addRow = () =>
     setRows((r) => [...r, { itemId: "", quantity: 1, purchaseCost: 0, margin: 0 }]);
@@ -127,7 +147,7 @@ export function QuotationForm({
     );
     formData.set(
       "clientId",
-      (form.querySelector("#clientId") as HTMLSelectElement)?.value || ""
+      clientId || (form.querySelector("#clientId") as HTMLSelectElement)?.value || ""
     );
     formData.set(
       "status",
@@ -205,15 +225,22 @@ export function QuotationForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="clientId">Client</Label>
+          <Input
+            id="clientSearch"
+            value={clientSearch}
+            onChange={(e) => setClientSearch(e.target.value)}
+            placeholder="Search client..."
+          />
           <select
             id="clientId"
             name="clientId"
             required
-            defaultValue={defaultValues?.clientId}
+            value={clientId}
+            onChange={(e) => setClientId(e.target.value)}
             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
           >
             <option value="">Select client</option>
-            {clients.map((c) => (
+            {optionClients.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
@@ -243,6 +270,13 @@ export function QuotationForm({
             Add Item
           </Button>
         </div>
+        <div className="mt-2">
+          <Input
+            value={itemSearch}
+            onChange={(e) => setItemSearch(e.target.value)}
+            placeholder="Search items by SKU or name..."
+          />
+        </div>
         <div className="mt-2 overflow-x-auto rounded-md border">
           <table className="w-full text-sm">
             <thead>
@@ -261,6 +295,10 @@ export function QuotationForm({
                 const item = getItem(row.itemId);
                 const lowStock = item && row.quantity > item.stockQty;
                 const price = salesPrice(row.purchaseCost, row.margin);
+                const selectedItemOption =
+                  row.itemId && itemSearch.trim() && item && !filteredItems.some((it) => it.id === item.id)
+                    ? [item, ...filteredItems]
+                    : filteredItems;
                 return (
                   <tr key={i} className="border-b last:border-0">
                     <td className="px-4 py-2">
@@ -273,7 +311,7 @@ export function QuotationForm({
                         className="flex h-9 w-full rounded border border-input bg-background px-2 text-sm"
                       >
                         <option value="">Select item</option>
-                        {items.map((it) => (
+                        {selectedItemOption.map((it) => (
                           <option key={it.id} value={it.id}>
                             {it.sku} - {it.name}
                           </option>

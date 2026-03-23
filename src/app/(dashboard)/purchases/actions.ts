@@ -37,6 +37,9 @@ const purchaseInvoiceSchema = z.object({
   notes: z.string().optional(),
 });
 
+const PAGE_SIZE = 10;
+const searchMode = "insensitive" as const;
+
 export async function getGrns() {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
@@ -255,6 +258,45 @@ export async function getPurchaseOrdersForGrn() {
   return pos.filter((po) => getPurchaseOrderGrnStatus(po as unknown as PurchaseOrderForFulfillment) === "PENDING_GRN");
 }
 
+export async function getGrnsPaginated(page: number, search?: string) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const currentPage = Math.max(1, page);
+  const q = (search ?? "").trim();
+  const where = {
+    organizationId: orgId,
+    deletedAt: null,
+    ...(q
+      ? {
+          OR: [
+            { grnNo: { contains: q, mode: searchMode } },
+            { supplier: { name: { contains: q, mode: searchMode } } },
+            { items: { some: { item: { OR: [{ sku: { contains: q, mode: searchMode } }, { name: { contains: q, mode: searchMode } }] } } } },
+          ],
+        }
+      : {}),
+  };
+
+  const total = await prisma.grn.count({ where });
+
+  const grns = await prisma.grn.findMany({
+    where,
+    include: { supplier: true, items: { include: { item: true } } },
+    orderBy: { receivedDate: "desc" },
+    skip: (currentPage - 1) * PAGE_SIZE,
+    take: PAGE_SIZE,
+  });
+
+  return {
+    grns,
+    total,
+    pageSize: PAGE_SIZE,
+    totalPages: Math.ceil(total / PAGE_SIZE) || 1,
+    currentPage,
+  };
+}
+
 export async function getPurchaseInvoices() {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
@@ -263,6 +305,45 @@ export async function getPurchaseInvoices() {
     include: { supplier: true, grn: true },
     orderBy: { invoiceDate: "desc" },
   });
+}
+
+export async function getPurchaseInvoicesPaginated(page: number, search?: string) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const currentPage = Math.max(1, page);
+  const q = (search ?? "").trim();
+  const where = {
+    organizationId: orgId,
+    deletedAt: null,
+    ...(q
+      ? {
+          OR: [
+            { invoiceNo: { contains: q, mode: searchMode } },
+            { notes: { contains: q, mode: searchMode } },
+            { supplier: { name: { contains: q, mode: searchMode } } },
+          ],
+        }
+      : {}),
+  };
+
+  const total = await prisma.purchaseInvoice.count({ where });
+
+  const invoices = await prisma.purchaseInvoice.findMany({
+    where,
+    include: { supplier: true, grn: true },
+    orderBy: { invoiceDate: "desc" },
+    skip: (currentPage - 1) * PAGE_SIZE,
+    take: PAGE_SIZE,
+  });
+
+  return {
+    invoices,
+    total,
+    pageSize: PAGE_SIZE,
+    totalPages: Math.ceil(total / PAGE_SIZE) || 1,
+    currentPage,
+  };
 }
 
 export async function getPurchaseInvoiceById(id: string) {
@@ -568,6 +649,48 @@ export async function getPurchaseRequests() {
     },
     orderBy: { createdAt: "desc" },
   });
+}
+
+export async function getPurchaseRequestsPaginated(page: number, search?: string) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const currentPage = Math.max(1, page);
+  const q = (search ?? "").trim();
+  const where = {
+    organizationId: orgId,
+    deletedAt: null,
+    ...(q
+      ? {
+          OR: [
+            { prNo: { contains: q, mode: searchMode } },
+            { jobId: { contains: q, mode: searchMode } },
+            { items: { some: { item: { OR: [{ sku: { contains: q, mode: searchMode } }, { name: { contains: q, mode: searchMode } }] } } } },
+          ],
+        }
+      : {}),
+  };
+
+  const total = await prisma.purchaseRequest.count({ where });
+
+  const purchaseRequests = await prisma.purchaseRequest.findMany({
+    where,
+    include: {
+      items: { include: { item: true } },
+      salesOrder: { include: { quotation: { include: { client: true } } } },
+    },
+    orderBy: { createdAt: "desc" },
+    skip: (currentPage - 1) * PAGE_SIZE,
+    take: PAGE_SIZE,
+  });
+
+  return {
+    purchaseRequests,
+    total,
+    pageSize: PAGE_SIZE,
+    totalPages: Math.ceil(total / PAGE_SIZE) || 1,
+    currentPage,
+  };
 }
 
 export async function getPurchaseRequestById(id: string) {
@@ -887,6 +1010,69 @@ export async function getPurchaseOrders() {
       if (aPending !== bPending) return aPending ? -1 : 1;
       return new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime();
     });
+}
+
+export async function getPurchaseOrdersPaginated(page: number, search?: string) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const currentPage = Math.max(1, page);
+  const q = (search ?? "").trim();
+  const where = {
+    organizationId: orgId,
+    deletedAt: null,
+    ...(q
+      ? {
+          OR: [
+            { poNo: { contains: q, mode: searchMode } },
+            { supplier: { name: { contains: q, mode: searchMode } } },
+            { purchaseRequest: { prNo: { contains: q, mode: searchMode } } },
+            { items: { some: { item: { OR: [{ sku: { contains: q, mode: searchMode } }, { name: { contains: q, mode: searchMode } }] } } } },
+          ],
+        }
+      : {}),
+  };
+
+  const total = await prisma.purchaseOrder.count({ where });
+
+  // `grnStatus` is computed in JS, so we compute + sort the full list and slice for the requested page.
+  // If this grows large, we should move `grnStatus` computation to DB or precomputed fields.
+  const pos = await prisma.purchaseOrder.findMany({
+    where,
+    include: {
+      purchaseRequest: true,
+      supplier: true,
+      items: { include: { item: true } },
+      grns: {
+        where: { deletedAt: null },
+        include: { items: true },
+      },
+    },
+    orderBy: { orderDate: "desc" },
+  });
+
+  const sorted = pos
+    .map((po) => ({
+      ...po,
+      grnStatus: getPurchaseOrderGrnStatus(po as unknown as PurchaseOrderForFulfillment),
+    }))
+    .sort((a: any, b: any) => {
+      const aPending = a.grnStatus === "PENDING_GRN";
+      const bPending = b.grnStatus === "PENDING_GRN";
+      if (aPending !== bPending) return aPending ? -1 : 1;
+      return new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime();
+    });
+
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const purchaseOrders = sorted.slice(start, start + PAGE_SIZE);
+
+  return {
+    purchaseOrders,
+    total,
+    pageSize: PAGE_SIZE,
+    totalPages: Math.ceil(total / PAGE_SIZE) || 1,
+    currentPage,
+  };
 }
 
 export async function getPurchaseOrderById(id: string) {

@@ -49,8 +49,28 @@ export function PoForm({
   const [rows, setRows] = useState<PoItemRow[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [prSearch, setPrSearch] = useState("");
+  const [supplierSearch, setSupplierSearch] = useState("");
 
   const selectedPr = prId && prId !== NONE_PR ? prs.find((p) => p.id === prId) : undefined;
+
+  const filteredPrs = prSearch.trim()
+    ? prs.filter((p) => p.prNo.toLowerCase().includes(prSearch.trim().toLowerCase()))
+    : prs;
+  const optionPrs =
+    selectedPr && prSearch.trim() && !filteredPrs.some((p) => p.id === selectedPr.id)
+      ? [selectedPr, ...filteredPrs]
+      : filteredPrs;
+
+  const selectedSupplier =
+    supplierId && supplierId !== NONE_SUPPLIER ? suppliers.find((s) => s.id === supplierId) : undefined;
+  const filteredSuppliers = supplierSearch.trim()
+    ? suppliers.filter((s) => s.name.toLowerCase().includes(supplierSearch.trim().toLowerCase()))
+    : suppliers;
+  const optionSuppliers =
+    selectedSupplier && supplierSearch.trim() && !filteredSuppliers.some((s) => s.id === selectedSupplier.id)
+      ? [selectedSupplier, ...filteredSuppliers]
+      : filteredSuppliers;
 
   useEffect(() => {
     if (selectedPr) {
@@ -121,18 +141,23 @@ export function PoForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="pr">Purchase Request *</Label>
+          <Input
+            value={prSearch}
+            onChange={(e) => setPrSearch(e.target.value)}
+            placeholder="Search PR..."
+          />
           <Select value={prId} onValueChange={setPrId} required>
             <SelectTrigger>
               <SelectValue placeholder="Select PR" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={NONE_PR}>Select PR</SelectItem>
-              {prs.map((pr) => (
+              {optionPrs.map((pr) => (
                 <SelectItem key={pr.id} value={pr.id}>
                   {pr.prNo} ({pr.items.length} items)
                 </SelectItem>
               ))}
-              {prs.length === 0 && (
+              {optionPrs.length === 0 && (
                 <div className="px-2 py-4 text-sm text-muted-foreground">
                   No approved PRs. Approve a PR first.
                 </div>
@@ -142,13 +167,18 @@ export function PoForm({
         </div>
         <div className="space-y-2">
           <Label htmlFor="supplier">Supplier *</Label>
+          <Input
+            value={supplierSearch}
+            onChange={(e) => setSupplierSearch(e.target.value)}
+            placeholder="Search supplier..."
+          />
           <Select value={supplierId} onValueChange={setSupplierId} required>
             <SelectTrigger>
               <SelectValue placeholder="Select supplier" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={NONE_SUPPLIER}>Select supplier</SelectItem>
-              {suppliers.map((s) => (
+              {optionSuppliers.map((s) => (
                 <SelectItem key={s.id} value={s.id}>
                   {s.name}
                 </SelectItem>

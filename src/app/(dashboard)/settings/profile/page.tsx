@@ -32,7 +32,7 @@ export default async function ProfilePage() {
           Profile
         </h1>
         <p className="text-muted-foreground">
-          Update your account password and upload your signature for printed quotations and invoices.
+          Change PassWord and upload your signature for printed quotations and invoices.
         </p>
       </div>
 
@@ -50,7 +50,7 @@ export default async function ProfilePage() {
 
       <Card className="max-w-md">
         <CardHeader>
-          <CardTitle>Update password</CardTitle>
+          <CardTitle>Change PassWord</CardTitle>
           <CardDescription>
             Enter your current password and choose a new one. Passwords must be at least 6 characters.
           </CardDescription>

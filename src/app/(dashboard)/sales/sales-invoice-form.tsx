@@ -80,6 +80,22 @@ export function SalesInvoiceForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dueDatePreview, setDueDatePreview] = useState<string | null>(null);
+  const [clientSearch, setClientSearch] = useState("");
+  const [itemSearch, setItemSearch] = useState("");
+
+  const filteredClients = clientSearch.trim()
+    ? clients.filter((c) => c.name.toLowerCase().includes(clientSearch.trim().toLowerCase()))
+    : clients;
+  const selectedClient =
+    clientId && clientId !== "" ? clients.find((c) => c.id === clientId) : undefined;
+  const optionClients =
+    selectedClient && clientSearch.trim() && !filteredClients.some((c) => c.id === selectedClient.id)
+      ? [selectedClient, ...filteredClients]
+      : filteredClients;
+
+  const filteredItems = itemSearch.trim()
+    ? items.filter((it) => `${it.sku} ${it.name}`.toLowerCase().includes(itemSearch.trim().toLowerCase()))
+    : items;
 
   const client = clients.find((c) => c.id === clientId);
   const getItem = (itemId: string) => items.find((it) => it.id === itemId);
@@ -366,6 +382,12 @@ export function SalesInvoiceForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="clientId">Client *</Label>
+          <Input
+            id="clientSearch"
+            value={clientSearch}
+            onChange={(e) => setClientSearch(e.target.value)}
+            placeholder="Search client..."
+          />
           <select
             id="clientId"
             name="clientId"
@@ -375,7 +397,7 @@ export function SalesInvoiceForm({
             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
           >
             <option value="">Select client</option>
-            {clients.map((c) => (
+            {optionClients.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
@@ -420,6 +442,13 @@ export function SalesInvoiceForm({
             Add Item
           </Button>
         </div>
+        <div className="mt-2">
+          <Input
+            value={itemSearch}
+            onChange={(e) => setItemSearch(e.target.value)}
+            placeholder="Search items by SKU or name..."
+          />
+        </div>
         <div className="mt-2 overflow-x-auto rounded-md border">
           <table className="w-full text-sm">
             <thead>
@@ -435,6 +464,10 @@ export function SalesInvoiceForm({
               {rows.map((row, i) => {
                 const item = getItem(row.itemId);
                 const lowStock = item && row.quantity > item.stockQty;
+                const selectedItemOption =
+                  row.itemId && itemSearch.trim() && item && !filteredItems.some((it) => it.id === item.id)
+                    ? [item, ...filteredItems]
+                    : filteredItems;
                 return (
                   <tr key={i} className="border-b last:border-0">
                     <td className="px-4 py-2">
@@ -447,7 +480,7 @@ export function SalesInvoiceForm({
                         className="flex h-9 w-full rounded border border-input bg-background px-2 text-sm"
                       >
                         <option value="">Select item</option>
-                        {items.map((it) => (
+                        {selectedItemOption.map((it) => (
                           <option key={it.id} value={it.id}>
                             {it.sku} - {it.name}
                           </option>

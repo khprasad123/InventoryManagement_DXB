@@ -58,9 +58,14 @@ export function PrForm({
   );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [itemSearch, setItemSearch] = useState("");
 
   const selectedSo = salesOrders.find((s) => s.id === salesOrderId);
   const isLocked = salesOrderId !== NONE_SO_VALUE && Boolean(salesOrderId);
+
+  const filteredItems = itemSearch.trim()
+    ? items.filter((it) => `${it.sku} ${it.name}`.toLowerCase().includes(itemSearch.trim().toLowerCase()))
+    : items;
 
   useEffect(() => {
     if (initialPr) return;
@@ -186,6 +191,14 @@ export function PrForm({
             </Button>
           )}
         </div>
+        <div className="mt-2">
+          <Input
+            value={itemSearch}
+            onChange={(e) => setItemSearch(e.target.value)}
+            placeholder="Search items by SKU or name..."
+            disabled={isLocked}
+          />
+        </div>
         <div className="mt-2 rounded-md border overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -198,6 +211,14 @@ export function PrForm({
             <tbody>
               {rows.map((row, i) => {
                 const soItem = selectedSo?.items.find((x) => x.itemId === row.itemId);
+                const selectedItem =
+                  row.itemId && row.itemId !== "" ? items.find((it) => it.id === row.itemId) : undefined;
+                const optionItems =
+                  selectedItem &&
+                  itemSearch.trim() &&
+                  !filteredItems.some((it) => it.id === selectedItem.id)
+                    ? [selectedItem, ...filteredItems]
+                    : filteredItems;
                 return (
                   <tr key={i} className="border-b last:border-0">
                     <td className="px-4 py-2">
@@ -212,7 +233,7 @@ export function PrForm({
                           className="flex h-9 w-full rounded border border-input bg-background px-2 text-sm"
                         >
                           <option value="">Select item</option>
-                          {items.map((it) => (
+                          {optionItems.map((it) => (
                             <option key={it.id} value={it.id}>
                               {it.sku} - {it.name}
                             </option>

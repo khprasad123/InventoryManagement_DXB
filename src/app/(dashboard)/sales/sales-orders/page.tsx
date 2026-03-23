@@ -7,19 +7,30 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getSalesOrders } from "../actions";
+import { getSalesOrdersPaginated } from "../actions";
 import { getOrganizationId } from "@/lib/auth-utils";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Eye, FileText } from "lucide-react";
 import { CreateInvoiceFromSoButton } from "../create-invoice-from-so-button";
+import { PaginationLinks } from "@/components/ui/pagination-links";
+import { SearchInput } from "@/components/ui/search-input";
 
-export default async function SalesOrdersPage() {
+export default async function SalesOrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; search?: string }>;
+}) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
-  const orders = await getSalesOrders();
+  const params = await searchParams;
+  const page = Math.max(1, parseInt(params.page ?? "1", 10));
+  const search = params.search ?? "";
+
+  const { salesOrders, total, pageSize, totalPages, currentPage } = await getSalesOrdersPaginated(page, search);
+  const orders = salesOrders;
 
   return (
     <div className="space-y-6">
@@ -36,6 +47,9 @@ export default async function SalesOrdersPage() {
             Created from approved quotations. Create Invoice from a Sales Order to complete the sale.
           </p>
         </div>
+        <div className="w-full sm:w-[240px]">
+          <SearchInput value={search} placeholder="Search sales orders / clients / items..." />
+        </div>
       </div>
 
       <Card>
@@ -46,7 +60,7 @@ export default async function SalesOrdersPage() {
           </p>
         </CardHeader>
         <CardContent>
-          {orders.length === 0 ? (
+          {total === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <FileText className="h-12 w-12 text-muted-foreground" />
               <p className="mt-2 text-sm text-muted-foreground">
@@ -129,6 +143,24 @@ export default async function SalesOrdersPage() {
                   })}
                 </TableBody>
               </Table>
+
+              <PaginationLinks
+                page={currentPage}
+                totalPages={totalPages}
+                total={total}
+                showingFrom={(currentPage - 1) * pageSize + 1}
+                showingTo={Math.min(currentPage * pageSize, total)}
+                prevHref={
+                  currentPage <= 1
+                    ? undefined
+                    : `/sales/sales-orders?page=${currentPage - 1}${search ? `&search=${encodeURIComponent(search)}` : ""}`
+                }
+                nextHref={
+                  currentPage >= totalPages
+                    ? undefined
+                    : `/sales/sales-orders?page=${currentPage + 1}${search ? `&search=${encodeURIComponent(search)}` : ""}`
+                }
+              />
             </div>
           )}
         </CardContent>

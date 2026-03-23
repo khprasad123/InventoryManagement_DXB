@@ -49,6 +49,9 @@ const salesInvoiceSchema = z.object({
   items: z.array(invoiceItemSchema).min(1, "Add at least one item"),
 });
 
+const PAGE_SIZE = 10;
+const searchMode = "insensitive" as const;
+
 export async function getQuotations() {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
@@ -61,6 +64,49 @@ export async function getQuotations() {
     },
     orderBy: { quotationDate: "desc" },
   });
+}
+
+export async function getQuotationsPaginated(page: number, search?: string) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const currentPage = Math.max(1, page);
+  const q = (search ?? "").trim();
+  const where = {
+    organizationId: orgId,
+    deletedAt: null,
+    ...(q
+      ? {
+          OR: [
+            { quotationNo: { contains: q, mode: searchMode } },
+            { client: { name: { contains: q, mode: searchMode } } },
+            { items: { some: { item: { OR: [{ sku: { contains: q, mode: searchMode } }, { name: { contains: q, mode: searchMode } }] } } } },
+          ],
+        }
+      : {}),
+  };
+
+  const total = await prisma.quotation.count({ where });
+
+  const quotations = await prisma.quotation.findMany({
+    where,
+    include: {
+      client: true,
+      items: { include: { item: true } },
+      salesOrder: { include: { salesInvoices: true } },
+    },
+    orderBy: { quotationDate: "desc" },
+    skip: (currentPage - 1) * PAGE_SIZE,
+    take: PAGE_SIZE,
+  });
+
+  return {
+    quotations,
+    total,
+    pageSize: PAGE_SIZE,
+    totalPages: Math.ceil(total / PAGE_SIZE) || 1,
+    currentPage,
+  };
 }
 
 export async function getQuotationById(id: string) {
@@ -478,6 +524,50 @@ export async function getSalesOrders() {
   });
 }
 
+export async function getSalesOrdersPaginated(page: number, search?: string) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const currentPage = Math.max(1, page);
+  const q = (search ?? "").trim();
+  const where = {
+    organizationId: orgId,
+    deletedAt: null,
+    ...(q
+      ? {
+          OR: [
+            { orderNo: { contains: q, mode: searchMode } },
+            { jobId: { contains: q, mode: searchMode } },
+            { quotation: { client: { name: { contains: q, mode: searchMode } } } },
+            { items: { some: { item: { OR: [{ sku: { contains: q, mode: searchMode } }, { name: { contains: q, mode: searchMode } }] } } } },
+          ],
+        }
+      : {}),
+  };
+
+  const total = await prisma.salesOrder.count({ where });
+
+  const salesOrders = await prisma.salesOrder.findMany({
+    where,
+    include: {
+      quotation: { include: { client: true } },
+      items: { include: { item: true } },
+      salesInvoices: true,
+    },
+    orderBy: { orderDate: "desc" },
+    skip: (currentPage - 1) * PAGE_SIZE,
+    take: PAGE_SIZE,
+  });
+
+  return {
+    salesOrders,
+    total,
+    pageSize: PAGE_SIZE,
+    totalPages: Math.ceil(total / PAGE_SIZE) || 1,
+    currentPage,
+  };
+}
+
 export async function getSalesOrderById(id: string) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
@@ -726,6 +816,50 @@ export async function getSalesInvoices() {
     },
     orderBy: { invoiceDate: "desc" },
   });
+}
+
+export async function getSalesInvoicesPaginated(page: number, search?: string) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const currentPage = Math.max(1, page);
+  const q = (search ?? "").trim();
+  const where = {
+    organizationId: orgId,
+    deletedAt: null,
+    ...(q
+      ? {
+          OR: [
+            { invoiceNo: { contains: q, mode: searchMode } },
+            { client: { name: { contains: q, mode: searchMode } } },
+            { notes: { contains: q, mode: searchMode } },
+          ],
+        }
+      : {}),
+  };
+
+  const total = await prisma.salesInvoice.count({ where });
+
+  const invoices = await prisma.salesInvoice.findMany({
+    where,
+    include: {
+      client: true,
+      salesOrder: { include: { quotation: true } },
+      createdBy: { select: { name: true, signatureUrl: true } },
+      approvedBy: { select: { name: true, signatureUrl: true } },
+    },
+    orderBy: { invoiceDate: "desc" },
+    skip: (currentPage - 1) * PAGE_SIZE,
+    take: PAGE_SIZE,
+  });
+
+  return {
+    invoices,
+    total,
+    pageSize: PAGE_SIZE,
+    totalPages: Math.ceil(total / PAGE_SIZE) || 1,
+    currentPage,
+  };
 }
 
 export type SalesInvoiceWithRelations = Prisma.SalesInvoiceGetPayload<{

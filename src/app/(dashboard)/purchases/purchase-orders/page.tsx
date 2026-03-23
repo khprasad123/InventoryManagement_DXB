@@ -9,17 +9,28 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getPurchaseOrders } from "../actions";
+import { getPurchaseOrdersPaginated } from "../actions";
 import { getOrganizationId } from "@/lib/auth-utils";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Eye } from "lucide-react";
+import { PaginationLinks } from "@/components/ui/pagination-links";
+import { SearchInput } from "@/components/ui/search-input";
 
-export default async function PurchaseOrdersPage() {
+export default async function PurchaseOrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; search?: string }>;
+}) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
-  const pos = await getPurchaseOrders();
+  const params = await searchParams;
+  const page = Math.max(1, parseInt(params.page ?? "1", 10));
+  const search = params.search ?? "";
+
+  const { purchaseOrders, total, pageSize, totalPages, currentPage } = await getPurchaseOrdersPaginated(page, search);
+  const pos = purchaseOrders;
 
   return (
     <div className="space-y-6">
@@ -38,9 +49,14 @@ export default async function PurchaseOrdersPage() {
             Created from approved Purchase Requests.
           </p>
         </div>
-        <Button asChild>
-          <Link href="/purchases/purchase-orders/add">Create PO from PR</Link>
-        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="w-full sm:w-[240px]">
+            <SearchInput value={search} placeholder="Search PO / PR / supplier..." />
+          </div>
+          <Button asChild>
+            <Link href="/purchases/purchase-orders/add">Create PO from PR</Link>
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -48,7 +64,7 @@ export default async function PurchaseOrdersPage() {
           <CardTitle>All Purchase Orders</CardTitle>
         </CardHeader>
         <CardContent>
-          {pos.length === 0 ? (
+          {total === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <p className="text-sm text-muted-foreground">
                 No purchase orders yet. Create an approved PR first, then create a PO.
@@ -122,6 +138,24 @@ export default async function PurchaseOrdersPage() {
                   ))}
                 </TableBody>
               </Table>
+
+              <PaginationLinks
+                page={currentPage}
+                totalPages={totalPages}
+                total={total}
+                showingFrom={(currentPage - 1) * pageSize + 1}
+                showingTo={Math.min(currentPage * pageSize, total)}
+                prevHref={
+                  currentPage <= 1
+                    ? undefined
+                    : `/purchases/purchase-orders?page=${currentPage - 1}${search ? `&search=${encodeURIComponent(search)}` : ""}`
+                }
+                nextHref={
+                  currentPage >= totalPages
+                    ? undefined
+                    : `/purchases/purchase-orders?page=${currentPage + 1}${search ? `&search=${encodeURIComponent(search)}` : ""}`
+                }
+              />
             </div>
           )}
         </CardContent>

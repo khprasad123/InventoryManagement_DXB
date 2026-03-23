@@ -8,19 +8,29 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { getClients } from "./actions";
+import { getClientsPaginated } from "./actions";
 import { getOrganizationId } from "@/lib/auth-utils";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Plus, Pencil, Trash2, Eye } from "lucide-react";
 import { DeleteClientButton } from "./delete-client-button";
 import { CsvBulkImportCard } from "@/components/bulk-import/csv-bulk-import-card";
+import { PaginationLinks } from "@/components/ui/pagination-links";
+import { SearchInput } from "@/components/ui/search-input";
 
-export default async function ClientsPage() {
+export default async function ClientsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; search?: string }>;
+}) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
-  const clients = await getClients();
+  const params = await searchParams;
+  const page = Math.max(1, parseInt(params.page ?? "1", 10));
+  const search = params.search ?? "";
+
+  const { clients, total, pageSize, totalPages, currentPage } = await getClientsPaginated(page, search);
 
   return (
     <div className="space-y-6">
@@ -31,12 +41,17 @@ export default async function ClientsPage() {
             Manage your client contacts
           </p>
         </div>
-        <Button asChild>
-          <Link href="/clients/add">
-            <Plus className="mr-2 h-4 w-4" />
-            Add Client
-          </Link>
-        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="w-full sm:w-[240px]">
+            <SearchInput value={search} placeholder="Search clients..." />
+          </div>
+          <Button asChild>
+            <Link href="/clients/add">
+              <Plus className="mr-2 h-4 w-4" />
+              Add Client
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <CsvBulkImportCard
@@ -58,7 +73,7 @@ export default async function ClientsPage() {
           <CardTitle>Client List</CardTitle>
         </CardHeader>
         <CardContent>
-          {clients.length === 0 ? (
+          {total === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <p className="text-sm text-muted-foreground">
                 No clients yet. Add clients to track your sales orders.
@@ -130,6 +145,24 @@ export default async function ClientsPage() {
                   ))}
                 </TableBody>
               </Table>
+
+              <PaginationLinks
+                page={currentPage}
+                totalPages={totalPages}
+                total={total}
+                showingFrom={(currentPage - 1) * pageSize + 1}
+                showingTo={Math.min(currentPage * pageSize, total)}
+                prevHref={
+                  currentPage <= 1
+                    ? undefined
+                    : `/clients?page=${currentPage - 1}${search ? `&search=${encodeURIComponent(search)}` : ""}`
+                }
+                nextHref={
+                  currentPage >= totalPages
+                    ? undefined
+                    : `/clients?page=${currentPage + 1}${search ? `&search=${encodeURIComponent(search)}` : ""}`
+                }
+              />
             </div>
           )}
         </CardContent>

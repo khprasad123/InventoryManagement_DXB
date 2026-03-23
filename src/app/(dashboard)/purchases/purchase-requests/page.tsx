@@ -9,19 +9,30 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getPurchaseRequests } from "../actions";
+import { getPurchaseRequestsPaginated } from "../actions";
 import { getOrganizationId } from "@/lib/auth-utils";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Plus, ArrowLeft, Eye, Pencil } from "lucide-react";
 import { SubmitPrButton } from "./submit-pr-button";
 import { DeletePrButton } from "./delete-pr-button";
+import { PaginationLinks } from "@/components/ui/pagination-links";
+import { SearchInput } from "@/components/ui/search-input";
 
-export default async function PurchaseRequestsPage() {
+export default async function PurchaseRequestsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; search?: string }>;
+}) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
-  const prs = await getPurchaseRequests();
+  const params = await searchParams;
+  const page = Math.max(1, parseInt(params.page ?? "1", 10));
+  const search = params.search ?? "";
+
+  const { purchaseRequests, total, pageSize, totalPages, currentPage } = await getPurchaseRequestsPaginated(page, search);
+  const prs = purchaseRequests;
 
   return (
     <div className="space-y-6">
@@ -40,12 +51,17 @@ export default async function PurchaseRequestsPage() {
             Create and approve purchase requests. Approved PRs can be converted to Purchase Orders.
           </p>
         </div>
-        <Button asChild>
-          <Link href="/purchases/purchase-requests/add">
-            <Plus className="mr-2 h-4 w-4" />
-            New PR
-          </Link>
-        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="w-full sm:w-[240px]">
+            <SearchInput value={search} placeholder="Search PR / items..." />
+          </div>
+          <Button asChild>
+            <Link href="/purchases/purchase-requests/add">
+              <Plus className="mr-2 h-4 w-4" />
+              New PR
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -53,7 +69,7 @@ export default async function PurchaseRequestsPage() {
           <CardTitle>All Purchase Requests</CardTitle>
         </CardHeader>
         <CardContent>
-          {prs.length === 0 ? (
+          {total === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <p className="text-sm text-muted-foreground">
                 No purchase requests yet.
@@ -126,6 +142,24 @@ export default async function PurchaseRequestsPage() {
                   ))}
                 </TableBody>
               </Table>
+
+              <PaginationLinks
+                page={currentPage}
+                totalPages={totalPages}
+                total={total}
+                showingFrom={(currentPage - 1) * pageSize + 1}
+                showingTo={Math.min(currentPage * pageSize, total)}
+                prevHref={
+                  currentPage <= 1
+                    ? undefined
+                    : `/purchases/purchase-requests?page=${currentPage - 1}${search ? `&search=${encodeURIComponent(search)}` : ""}`
+                }
+                nextHref={
+                  currentPage >= totalPages
+                    ? undefined
+                    : `/purchases/purchase-requests?page=${currentPage + 1}${search ? `&search=${encodeURIComponent(search)}` : ""}`
+                }
+              />
             </div>
           )}
         </CardContent>

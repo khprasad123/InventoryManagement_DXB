@@ -51,8 +51,19 @@ export function PurchaseInvoiceForm({
   const [supplierId, setSupplierId] = useState(defaultValues?.supplierId ?? "");
   const [grnId, setGrnId] = useState(defaultValues?.grnId ?? "");
   const [dueDatePreview, setDueDatePreview] = useState<string | null>(null);
+  const [supplierSearch, setSupplierSearch] = useState("");
 
   const supplier = suppliers.find((s) => s.id === supplierId);
+
+  const filteredSuppliers = supplierSearch.trim()
+    ? suppliers.filter((s) => s.name.toLowerCase().includes(supplierSearch.trim().toLowerCase()))
+    : suppliers;
+  const optionSuppliers =
+    supplier &&
+    supplierSearch.trim() &&
+    !filteredSuppliers.some((s) => s.id === supplier.id)
+      ? [supplier, ...filteredSuppliers]
+      : filteredSuppliers;
 
   useEffect(() => {
     if (!supplier?.defaultPaymentTerms) {
@@ -151,6 +162,12 @@ export function PurchaseInvoiceForm({
         </div>
         <div className="space-y-2">
           <Label htmlFor="supplierId">Supplier *</Label>
+          <Input
+            id="supplierSearch"
+            value={supplierSearch}
+            onChange={(e) => setSupplierSearch(e.target.value)}
+            placeholder="Search supplier..."
+          />
           <select
             id="supplierId"
             name="supplierId"
@@ -160,7 +177,7 @@ export function PurchaseInvoiceForm({
             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
           >
             <option value="">Select supplier</option>
-            {suppliers.map((s) => (
+            {optionSuppliers.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
               </option>

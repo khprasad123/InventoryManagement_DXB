@@ -5,6 +5,7 @@ import { getDocumentsFor, uploadDocument, deleteDocument } from "./actions";
 import { getCurrentUser, getOrgTimezone } from "@/lib/auth-utils";
 import { canManageUsers } from "@/lib/permissions";
 import { formatDateTimeInTimezone } from "@/lib/date-utils";
+import { Upload } from "lucide-react";
 
 type DocumentableType =
   | "Supplier"
@@ -54,21 +55,29 @@ export async function DocumentSection({
         <CardTitle>Documents</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <form
-          action={uploadAction}
-          encType="multipart/form-data"
-          className="flex flex-col gap-2 sm:flex-row sm:items-center"
-        >
-          <input
-            type="file"
-            name="file"
-            className="flex-1 text-sm"
-            required
-          />
-          <Button type="submit" size="sm">
-            Upload
-          </Button>
-        </form>
+        <details className="rounded-md border bg-muted/30 p-3">
+          <summary className="cursor-pointer list-none select-none text-sm font-medium text-primary flex items-center gap-2">
+            <Upload className="h-4 w-4" />
+            Upload document
+          </summary>
+          <div className="mt-3">
+            <form
+              action={uploadAction}
+              encType="multipart/form-data"
+              className="flex flex-col gap-2 sm:flex-row sm:items-center"
+            >
+              <input
+                type="file"
+                name="file"
+                className="flex-1 text-sm"
+                required
+              />
+              <Button type="submit" size="sm">
+                Upload
+              </Button>
+            </form>
+          </div>
+        </details>
 
         {docs.length === 0 ? (
           <p className="text-sm text-muted-foreground">

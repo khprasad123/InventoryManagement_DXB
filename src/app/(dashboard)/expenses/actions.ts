@@ -17,6 +17,9 @@ const categorySchema = z.object({
   description: z.string().max(500).optional(),
 });
 
+const PAGE_SIZE = 10;
+const searchMode = "insensitive" as const;
+
 export async function getExpenseCategories() {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
@@ -24,6 +27,43 @@ export async function getExpenseCategories() {
     where: { organizationId: orgId, deletedAt: null },
     orderBy: { name: "asc" },
   });
+}
+
+export async function getExpenseCategoriesPaginated(page: number, search?: string) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const currentPage = Math.max(1, page);
+  const q = (search ?? "").trim();
+  const where = {
+    organizationId: orgId,
+    deletedAt: null,
+    ...(q
+      ? {
+          OR: [
+            { name: { contains: q, mode: searchMode } },
+            { description: { contains: q, mode: searchMode } },
+          ],
+        }
+      : {}),
+  };
+
+  const total = await prisma.expenseCategory.count({ where });
+
+  const categories = await prisma.expenseCategory.findMany({
+    where,
+    orderBy: { name: "asc" },
+    skip: (currentPage - 1) * PAGE_SIZE,
+    take: PAGE_SIZE,
+  });
+
+  return {
+    categories,
+    total,
+    pageSize: PAGE_SIZE,
+    totalPages: Math.ceil(total / PAGE_SIZE) || 1,
+    currentPage,
+  };
 }
 
 export async function getExpenseCategoryById(id: string) {
@@ -168,6 +208,44 @@ export async function getExpenses() {
     include: { category: true },
     orderBy: { expenseDate: "desc" },
   });
+}
+
+export async function getExpensesPaginated(page: number, search?: string) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const q = (search ?? "").trim();
+  const where = {
+    organizationId: orgId,
+    deletedAt: null,
+    ...(q
+      ? {
+          OR: [
+            { description: { contains: q, mode: searchMode } },
+            { category: { name: { contains: q, mode: searchMode } } },
+          ],
+        }
+      : {}),
+  };
+
+  const currentPage = Math.max(1, page);
+  const total = await prisma.expense.count({ where });
+
+  const expenses = await prisma.expense.findMany({
+    where,
+    include: { category: true },
+    orderBy: { expenseDate: "desc" },
+    skip: (currentPage - 1) * PAGE_SIZE,
+    take: PAGE_SIZE,
+  });
+
+  return {
+    expenses,
+    total,
+    pageSize: PAGE_SIZE,
+    totalPages: Math.ceil(total / PAGE_SIZE) || 1,
+    currentPage,
+  };
 }
 
 export async function getExpenseById(id: string) {

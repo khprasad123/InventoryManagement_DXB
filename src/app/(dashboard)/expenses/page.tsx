@@ -8,22 +8,34 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { getExpenses } from "./actions";
+import { getExpensesPaginated } from "./actions";
 import { getOrganizationId, getOrgTimezone } from "@/lib/auth-utils";
 import { formatInTimezone } from "@/lib/date-utils";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Plus, Pencil, Trash2, FolderTree, FileText, Eye } from "lucide-react";
 import { DeleteExpenseButton } from "./delete-expense-button";
+import { PaginationLinks } from "@/components/ui/pagination-links";
+import { SearchInput } from "@/components/ui/search-input";
 
-export default async function ExpensesPage() {
+export default async function ExpensesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; search?: string }>;
+}) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
-  const [expenses, timezone] = await Promise.all([
-    getExpenses(),
+  const params = await searchParams;
+  const page = Math.max(1, parseInt(params.page ?? "1", 10));
+  const search = params.search ?? "";
+
+  const [expenseResult, timezone] = await Promise.all([
+    getExpensesPaginated(page, search),
     getOrgTimezone(),
   ]);
+  const expenses = expenseResult.expenses;
+  const { total, pageSize, totalPages, currentPage } = expenseResult;
   const tz = timezone ?? "UTC";
 
   return (
@@ -35,7 +47,10 @@ export default async function ExpensesPage() {
             Track business expenses by category
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          <div className="w-full sm:w-[240px]">
+            <SearchInput value={search} placeholder="Search expenses / categories..." />
+          </div>
           <Button variant="outline" asChild>
             <Link href="/expenses/categories">
               <FolderTree className="mr-2 h-4 w-4" />
@@ -56,7 +71,7 @@ export default async function ExpensesPage() {
           <CardTitle>Expense Records</CardTitle>
         </CardHeader>
         <CardContent>
-          {expenses.length === 0 ? (
+          {total === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <p className="text-sm text-muted-foreground">
                 No expenses yet. Add a category first, then record expenses.
@@ -121,6 +136,24 @@ export default async function ExpensesPage() {
                   ))}
                 </TableBody>
               </Table>
+
+              <PaginationLinks
+                page={currentPage}
+                totalPages={totalPages}
+                total={total}
+                showingFrom={(currentPage - 1) * pageSize + 1}
+                showingTo={Math.min(currentPage * pageSize, total)}
+                prevHref={
+                  currentPage <= 1
+                    ? undefined
+                    : `/expenses?page=${currentPage - 1}${search ? `&search=${encodeURIComponent(search)}` : ""}`
+                }
+                nextHref={
+                  currentPage >= totalPages
+                    ? undefined
+                    : `/expenses?page=${currentPage + 1}${search ? `&search=${encodeURIComponent(search)}` : ""}`
+                }
+              />
             </div>
           )}
         </CardContent>

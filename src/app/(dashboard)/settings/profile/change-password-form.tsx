@@ -65,7 +65,7 @@ export function ChangePasswordForm() {
         />
       </div>
       <Button type="submit" disabled={pending}>
-        {pending ? "Updating..." : "Update password"}
+        {pending ? "Updating..." : "Change PassWord"}
       </Button>
     </form>
   );

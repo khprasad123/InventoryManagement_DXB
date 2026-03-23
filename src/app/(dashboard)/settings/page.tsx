@@ -55,7 +55,7 @@ export default async function SettingsPage() {
             <Button variant="outline" size="sm" asChild>
               <Link href="/settings/profile">
                 <KeyRound className="mr-2 h-4 w-4" />
-                Change password
+                Change PassWord & upload signature
               </Link>
             </Button>
             <Button variant="outline" size="sm" asChild>

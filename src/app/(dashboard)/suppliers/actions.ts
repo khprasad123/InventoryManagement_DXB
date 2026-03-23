@@ -32,6 +32,9 @@ const supplierSchema = z.object({
     .nullable(),
 });
 
+const PAGE_SIZE = 10;
+const searchMode = "insensitive" as const;
+
 export async function getSuppliers() {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
@@ -40,6 +43,46 @@ export async function getSuppliers() {
     where: { organizationId: orgId, deletedAt: null },
     orderBy: { name: "asc" },
   });
+}
+
+export async function getSuppliersPaginated(page: number, search?: string) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const currentPage = Math.max(1, page);
+  const q = (search ?? "").trim();
+
+  const where = {
+    organizationId: orgId,
+    deletedAt: null,
+    ...(q
+      ? {
+          OR: [
+            { name: { contains: q, mode: searchMode } },
+            { contactName: { contains: q, mode: searchMode } },
+            { email: { contains: q, mode: searchMode } },
+            { phone: { contains: q, mode: searchMode } },
+          ],
+        }
+      : {}),
+  };
+
+  const total = await prisma.supplier.count({ where });
+
+  const suppliers = await prisma.supplier.findMany({
+    where,
+    orderBy: { name: "asc" },
+    skip: (currentPage - 1) * PAGE_SIZE,
+    take: PAGE_SIZE,
+  });
+
+  return {
+    suppliers,
+    total,
+    pageSize: PAGE_SIZE,
+    totalPages: Math.ceil(total / PAGE_SIZE) || 1,
+    currentPage,
+  };
 }
 
 export async function getSupplierById(id: string) {

@@ -8,19 +8,29 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getSuppliers } from "./actions";
+import { getSuppliersPaginated } from "./actions";
 import { getOrganizationId } from "@/lib/auth-utils";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Plus, Pencil, Trash2, Eye } from "lucide-react";
 import { DeleteSupplierButton } from "./delete-supplier-button";
 import { CsvBulkImportCard } from "@/components/bulk-import/csv-bulk-import-card";
+import { PaginationLinks } from "@/components/ui/pagination-links";
+import { SearchInput } from "@/components/ui/search-input";
 
-export default async function SuppliersPage() {
+export default async function SuppliersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; search?: string }>;
+}) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
-  const suppliers = await getSuppliers();
+  const params = await searchParams;
+  const page = Math.max(1, parseInt(params.page ?? "1", 10));
+  const search = params.search ?? "";
+
+  const { suppliers, total, pageSize, totalPages, currentPage } = await getSuppliersPaginated(page, search);
 
   return (
     <div className="space-y-6">
@@ -31,12 +41,17 @@ export default async function SuppliersPage() {
             Manage your supplier contacts
           </p>
         </div>
-        <Button asChild>
-          <Link href="/suppliers/add">
-            <Plus className="mr-2 h-4 w-4" />
-            Add Supplier
-          </Link>
-        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="w-full sm:w-[240px]">
+            <SearchInput value={search} placeholder="Search suppliers..." />
+          </div>
+          <Button asChild>
+            <Link href="/suppliers/add">
+              <Plus className="mr-2 h-4 w-4" />
+              Add Supplier
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <CsvBulkImportCard
@@ -58,7 +73,7 @@ export default async function SuppliersPage() {
           <CardTitle>Supplier List</CardTitle>
         </CardHeader>
         <CardContent>
-          {suppliers.length === 0 ? (
+          {total === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <p className="text-sm text-muted-foreground">
                 No suppliers yet. Add suppliers to track your purchase orders.
@@ -130,6 +145,24 @@ export default async function SuppliersPage() {
                   ))}
                 </TableBody>
               </Table>
+
+              <PaginationLinks
+                page={currentPage}
+                totalPages={totalPages}
+                total={total}
+                showingFrom={(currentPage - 1) * pageSize + 1}
+                showingTo={Math.min(currentPage * pageSize, total)}
+                prevHref={
+                  currentPage <= 1
+                    ? undefined
+                    : `/suppliers?page=${currentPage - 1}${search ? `&search=${encodeURIComponent(search)}` : ""}`
+                }
+                nextHref={
+                  currentPage >= totalPages
+                    ? undefined
+                    : `/suppliers?page=${currentPage + 1}${search ? `&search=${encodeURIComponent(search)}` : ""}`
+                }
+              />
             </div>
           )}
         </CardContent>
