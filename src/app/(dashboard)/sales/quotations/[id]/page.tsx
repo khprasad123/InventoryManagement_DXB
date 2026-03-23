@@ -38,7 +38,14 @@ export default async function QuotationDetailPage({
   ]);
   if (!quotation) notFound();
 
-  const total = quotation.items.reduce((s, i) => s + Number(i.total), 0);
+  const subtotal = quotation.items.reduce((s, i) => s + Number(i.total), 0);
+  const vatPct = Number((quotation as any).taxPercent ?? 0);
+  const computedTaxAmount = (subtotal * vatPct) / 100;
+  const storedTaxAmount = Number((quotation as any).taxAmount ?? 0);
+  const taxAmount = storedTaxAmount === 0 ? computedTaxAmount : storedTaxAmount;
+  const storedTotalAmount = Number((quotation as any).totalAmount ?? 0);
+  const totalAmount =
+    storedTotalAmount === 0 ? subtotal + taxAmount : storedTotalAmount;
   const tz = org?.timezone ?? "UTC";
 
   return (
@@ -110,6 +117,9 @@ export default async function QuotationDetailPage({
                   <TableHead className="text-right">Margin %</TableHead>
                   <TableHead className="text-right">Price</TableHead>
                   <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="text-right">VAT %</TableHead>
+                  <TableHead className="text-right">VAT Amount</TableHead>
+                  <TableHead className="text-right">Gross Amount</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -133,13 +143,33 @@ export default async function QuotationDetailPage({
                     <TableCell className="text-right">
                       {Number(qi.total).toFixed(2)}
                     </TableCell>
+                    {(() => {
+                      const netAmount = Number(qi.total ?? 0);
+                      const taxAmt = (netAmount * vatPct) / 100;
+                      const gross = netAmount + taxAmt;
+                      return (
+                        <>
+                          <TableCell className="text-right">
+                            {vatPct.toFixed(2)}%
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {taxAmt.toFixed(2)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {gross.toFixed(2)}
+                          </TableCell>
+                        </>
+                      );
+                    })()}
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           </div>
-          <div className="mt-4 flex justify-end">
-            <p className="text-lg font-medium">Total: {total.toFixed(2)}</p>
+          <div className="mt-4 flex flex-col items-end gap-1 text-right">
+            <p className="text-sm text-muted-foreground">Taxable Value: {subtotal.toFixed(2)}</p>
+            <p className="text-sm text-muted-foreground">VAT ({vatPct}%): {taxAmount.toFixed(2)}</p>
+            <p className="text-lg font-medium">Total: {totalAmount.toFixed(2)}</p>
           </div>
         </CardContent>
       </Card>
@@ -154,6 +184,15 @@ export default async function QuotationDetailPage({
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Prepared By</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="font-medium">{(quotation as any).preparedByName ?? "—"}</p>
+        </CardContent>
+      </Card>
 
       {quotation.status === "APPROVED" && quotation.approvedAt && (
         <Card>

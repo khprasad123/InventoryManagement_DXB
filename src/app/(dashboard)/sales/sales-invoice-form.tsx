@@ -48,6 +48,7 @@ interface SalesInvoiceFormProps {
   defaultInvoiceNo: string;
   currencies: CurrencyOption[];
   defaultCurrencyCode: string;
+  defaultTaxPercent: number;
 }
 
 type InvoiceItemRow = { itemId: string; quantity: number; unitPrice: number };
@@ -60,6 +61,7 @@ export function SalesInvoiceForm({
   defaultInvoiceNo,
   currencies,
   defaultCurrencyCode,
+  defaultTaxPercent,
 }: SalesInvoiceFormProps) {
   const router = useRouter();
   const [invoiceSource, setInvoiceSource] = useState<"ad_hoc" | "sales_order">("ad_hoc");
@@ -69,12 +71,19 @@ export function SalesInvoiceForm({
   ]);
   const [quotationId, setQuotationId] = useState("");
   const [clientId, setClientId] = useState("");
+  const [sendForApproval, setSendForApproval] = useState(false);
+  const [vatPercent, setVatPercent] = useState(defaultTaxPercent);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dueDatePreview, setDueDatePreview] = useState<string | null>(null);
 
   const client = clients.find((c) => c.id === clientId);
   const getItem = (itemId: string) => items.find((it) => it.id === itemId);
+
+  const subtotalPreview = rows
+    .filter((r) => r.itemId && r.quantity > 0)
+    .reduce((s, r) => s + r.quantity * r.unitPrice, 0);
+  const taxAmountPreview = (subtotalPreview * vatPercent) / 100;
 
   useEffect(() => {
     if (quotationId) {
@@ -158,13 +167,14 @@ export function SalesInvoiceForm({
       (form.querySelector("#clientId") as HTMLSelectElement)?.value || ""
     );
     formData.set("quotationId", quotationId || "");
-    formData.set(
-      "subtotal",
-      rows
-        .filter((r) => r.itemId && r.quantity > 0)
-        .reduce((s, r) => s + r.quantity * r.unitPrice, 0)
-        .toString()
-    );
+    const subtotal = rows
+      .filter((r) => r.itemId && r.quantity > 0)
+      .reduce((s, r) => s + r.quantity * r.unitPrice, 0);
+    const taxAmount = (subtotal * vatPercent) / 100;
+
+    formData.set("subtotal", subtotal.toString());
+    formData.set("taxPercent", vatPercent.toString());
+    formData.set("taxAmount", taxAmount.toString());
 
     const validRows = rows.filter((r) => r.itemId && r.quantity > 0);
     if (validRows.length === 0) {
@@ -196,7 +206,7 @@ export function SalesInvoiceForm({
     }
     setError(null);
     setSubmitting(true);
-    const result = await createInvoiceFromSalesOrder(salesOrderId);
+    const result = await createInvoiceFromSalesOrder(salesOrderId, sendForApproval);
     setSubmitting(false);
     if (result?.error) {
       setError(String(result.error));
@@ -247,6 +257,14 @@ export function SalesInvoiceForm({
           <p className="text-sm text-muted-foreground">
             Item list and quantities are locked from the Sales Order. You cannot edit them.
           </p>
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={sendForApproval}
+              onChange={(e) => setSendForApproval(e.target.checked)}
+            />
+            Send invoice for approval
+          </label>
           <div className="space-y-2">
             <Label htmlFor="salesOrderId">Sales Order *</Label>
             <select
@@ -273,6 +291,15 @@ export function SalesInvoiceForm({
 
       {invoiceSource === "ad_hoc" && (
     <form onSubmit={handleSubmit} className="space-y-6">
+      <label className="flex items-center gap-2 text-sm text-muted-foreground">
+        <input
+          type="checkbox"
+          checked={sendForApproval}
+          onChange={(e) => setSendForApproval(e.target.checked)}
+          name="sendForApproval"
+        />
+        Send invoice for approval
+      </label>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="quotationId">From Quotation (optional prefill)</Label>
@@ -350,6 +377,27 @@ export function SalesInvoiceForm({
               </option>
             ))}
           </select>
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="vatPercent">VAT %</Label>
+          <Input
+            id="vatPercent"
+            type="number"
+            step="0.01"
+            min={0}
+            max={100}
+            value={vatPercent}
+            onChange={(e) => setVatPercent(Number(e.target.value))}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>VAT Amount (preview)</Label>
+          <p className="text-sm text-muted-foreground">
+            {taxAmountPreview.toFixed(2)}
+          </p>
         </div>
       </div>
 

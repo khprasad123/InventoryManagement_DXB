@@ -60,6 +60,7 @@ export default async function EditQuotationPage({
     validUntil: quotation.validUntil
       ? new Date(quotation.validUntil).toISOString().slice(0, 10)
       : undefined,
+    taxPercent: Number((quotation as any).taxPercent ?? 5),
     items: quotation.items.map((i) => ({
       itemId: i.itemId,
       quantity: i.quantity,

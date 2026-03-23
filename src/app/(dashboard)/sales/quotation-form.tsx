@@ -32,6 +32,7 @@ interface QuotationFormDefaultValues {
   status: string;
   notes?: string;
   validUntil?: string;
+  taxPercent?: number;
   items: Array<{
     itemId: string;
     quantity: number;
@@ -45,6 +46,7 @@ interface QuotationFormProps {
   clients: Client[];
   items: ItemWithDefaults[];
   defaultQuotationNo: string;
+  defaultTaxPercent?: number;
   mode?: "add" | "edit";
   quotationId?: string;
   defaultValues?: QuotationFormDefaultValues;
@@ -59,6 +61,7 @@ export function QuotationForm({
   clients,
   items,
   defaultQuotationNo,
+  defaultTaxPercent,
   mode = "add",
   quotationId,
   defaultValues,
@@ -128,6 +131,9 @@ export function QuotationForm({
       "status",
       (form.querySelector("#status") as HTMLSelectElement)?.value || "DRAFT"
     );
+    const taxPercentValue = (form.querySelector("#taxPercent") as HTMLInputElement)
+      ?.value;
+    formData.set("taxPercent", taxPercentValue ?? String(defaultValues?.taxPercent ?? defaultTaxPercent ?? 5));
 
     const validRows = rows.filter(
       (r) => r.itemId && r.quantity > 0 && r.purchaseCost >= 0 && r.margin >= 0
@@ -177,6 +183,19 @@ export function QuotationForm({
             name="quotationDate"
             type="date"
             defaultValue={new Date().toISOString().slice(0, 10)}
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="taxPercent">VAT %</Label>
+          <Input
+            id="taxPercent"
+            name="taxPercent"
+            type="number"
+            step="0.01"
+            min={0}
+            max={100}
+            defaultValue={defaultValues?.taxPercent ?? defaultTaxPercent ?? 5}
             required
           />
         </div>

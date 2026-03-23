@@ -195,7 +195,10 @@ export default async function SalesInvoiceDetailPage({
                     <TableHead>SKU</TableHead>
                     <TableHead className="text-right">Qty</TableHead>
                     <TableHead className="text-right">Price</TableHead>
+                    <TableHead className="text-right">VAT %</TableHead>
+                    <TableHead className="text-right">VAT Amount</TableHead>
                     <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="text-right">Gross Amount</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -207,9 +210,28 @@ export default async function SalesInvoiceDetailPage({
                       <TableCell className="text-right">
                         {Number(it.unitPrice).toFixed(2)}
                       </TableCell>
-                      <TableCell className="text-right">
-                        {Number(it.total).toFixed(2)}
-                      </TableCell>
+                      {(() => {
+                        const netAmount = Number(it.total ?? it.quantity * Number(it.unitPrice));
+                        const taxPct = Number(it.taxPercent ?? invoice.defaultTaxPercent ?? 5);
+                        const taxAmt = (netAmount * taxPct) / 100;
+                        const gross = netAmount + taxAmt;
+                        return (
+                          <>
+                            <TableCell className="text-right">
+                              {taxPct.toFixed(2)}%
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {taxAmt.toFixed(2)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {netAmount.toFixed(2)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {gross.toFixed(2)}
+                            </TableCell>
+                          </>
+                        );
+                      })()}
                     </TableRow>
                   ))}
                 </TableBody>

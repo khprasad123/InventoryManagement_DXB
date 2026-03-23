@@ -19,6 +19,11 @@ type QuotationForPrint = {
   quotationDate: Date;
   validUntil: Date | null;
   jobId: string | null;
+  taxPercent?: { toString: () => string } | number;
+  taxAmount?: { toString: () => string } | number;
+  totalAmount?: { toString: () => string } | number;
+  taxRegistrationNo?: string | null;
+  sealUrl?: string | null;
   client: {
     name: string;
     contactName: string | null;
@@ -36,6 +41,7 @@ type QuotationForPrint = {
   }>;
   notes: string | null;
   status: string;
+  preparedByName?: string | null;
   approvedByName?: string | null;
   approvedAt?: Date | null;
 };
@@ -50,8 +56,15 @@ export function QuotationPrintLayout({
   if (!quotation) return null;
 
   const tz = org?.timezone ?? "UTC";
-  const total = quotation.items.reduce((s, i) => s + Number(i.total), 0);
-  const amountWords = numberToWords(total);
+  const subtotal = quotation.items.reduce((s, i) => s + Number(i.total), 0);
+  const vatPct = Number(quotation.taxPercent ?? 0);
+  const computedTaxAmount = (subtotal * vatPct) / 100;
+  const storedTaxAmount = Number(quotation.taxAmount ?? 0);
+  const taxAmount = storedTaxAmount === 0 ? computedTaxAmount : storedTaxAmount;
+  const storedTotalAmount = Number(quotation.totalAmount ?? 0);
+  const totalAmount =
+    storedTotalAmount === 0 ? subtotal + taxAmount : storedTotalAmount;
+  const amountWords = numberToWords(totalAmount);
 
   return (
     <div className="invoice-container w-[210mm] min-h-[297mm] p-[10mm] mx-auto bg-white font-sans text-sm">
@@ -87,7 +100,11 @@ export function QuotationPrintLayout({
               </p>
             )}
             <div className="text-xs text-gray-600 mt-1 space-y-0.5">
-              {org?.taxRegistrationNo && <span>TRN: {org.taxRegistrationNo}</span>}
+              {(quotation.taxRegistrationNo ?? org?.taxRegistrationNo) && (
+                <span>
+                  TRN: {quotation.taxRegistrationNo ?? org?.taxRegistrationNo}
+                </span>
+              )}
               {org?.phone && <span>Tel: {org.phone}</span>}
               {org?.fax && <span className="ml-4">Fax: {org.fax}</span>}
               {org?.website && (
@@ -173,6 +190,9 @@ export function QuotationPrintLayout({
             <th className="text-right">Margin %</th>
             <th className="text-right">Price</th>
             <th className="text-right">Total</th>
+            <th className="text-right">VAT %</th>
+            <th className="text-right">VAT Amount</th>
+            <th className="text-right">Gross Amount</th>
           </tr>
         </thead>
         <tbody>
@@ -187,6 +207,18 @@ export function QuotationPrintLayout({
               <td className="text-right">{Number(it.margin).toFixed(2)}%</td>
               <td className="text-right">{Number(it.unitPrice).toFixed(2)}</td>
               <td className="text-right">{Number(it.total).toFixed(2)}</td>
+              {(() => {
+                const netAmount = Number(it.total ?? 0);
+                const taxAmt = (netAmount * vatPct) / 100;
+                const gross = netAmount + taxAmt;
+                return (
+                  <>
+                    <td className="text-right">{vatPct.toFixed(2)}%</td>
+                    <td className="text-right">{taxAmt.toFixed(2)}</td>
+                    <td className="text-right">{gross.toFixed(2)}</td>
+                  </>
+                );
+              })()}
             </tr>
           ))}
         </tbody>
@@ -197,9 +229,19 @@ export function QuotationPrintLayout({
         <table className="w-72 no-border text-xs">
           <tbody>
             <tr>
-              <td className="font-medium py-1">Quotation Total</td>
+              <td className="font-medium py-1">Taxable Value</td>
               <td className="text-right">
-                {total.toFixed(2)}
+                {subtotal.toFixed(2)}
+              </td>
+            </tr>
+            <tr>
+              <td className="font-medium py-1">VAT Amount ({vatPct}%)</td>
+              <td className="text-right">{taxAmount.toFixed(2)}</td>
+            </tr>
+            <tr>
+              <td className="font-bold py-1 border-t">Total Amount</td>
+              <td className="text-right font-bold border-t">
+                {totalAmount.toFixed(2)}
               </td>
             </tr>
             <tr>
@@ -224,7 +266,7 @@ export function QuotationPrintLayout({
       <div className="mt-12 grid grid-cols-3 gap-8 text-xs">
         <div className="border-t border-gray-400 pt-2">
           <p className="font-medium">Prepared By</p>
-          <p className="mt-2 font-medium">—</p>
+          <p className="mt-2 font-medium">{quotation.preparedByName ?? "—"}</p>
         </div>
         <div className="border-t border-gray-400 pt-2">
           <p className="font-medium">Approved By</p>
@@ -236,11 +278,11 @@ export function QuotationPrintLayout({
               {formatInTimezone(quotation.approvedAt, tz)}
             </p>
           )}
-          {org?.sealUrl && quotation.approvedAt && (
-            <div className="mt-2 h-12 w-24">
+          {(quotation.sealUrl ?? org?.sealUrl) && quotation.approvedAt && (
+            <div className="mt-2 h-24 w-36">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={org.sealUrl}
+                src={quotation.sealUrl ?? org?.sealUrl ?? undefined}
                 alt="Stamp"
                 className="h-full w-full object-contain"
               />

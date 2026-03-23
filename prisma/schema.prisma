@@ -105,6 +105,7 @@ model InvoiceSettings {
   website          String?
   taxRegistrationNo String? @map("tax_registration_no")
   bankDetails      String?  @map("bank_details")
+  defaultTaxPercent Decimal @default(5) @map("default_tax_percent") @db.Decimal(5, 2) // VAT % for invoices/quotations (per document stored)
   invoiceLogoUrl   String?  @map("invoice_logo_url")
   sealUrl          String?  @map("seal_url") // Stamp - optional
   createdAt        DateTime @default(now()) @map("created_at")
@@ -616,6 +617,11 @@ model Quotation {
   status         QuotationStatus @default(DRAFT)
   validUntil     DateTime?       @map("valid_until")
   notes          String?
+  taxPercent     Decimal        @default(5) @map("tax_percent") @db.Decimal(5, 2)
+  taxAmount      Decimal        @default(0) @map("tax_amount") @db.Decimal(12, 2)
+  totalAmount    Decimal        @default(0) @map("total_amount") @db.Decimal(12, 2)
+  taxRegistrationNo String?     @map("tax_registration_no")
+  sealUrl        String?       @map("seal_url")
   createdAt      DateTime        @default(now()) @map("created_at")
   updatedAt      DateTime        @updatedAt @map("updated_at")
   deletedAt      DateTime?       @map("deleted_at")
@@ -723,6 +729,8 @@ model SalesInvoice {
   defaultTaxPercent Decimal    @default(5) @map("default_tax_percent") @db.Decimal(5, 2)
   pdfUrl         String?       @map("pdf_url")
   notes          String?
+  taxRegistrationNo String?    @map("tax_registration_no")
+  sealUrl        String?       @map("seal_url")
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
   deletedAt      DateTime?     @map("deleted_at")

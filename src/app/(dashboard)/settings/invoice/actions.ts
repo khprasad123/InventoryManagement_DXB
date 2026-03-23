@@ -17,9 +17,17 @@ export async function getInvoiceSettings() {
   const user = await import("@/lib/auth-utils").then((m) => m.getCurrentUser());
   if (!isSuperAdmin(user)) redirect("/settings");
 
-  return prisma.invoiceSettings.findUnique({
+  const settings = await prisma.invoiceSettings.findUnique({
     where: { organizationId: orgId },
   });
+
+  if (!settings) return null;
+
+  // Convert Decimal to plain number for Client Components.
+  return {
+    ...settings,
+    defaultTaxPercent: Number(settings.defaultTaxPercent),
+  };
 }
 
 const updateInvoiceSchema = z.object({
@@ -30,6 +38,7 @@ const updateInvoiceSchema = z.object({
   website: z.string().max(200).optional(),
   taxRegistrationNo: z.string().max(100).optional(),
   bankDetails: z.string().max(500).optional(),
+  defaultTaxPercent: z.coerce.number().min(0).max(100).default(5),
 });
 
 export async function updateInvoiceSettings(formData: FormData) {
@@ -49,6 +58,7 @@ export async function updateInvoiceSettings(formData: FormData) {
     website: formData.get("website") || undefined,
     taxRegistrationNo: formData.get("taxRegistrationNo") || undefined,
     bankDetails: formData.get("bankDetails") || undefined,
+    defaultTaxPercent: formData.get("defaultTaxPercent") ?? 5,
   });
 
   if (!parsed.success) {
@@ -66,6 +76,7 @@ export async function updateInvoiceSettings(formData: FormData) {
       website: parsed.data.website || null,
       taxRegistrationNo: parsed.data.taxRegistrationNo ?? null,
       bankDetails: parsed.data.bankDetails ?? null,
+      defaultTaxPercent: parsed.data.defaultTaxPercent,
     },
     update: {
       companyName: parsed.data.companyName,
@@ -75,6 +86,7 @@ export async function updateInvoiceSettings(formData: FormData) {
       website: parsed.data.website || null,
       taxRegistrationNo: parsed.data.taxRegistrationNo ?? null,
       bankDetails: parsed.data.bankDetails ?? null,
+      defaultTaxPercent: parsed.data.defaultTaxPercent,
     },
   });
 

@@ -31,6 +31,7 @@ const quotationSchema = z.object({
   status: z.enum(["DRAFT", "PENDING_APPROVAL", "APPROVED", "REJECTED"]).default("DRAFT"),
   validUntil: z.string().optional(),
   notes: z.string().optional(),
+  taxPercent: z.coerce.number().min(0).max(100).optional(),
   items: z.array(quotationItemSchema).min(1, "Add at least one item"),
 });
 
@@ -40,6 +41,7 @@ const salesInvoiceSchema = z.object({
   invoiceNo: z.string().min(1, "Invoice number is required").max(50),
   invoiceDate: z.string().min(1, "Date is required"),
   subtotal: z.coerce.number().min(0),
+  taxPercent: z.coerce.number().min(0).max(100).default(5),
   taxAmount: z.coerce.number().min(0).default(0),
   paidAmount: z.coerce.number().min(0).default(0),
   currencyCode: z.string().min(1).max(10).default("AED"),
@@ -70,6 +72,7 @@ export async function getQuotationById(id: string) {
       client: true,
       items: { include: { item: true } },
       salesOrder: { include: { salesInvoices: true } },
+      createdBy: { select: { name: true } },
     },
   });
   if (!quotation) return null;
@@ -85,7 +88,11 @@ export async function getQuotationById(id: string) {
     approvedByName = approver?.name ?? null;
   }
 
-  return { ...quotation, approvedByName };
+  return {
+    ...quotation,
+    approvedByName,
+    preparedByName: quotation.createdBy?.name ?? null,
+  };
 }
 
 export async function getNextQuotationNo() {
@@ -115,6 +122,7 @@ export async function createQuotation(formData: FormData) {
     status: formData.get("status") || "DRAFT",
     validUntil: formData.get("validUntil") || undefined,
     notes: formData.get("notes") || undefined,
+    taxPercent: formData.get("taxPercent") || undefined,
     items,
   });
 
@@ -122,8 +130,16 @@ export async function createQuotation(formData: FormData) {
     return { error: parsed.error.flatten().fieldErrors };
   }
 
-  const { clientId, quotationDate, quotationNo, status, validUntil, notes, items: quoteItems } =
-    parsed.data;
+  const {
+    clientId,
+    quotationDate,
+    quotationNo,
+    status,
+    validUntil,
+    notes,
+    taxPercent,
+    items: quoteItems,
+  } = parsed.data;
 
   const existing = await prisma.quotation.findFirst({
     where: { organizationId: orgId, quotationNo, deletedAt: null },
@@ -142,6 +158,33 @@ export async function createQuotation(formData: FormData) {
   const user = await getCurrentUser();
   const userId = (user as { id?: string } | null)?.id ?? null;
 
+  const invoiceSettings = await prisma.invoiceSettings.findUnique({
+    where: { organizationId: orgId },
+  });
+  const defaultTaxPercent = invoiceSettings
+    ? Number(invoiceSettings.defaultTaxPercent)
+    : 5;
+  const finalTaxPercent = taxPercent ?? defaultTaxPercent;
+  const taxRegistrationNo = invoiceSettings?.taxRegistrationNo ?? null;
+  const sealUrl = invoiceSettings?.sealUrl ?? null;
+
+  const computedQuoteItems = quoteItems.map((it) => {
+    const cost = Number(it.purchaseCost);
+    const marginPct = Number(it.margin);
+    const unitPrice = cost * (1 + marginPct / 100);
+    return {
+      itemId: it.itemId,
+      quantity: it.quantity,
+      purchaseCost: cost,
+      margin: marginPct,
+      unitPrice,
+      total: it.quantity * unitPrice,
+    };
+  });
+  const subtotal = computedQuoteItems.reduce((s, i) => s + i.total, 0);
+  const taxAmount = (subtotal * finalTaxPercent) / 100;
+  const totalAmount = subtotal + taxAmount;
+
   const jobId = `JOB-${quotationNo}`;
   const quotation = await prisma.quotation.create({
     data: {
@@ -153,22 +196,22 @@ export async function createQuotation(formData: FormData) {
       status: status as "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED",
       validUntil: validUntil ? new Date(validUntil) : null,
       notes: notes || null,
+      taxPercent: finalTaxPercent,
+      taxAmount,
+      totalAmount,
+      taxRegistrationNo,
+      sealUrl,
       createdById: userId ?? undefined,
       updatedById: userId ?? undefined,
       items: {
-        create: quoteItems.map((it) => {
-          const cost = Number(it.purchaseCost);
-          const marginPct = Number(it.margin);
-          const unitPrice = cost * (1 + marginPct / 100);
-          return {
-            itemId: it.itemId,
-            quantity: it.quantity,
-            purchaseCost: cost,
-            margin: marginPct,
-            unitPrice,
-            total: it.quantity * unitPrice,
-          };
-        }),
+        create: computedQuoteItems.map((it) => ({
+          itemId: it.itemId,
+          quantity: it.quantity,
+          purchaseCost: it.purchaseCost,
+          margin: it.margin,
+          unitPrice: it.unitPrice,
+          total: it.total,
+        })),
       },
     },
   });
@@ -208,6 +251,7 @@ export async function updateQuotation(id: string, formData: FormData) {
     status: formData.get("status") || "DRAFT",
     validUntil: formData.get("validUntil") || undefined,
     notes: formData.get("notes") || undefined,
+    taxPercent: formData.get("taxPercent") || undefined,
     items,
   });
 
@@ -215,8 +259,16 @@ export async function updateQuotation(id: string, formData: FormData) {
     return { error: parsed.error.flatten().fieldErrors };
   }
 
-  const { clientId, quotationDate, quotationNo, status, validUntil, notes, items: quoteItems } =
-    parsed.data;
+  const {
+    clientId,
+    quotationDate,
+    quotationNo,
+    status,
+    validUntil,
+    notes,
+    taxPercent,
+    items: quoteItems,
+  } = parsed.data;
 
   const duplicateNo = await prisma.quotation.findFirst({
     where: { organizationId: orgId, quotationNo, deletedAt: null, id: { not: id } },
@@ -235,6 +287,31 @@ export async function updateQuotation(id: string, formData: FormData) {
   const user = await getCurrentUser();
   const userId = (user as { id?: string } | null)?.id ?? null;
 
+  const invoiceSettings = await prisma.invoiceSettings.findUnique({
+    where: { organizationId: orgId },
+  });
+  const defaultTaxPercent = invoiceSettings
+    ? Number(invoiceSettings.defaultTaxPercent)
+    : 5;
+  const finalTaxPercent = taxPercent ?? defaultTaxPercent;
+
+  const computedQuoteItems = quoteItems.map((it) => {
+    const cost = Number(it.purchaseCost);
+    const marginPct = Number(it.margin);
+    const unitPrice = cost * (1 + marginPct / 100);
+    return {
+      itemId: it.itemId,
+      quantity: it.quantity,
+      purchaseCost: cost,
+      margin: marginPct,
+      unitPrice,
+      total: it.quantity * unitPrice,
+    };
+  });
+  const subtotal = computedQuoteItems.reduce((s, i) => s + i.total, 0);
+  const taxAmount = (subtotal * finalTaxPercent) / 100;
+  const totalAmount = subtotal + taxAmount;
+
   await prisma.$transaction([
     prisma.quotationItem.deleteMany({ where: { quotationId: id } }),
     prisma.quotation.update({
@@ -246,21 +323,19 @@ export async function updateQuotation(id: string, formData: FormData) {
         status: status as "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED",
         validUntil: validUntil ? new Date(validUntil) : null,
         notes: notes || null,
+        taxPercent: finalTaxPercent,
+        taxAmount,
+        totalAmount,
         updatedById: userId ?? undefined,
         items: {
-          create: quoteItems.map((it) => {
-            const cost = Number(it.purchaseCost);
-            const marginPct = Number(it.margin);
-            const unitPrice = cost * (1 + marginPct / 100);
-            return {
-              itemId: it.itemId,
-              quantity: it.quantity,
-              purchaseCost: cost,
-              margin: marginPct,
-              unitPrice,
-              total: it.quantity * unitPrice,
-            };
-          }),
+          create: computedQuoteItems.map((it) => ({
+            itemId: it.itemId,
+            quantity: it.quantity,
+            purchaseCost: it.purchaseCost,
+            margin: it.margin,
+            unitPrice: it.unitPrice,
+            total: it.total,
+          })),
         },
       },
     }),
@@ -464,7 +539,10 @@ export async function createSalesOrderFromQuotation(quotationId: string) {
   return { success: true };
 }
 
-export async function createInvoiceFromSalesOrder(salesOrderId: string) {
+export async function createInvoiceFromSalesOrder(
+  salesOrderId: string,
+  sendForApproval: boolean = false
+) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -496,7 +574,15 @@ export async function createInvoiceFromSalesOrder(salesOrderId: string) {
   const invDate = new Date();
   const dueDate = calculateDueDate(invDate, quotation.client.agreedDueDays);
   const subtotal = salesOrder.items.reduce((s, i) => s + Number(i.total), 0);
-  const taxAmount = 0;
+  const invoiceSettings = await prisma.invoiceSettings.findUnique({
+    where: { organizationId: orgId },
+  });
+  const vatPercent = invoiceSettings
+    ? Number(invoiceSettings.defaultTaxPercent)
+    : 5;
+  const taxRegistrationNo = invoiceSettings?.taxRegistrationNo ?? null;
+  const sealUrl = invoiceSettings?.sealUrl ?? null;
+  const taxAmount = (subtotal * vatPercent) / 100;
   const totalAmount = subtotal + taxAmount;
 
   const user = await getCurrentUser();
@@ -518,7 +604,12 @@ export async function createInvoiceFromSalesOrder(salesOrderId: string) {
         paidAmount: 0,
         paymentStatus: "UNPAID",
         notes: salesOrder.notes,
-        status: "DRAFT",
+        status: sendForApproval ? "PENDING_APPROVAL" : "APPROVED",
+        defaultTaxPercent: vatPercent,
+        taxRegistrationNo,
+        sealUrl,
+        approvedById: sendForApproval ? undefined : userId ?? undefined,
+        approvedAt: sendForApproval ? undefined : new Date(),
         createdById: userId ?? undefined,
         updatedById: userId ?? undefined,
       },
@@ -532,6 +623,7 @@ export async function createInvoiceFromSalesOrder(salesOrderId: string) {
           itemId: soi.itemId,
           quantity: soi.quantity,
           unitPrice: soi.unitPrice,
+          taxPercent: vatPercent,
           total: soi.quantity * Number(soi.unitPrice),
         },
       });
@@ -718,6 +810,12 @@ export async function createSalesInvoice(formData: FormData) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
+  const sendForApprovalRaw = formData.get("sendForApproval");
+  const sendForApproval =
+    sendForApprovalRaw === "true" ||
+    sendForApprovalRaw === "1" ||
+    sendForApprovalRaw === "on";
+
   const itemsJson = formData.get("items") as string;
   const items = itemsJson
     ? (JSON.parse(itemsJson) as { itemId: string; quantity: number; unitPrice: number }[])
@@ -729,6 +827,7 @@ export async function createSalesInvoice(formData: FormData) {
     invoiceNo: formData.get("invoiceNo"),
     invoiceDate: formData.get("invoiceDate"),
     subtotal: formData.get("subtotal"),
+    taxPercent: formData.get("taxPercent") || undefined,
     taxAmount: formData.get("taxAmount") || 0,
     paidAmount: formData.get("paidAmount") || 0,
     currencyCode: formData.get("currencyCode") || "AED",
@@ -746,7 +845,7 @@ export async function createSalesInvoice(formData: FormData) {
     invoiceNo,
     invoiceDate,
     subtotal,
-    taxAmount,
+    taxPercent,
     paidAmount,
     currencyCode,
     notes,
@@ -789,7 +888,13 @@ export async function createSalesInvoice(formData: FormData) {
 
   const invDate = new Date(invoiceDate);
   const dueDate = calculateDueDate(invDate, client.agreedDueDays);
+  const taxAmount = (subtotal * taxPercent) / 100;
   const totalAmount = subtotal + taxAmount;
+  const invoiceSettings = await prisma.invoiceSettings.findUnique({
+    where: { organizationId: orgId },
+  });
+  const taxRegistrationNo = invoiceSettings?.taxRegistrationNo ?? null;
+  const sealUrl = invoiceSettings?.sealUrl ?? null;
   const paymentStatus =
     (paidAmount ?? 0) >= totalAmount ? "PAID" : (paidAmount ?? 0) > 0 ? "PARTIAL" : "UNPAID";
 
@@ -844,11 +949,16 @@ export async function createSalesInvoice(formData: FormData) {
         subtotal,
         taxAmount,
         totalAmount,
+        defaultTaxPercent: taxPercent,
+        taxRegistrationNo,
+        sealUrl,
         paidAmount: paidAmount ?? 0,
         paymentStatus,
         currencyCode,
         notes: notes || null,
-        status: "DRAFT",
+        status: sendForApproval ? "PENDING_APPROVAL" : "APPROVED",
+        approvedById: sendForApproval ? undefined : userId ?? undefined,
+        approvedAt: sendForApproval ? undefined : new Date(),
         createdById: userId ?? undefined,
         updatedById: userId ?? undefined,
       },
@@ -867,6 +977,7 @@ export async function createSalesInvoice(formData: FormData) {
           itemId: it.itemId,
           quantity: it.quantity,
           unitPrice: it.unitPrice,
+          taxPercent: taxPercent,
           total,
         },
       });
@@ -922,6 +1033,7 @@ const updateSalesInvoiceSchema = z.object({
   invoiceDate: z.string().min(1, "Date is required"),
   notes: z.string().optional(),
   paidAmount: z.coerce.number().min(0).default(0),
+  taxPercent: z.coerce.number().min(0).max(100).default(5),
 });
 
 export async function updateSalesInvoice(id: string, formData: FormData) {
@@ -948,23 +1060,35 @@ export async function updateSalesInvoice(id: string, formData: FormData) {
   const user = await getCurrentUser();
   const userId = (user as { id?: string } | null)?.id ?? null;
 
-  const { invoiceDate, notes, paidAmount } = parsed.data;
+  const { invoiceDate, notes, paidAmount, taxPercent } = parsed.data;
   const invDate = new Date(invoiceDate);
   const dueDate = calculateDueDate(invDate, existing.client.agreedDueDays);
-  const totalAmount = Number(existing.totalAmount ?? 0);
+  const subtotal = Number(existing.subtotal ?? 0);
+  const taxAmount = (subtotal * taxPercent) / 100;
+  const totalAmount = subtotal + taxAmount;
   const paymentStatus =
     paidAmount >= totalAmount ? "PAID" : paidAmount > 0 ? "PARTIAL" : "UNPAID";
 
-  await prisma.salesInvoice.update({
-    where: { id },
-    data: {
-      invoiceDate: invDate,
-      dueDate,
-      paidAmount,
-      paymentStatus,
-      notes: notes ?? null,
-      updatedById: userId ?? undefined,
-    },
+  await prisma.$transaction(async (tx) => {
+    await tx.salesInvoice.update({
+      where: { id },
+      data: {
+        invoiceDate: invDate,
+        dueDate,
+        paidAmount,
+        paymentStatus,
+        notes: notes ?? null,
+        updatedById: userId ?? undefined,
+        defaultTaxPercent: taxPercent,
+        taxAmount,
+        totalAmount,
+      },
+    });
+
+    await tx.salesInvoiceItem.updateMany({
+      where: { salesInvoiceId: id },
+      data: { taxPercent },
+    });
   });
 
   await createAuditLog({

@@ -18,6 +18,7 @@ const invoiceSchema = z.object({
   website: z.string().max(200).optional(),
   taxRegistrationNo: z.string().max(100).optional(),
   bankDetails: z.string().max(500).optional(),
+  defaultTaxPercent: z.coerce.number().min(0).max(100).default(5),
 });
 
 type InvoiceFormValues = z.infer<typeof invoiceSchema>;
@@ -31,6 +32,7 @@ type InvoiceSettings = {
   website: string | null;
   taxRegistrationNo: string | null;
   bankDetails: string | null;
+  defaultTaxPercent: number;
   invoiceLogoUrl: string | null;
   sealUrl: string | null;
 };
@@ -58,6 +60,7 @@ export function InvoiceSettingsForm({ settings }: { settings: InvoiceSettings | 
       website: settings?.website ?? "",
       taxRegistrationNo: settings?.taxRegistrationNo ?? "",
       bankDetails: settings?.bankDetails ?? "",
+      defaultTaxPercent: settings?.defaultTaxPercent ?? 5,
     },
   });
 
@@ -232,6 +235,20 @@ export function InvoiceSettingsForm({ settings }: { settings: InvoiceSettings | 
               {...register("taxRegistrationNo")}
               placeholder="VAT/TRN number"
             />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="defaultTaxPercent">VAT % (default)</Label>
+            <Input
+              id="defaultTaxPercent"
+              type="number"
+              step="0.01"
+              min={0}
+              max={100}
+              {...register("defaultTaxPercent")}
+            />
+            {errors.defaultTaxPercent && (
+              <p className="text-sm text-destructive">{errors.defaultTaxPercent.message}</p>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="bankDetails">Bank Details</Label>

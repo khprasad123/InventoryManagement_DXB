@@ -44,6 +44,8 @@ type InvoiceForPrint = {
   createdBy?: { name: string | null } | null;
   approvedBy?: { name: string | null; signatureUrl?: string | null } | null;
   approvedAt?: Date | null;
+  taxRegistrationNo?: string | null;
+  sealUrl?: string | null;
 };
 
 export function InvoicePrintLayout({
@@ -56,8 +58,15 @@ export function InvoicePrintLayout({
   if (!invoice) return null;
 
   const tz = org?.timezone ?? "UTC";
-  const total = Number(invoice.totalAmount);
-  const amountWords = numberToWords(total);
+  const subtotal = Number(invoice.subtotal ?? 0);
+  const vatPct = Number(invoice.defaultTaxPercent ?? 5);
+  const computedTaxAmount = (subtotal * vatPct) / 100;
+  const storedTaxAmount = Number(invoice.taxAmount ?? 0);
+  const taxAmount = storedTaxAmount === 0 ? computedTaxAmount : storedTaxAmount;
+  const storedTotalAmount = Number(invoice.totalAmount ?? 0);
+  const totalAmount =
+    storedTotalAmount === 0 ? subtotal + taxAmount : storedTotalAmount;
+  const amountWords = numberToWords(totalAmount);
 
   return (
     <div className="invoice-container w-[210mm] min-h-[297mm] p-[10mm] mx-auto bg-white font-sans text-sm">
@@ -102,8 +111,10 @@ export function InvoicePrintLayout({
                   </a>
                 </p>
               )}
-              {org?.taxRegistrationNo && (
-                <p className="font-medium">Tax Registration No: {org.taxRegistrationNo}</p>
+              {(invoice.taxRegistrationNo ?? org?.taxRegistrationNo) && (
+                <p className="font-medium">
+                  Tax Registration No: {invoice.taxRegistrationNo ?? org?.taxRegistrationNo}
+                </p>
               )}
             </div>
           </div>
@@ -218,7 +229,7 @@ export function InvoicePrintLayout({
           <tbody>
             <tr>
               <td className="font-medium py-1">Invoice Amount</td>
-              <td className="text-right">{Number(invoice.subtotal).toFixed(2)} {invoice.currencyCode}</td>
+              <td className="text-right">{subtotal.toFixed(2)} {invoice.currencyCode}</td>
             </tr>
             <tr>
               <td className="font-medium py-1">Deductions</td>
@@ -226,16 +237,16 @@ export function InvoicePrintLayout({
             </tr>
             <tr>
               <td className="font-medium py-1">Taxable Value</td>
-              <td className="text-right">{Number(invoice.subtotal).toFixed(2)}</td>
+              <td className="text-right">{subtotal.toFixed(2)}</td>
             </tr>
             <tr>
               <td className="font-medium py-1">VAT Amount</td>
-              <td className="text-right">{Number(invoice.taxAmount).toFixed(2)}</td>
+              <td className="text-right">{taxAmount.toFixed(2)}</td>
             </tr>
             <tr className="border-t-2 border-gray-800">
               <td className="font-bold py-2">Net Amount</td>
               <td className="text-right font-bold">
-                {Number(invoice.totalAmount).toFixed(2)} {invoice.currencyCode}
+                {totalAmount.toFixed(2)} {invoice.currencyCode}
               </td>
             </tr>
           </tbody>
@@ -279,12 +290,12 @@ export function InvoicePrintLayout({
               />
             </div>
           )}
-          {org?.sealUrl && (
+          {(invoice.sealUrl ?? org?.sealUrl) && invoice.approvedAt && (
             <div className="mt-2 flex items-center gap-2">
-              <div className="h-10 w-10">
+              <div className="h-16 w-16">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={org.sealUrl}
+                  src={invoice.sealUrl ?? org?.sealUrl ?? undefined}
                   alt="Stamp"
                   className="h-full w-full object-contain"
                 />

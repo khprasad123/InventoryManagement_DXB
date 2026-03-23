@@ -13,7 +13,7 @@ export default async function AddSalesInvoicePage() {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
-  const [clients, items, quotations, salesOrders, defaultInvoiceNo, currencies, defaultCurrencyCode] =
+  const [clients, items, quotations, salesOrders, defaultInvoiceNo, currencies, defaultCurrencyCode, invoiceSettings] =
     await Promise.all([
     prisma.client.findMany({
       where: { organizationId: orgId, deletedAt: null },
@@ -74,6 +74,10 @@ export default async function AddSalesInvoicePage() {
     getNextInvoiceNo(),
     getOrganizationCurrencies(orgId),
     getDefaultCurrencyCodeForOrg(orgId),
+    prisma.invoiceSettings.findUnique({
+      where: { organizationId: orgId },
+      select: { defaultTaxPercent: true },
+    }),
   ]);
 
   return (
@@ -100,6 +104,7 @@ export default async function AddSalesInvoicePage() {
             defaultInvoiceNo={defaultInvoiceNo}
             currencies={currencies}
             defaultCurrencyCode={defaultCurrencyCode}
+            defaultTaxPercent={invoiceSettings ? Number(invoiceSettings.defaultTaxPercent) : 5}
           />
         </CardContent>
       </Card>

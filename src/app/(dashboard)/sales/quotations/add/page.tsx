@@ -9,7 +9,7 @@ export default async function AddQuotationPage() {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
-  const [clients, items, defaultQuotationNo] = await Promise.all([
+  const [clients, items, defaultQuotationNo, invoiceSettings] = await Promise.all([
     prisma.client.findMany({
       where: { organizationId: orgId, deletedAt: null },
       orderBy: { name: "asc" },
@@ -38,6 +38,10 @@ export default async function AddQuotationPage() {
         }))
       ),
     getNextQuotationNo(),
+    prisma.invoiceSettings.findUnique({
+      where: { organizationId: orgId },
+      select: { defaultTaxPercent: true },
+    }),
   ]);
 
   return (
@@ -60,6 +64,9 @@ export default async function AddQuotationPage() {
             clients={clients}
             items={items}
             defaultQuotationNo={defaultQuotationNo}
+            defaultTaxPercent={
+              invoiceSettings ? Number(invoiceSettings.defaultTaxPercent) : 5
+            }
           />
         </CardContent>
       </Card>

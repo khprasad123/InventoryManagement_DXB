@@ -10,6 +10,7 @@ interface SalesInvoiceEditFormProps {
     invoiceDate: string;
     notes: string;
     paidAmount: string;
+    taxPercent: number;
   };
   updateAction: (formData: FormData) => Promise<{ error?: Record<string, string[]> } | void>;
 }
@@ -31,7 +32,13 @@ export function SalesInvoiceEditForm({
     setSubmitting(false);
     if (result?.error) {
       const err = result.error as Record<string, string[]>;
-      setError(err.invoiceDate?.[0] || err.paidAmount?.[0] || err._form?.[0] || "Validation failed");
+      setError(
+        err.invoiceDate?.[0] ||
+          err.paidAmount?.[0] ||
+          err.taxPercent?.[0] ||
+          err._form?.[0] ||
+          "Validation failed"
+      );
       return;
     }
   }
@@ -58,6 +65,18 @@ export function SalesInvoiceEditForm({
             step="0.01"
             min={0}
             defaultValue={defaultValues.paidAmount}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="taxPercent">VAT %</Label>
+          <Input
+            id="taxPercent"
+            name="taxPercent"
+            type="number"
+            step="0.01"
+            min={0}
+            max={100}
+            defaultValue={defaultValues.taxPercent}
           />
         </div>
       </div>
