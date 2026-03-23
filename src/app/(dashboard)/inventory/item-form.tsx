@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -42,6 +42,17 @@ interface ItemFormProps {
 
 export function ItemForm({ mode, item, categories, onSubmit }: ItemFormProps) {
   const attachmentRef = useRef<HTMLInputElement>(null);
+  const [localCategories, setLocalCategories] = useState<string[]>(categories);
+
+  useEffect(() => {
+    setLocalCategories(categories);
+  }, [categories]);
+
+  function ensureCategoryInList(raw: unknown) {
+    const v = String(raw ?? "").trim();
+    if (!v) return;
+    setLocalCategories((prev) => (prev.includes(v) ? prev : [...prev, v]));
+  }
   const {
     register,
     handleSubmit,
@@ -124,12 +135,14 @@ export function ItemForm({ mode, item, categories, onSubmit }: ItemFormProps) {
           <Label htmlFor="category">Category</Label>
           <Input
             id="category"
-            {...register("category")}
+            {...register("category", {
+              onChange: (e) => ensureCategoryInList(e.target.value),
+            })}
             list="categories-list"
             placeholder="e.g. Electronics"
           />
           <datalist id="categories-list">
-            {categories.map((c) => (
+            {localCategories.map((c) => (
               <option key={c} value={c} />
             ))}
           </datalist>

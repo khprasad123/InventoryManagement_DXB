@@ -14,6 +14,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Plus, Pencil, Trash2, Eye } from "lucide-react";
 import { DeleteSupplierButton } from "./delete-supplier-button";
+import { CsvBulkImportCard } from "@/components/bulk-import/csv-bulk-import-card";
 
 export default async function SuppliersPage() {
   const orgId = await getOrganizationId();
@@ -37,6 +38,20 @@ export default async function SuppliersPage() {
           </Link>
         </Button>
       </div>
+
+      <CsvBulkImportCard
+        title="Bulk Import Suppliers"
+        subtitle="Download the CSV template, edit it, then upload to upsert suppliers. Import key: email if present, otherwise phone, otherwise name."
+        endpoint="/api/bulk-import/suppliers"
+        templateFileName="suppliers-template.csv"
+        entityLabel="Suppliers"
+        templateCsv={
+          [
+            "name,contactName,email,phone,address,paymentTerms,taxNumber,defaultPaymentTerms,creditLimit",
+            "Supplier Co,Jane Doe,supplier@example.com,+971 50 123 4567,Main street,NET 30,TRN123,30,10000",
+          ].join("\n") + "\n"
+        }
+      />
 
       <Card>
         <CardHeader>

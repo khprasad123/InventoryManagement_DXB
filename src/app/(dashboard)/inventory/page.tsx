@@ -22,6 +22,7 @@ import { Suspense } from "react";
 import { InventoryFilters } from "./inventory-filters";
 import { DeleteItemButton } from "./delete-item-button";
 import { StockMovementDialog } from "./stock-movement-dialog";
+import { CsvBulkImportCard } from "@/components/bulk-import/csv-bulk-import-card";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -58,6 +59,20 @@ export default async function InventoryPage({
           </Link>
         </Button>
       </div>
+
+      <CsvBulkImportCard
+        title="Bulk Import Inventory"
+        subtitle="Download the CSV template, edit it, then upload to upsert items by SKU. A per-row import log is generated."
+        endpoint="/api/bulk-import/inventory-items"
+        templateFileName="inventory-items-template.csv"
+        entityLabel="Inventory Items"
+        templateCsv={
+          [
+            "sku,name,description,category,unit,defaultPurchaseCost,defaultMargin,minStock",
+            "ITM-001,Item name,Optional description,General,pcs,0,0,0",
+          ].join("\n") + "\n"
+        }
+      />
 
       <Card>
         <CardHeader>

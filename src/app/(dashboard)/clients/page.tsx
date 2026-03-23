@@ -14,6 +14,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Plus, Pencil, Trash2, Eye } from "lucide-react";
 import { DeleteClientButton } from "./delete-client-button";
+import { CsvBulkImportCard } from "@/components/bulk-import/csv-bulk-import-card";
 
 export default async function ClientsPage() {
   const orgId = await getOrganizationId();
@@ -37,6 +38,20 @@ export default async function ClientsPage() {
           </Link>
         </Button>
       </div>
+
+      <CsvBulkImportCard
+        title="Bulk Import Clients"
+        subtitle="Download the CSV template, edit it, then upload to upsert clients. Import key: email if present, otherwise phone, otherwise name."
+        endpoint="/api/bulk-import/clients"
+        templateFileName="clients-template.csv"
+        entityLabel="Clients"
+        templateCsv={
+          [
+            "name,contactName,email,phone,address,siteLocation,building,taxNumber,defaultPaymentTerms,agreedDueDays,creditLimit",
+            "Client Co,Jane Doe,client@example.com,+971 50 123 4567,Main street,Ajman,Building A,TRN987,NET 30,30,50000",
+          ].join("\n") + "\n"
+        }
+      />
 
       <Card>
         <CardHeader>
