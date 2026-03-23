@@ -17,6 +17,17 @@ export default async function EditItemPage({
   const item = await getItemById(id);
   if (!item) notFound();
 
+  const serializedItem = {
+    sku: item.sku,
+    name: item.name,
+    description: item.description,
+    category: item.category,
+    unit: item.unit,
+    defaultPurchaseCost: Number(item.defaultPurchaseCost),
+    defaultMargin: Number(item.defaultMargin),
+    minStock: item.minStock,
+  };
+
   const categories = await getItemCategories(orgId);
   if (!categories.includes("General")) {
     categories.unshift("General");
@@ -43,7 +54,7 @@ export default async function EditItemPage({
         <CardContent>
           <ItemForm
             mode="edit"
-            item={item}
+            item={serializedItem}
             categories={categories}
             onSubmit={updateAction}
           />

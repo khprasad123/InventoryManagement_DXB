@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -40,10 +41,31 @@ export default async function PurchaseOrderDetailPage({
           <p className="text-muted-foreground">
             {po.supplier.name} • {new Date(po.orderDate).toLocaleDateString()}
           </p>
+          {(po as any).grnStatus && (
+            <div className="mt-2">
+              <Badge
+                variant={
+                  (po as any).grnStatus === "FULFILLED" ? "default" : "secondary"
+                }
+              >
+                {(po as any).grnStatus === "FULFILLED"
+                  ? "Fulfilled"
+                  : "Pending GRN"}
+              </Badge>
+            </div>
+          )}
         </div>
-        <Button asChild>
-          <Link href={`/purchases/grn/add?poId=${po.id}`}>Create GRN from PO</Link>
-        </Button>
+        {(po as any).grnStatus !== "FULFILLED" ? (
+          <Button asChild>
+            <Link href={`/purchases/grn/add?poId=${po.id}`}>
+              Create GRN from PO
+            </Link>
+          </Button>
+        ) : (
+          <div className="text-sm text-muted-foreground self-end pb-1">
+            Fulfilled - no GRN creation required
+          </div>
+        )}
       </div>
 
       <Card>

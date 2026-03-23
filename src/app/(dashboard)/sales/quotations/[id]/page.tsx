@@ -8,7 +8,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { getQuotationById } from "../../actions";
+import { getOrgForInvoice, getQuotationById } from "../../actions";
 import { getOrganizationId } from "@/lib/auth-utils";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
@@ -19,6 +19,9 @@ import { CreateInvoiceFromSoButton } from "../../create-invoice-from-so-button";
 import { SubmitQuotationButton } from "../../submit-quotation-button";
 import { ApproveRejectQuotation } from "../../approve-reject-quotation";
 import { DeleteQuotationButton } from "../../delete-quotation-button";
+import { formatInTimezone, formatDateTimeInTimezone } from "@/lib/date-utils";
+import { PrintQuotationButton } from "../../print-quotation-button";
+import { QuotationPrintLayout } from "../../quotation-print-layout";
 
 export default async function QuotationDetailPage({
   params,
@@ -29,10 +32,14 @@ export default async function QuotationDetailPage({
   if (!orgId) redirect("/login");
 
   const { id } = await Promise.resolve(params);
-  const quotation = await getQuotationById(id);
+  const [quotation, org] = await Promise.all([
+    getQuotationById(id),
+    getOrgForInvoice(),
+  ]);
   if (!quotation) notFound();
 
   const total = quotation.items.reduce((s, i) => s + Number(i.total), 0);
+  const tz = org?.timezone ?? "UTC";
 
   return (
     <div className="space-y-6">
@@ -80,10 +87,11 @@ export default async function QuotationDetailPage({
               → Invoice {quotation.salesOrder.salesInvoices[0].invoiceNo}
             </Link>
           )}
+          <PrintQuotationButton quotation={{ quotationNo: quotation.quotationNo }} />
         </div>
         <p className="text-muted-foreground">
           {quotation.client.name} • Job ID: {quotation.jobId || "-"} •{" "}
-          {new Date(quotation.quotationDate).toLocaleDateString()}
+          {formatInTimezone(quotation.quotationDate, tz)}
         </p>
       </div>
 
@@ -147,6 +155,32 @@ export default async function QuotationDetailPage({
         </Card>
       )}
 
+      {quotation.status === "APPROVED" && quotation.approvedAt && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Approval</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1">
+            <div>
+              <span className="text-sm text-muted-foreground">Approved By</span>
+              <p className="font-medium">
+                {(quotation as any).approvedByName ?? "—"}
+              </p>
+            </div>
+            {quotation.approvedAt && (
+              <div>
+                <span className="text-sm text-muted-foreground">
+                  Approved At
+                </span>
+                <p className="text-sm text-muted-foreground">
+                  {formatDateTimeInTimezone(quotation.approvedAt, tz)}
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {quotation.status === "DRAFT" && !quotation.salesOrder?.salesInvoices?.length && (
         <>
           <SubmitQuotationButton quotationId={quotation.id} />
@@ -205,6 +239,11 @@ export default async function QuotationDetailPage({
           </p>
         </>
       )}
+
+      {/* Printable quotation - shown only when printing */}
+      <div className="hidden print:block">
+        <QuotationPrintLayout quotation={quotation} org={org} />
+      </div>
 
     </div>
   );

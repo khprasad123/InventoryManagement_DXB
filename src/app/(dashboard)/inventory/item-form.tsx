@@ -4,14 +4,9 @@ import { useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import type { Item } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-type ItemWithCost = {
-  defaultPurchaseCost: { toNumber?: () => number } | number;
-  defaultMargin: { toNumber?: () => number } | number;
-} & Record<string, unknown>;
 
 const itemSchema = z.object({
   sku: z.string().min(1, "SKU is required").max(50),
@@ -26,9 +21,21 @@ const itemSchema = z.object({
 
 type ItemFormValues = z.infer<typeof itemSchema>;
 
+// Serializable props only: Prisma Decimal fields are not allowed in Client Components.
+type SerializableItem = {
+  sku: string;
+  name: string;
+  description?: string | null;
+  category?: string | null;
+  unit: string;
+  defaultPurchaseCost: number;
+  defaultMargin: number;
+  minStock: number;
+};
+
 interface ItemFormProps {
   mode: "add" | "edit";
-  item?: Item | null;
+  item?: SerializableItem | null;
   categories: string[];
   onSubmit: (formData: FormData) => Promise<{ error?: Record<string, string[]> } | void>;
 }
@@ -44,22 +51,14 @@ export function ItemForm({ mode, item, categories, onSubmit }: ItemFormProps) {
     resolver: zodResolver(itemSchema),
     defaultValues: item
       ? {
-          sku: (item as Record<string, unknown>).sku as string,
-          name: (item as Record<string, unknown>).name as string,
-          description: ((item as Record<string, unknown>).description as string) ?? "",
-          category: ((item as Record<string, unknown>).category as string) ?? "General",
-          unit: (item as Record<string, unknown>).unit as string,
-          defaultPurchaseCost: Number(
-            typeof item.defaultPurchaseCost === "object" && item.defaultPurchaseCost?.toNumber
-              ? item.defaultPurchaseCost.toNumber()
-              : item.defaultPurchaseCost
-          ),
-          defaultMargin: Number(
-            typeof item.defaultMargin === "object" && item.defaultMargin?.toNumber
-              ? item.defaultMargin.toNumber()
-              : item.defaultMargin
-          ),
-          minStock: (item as Record<string, unknown>).minStock as number,
+          sku: item.sku,
+          name: item.name,
+          description: item.description ?? "",
+          category: item.category ?? "General",
+          unit: item.unit,
+          defaultPurchaseCost: item.defaultPurchaseCost,
+          defaultMargin: item.defaultMargin,
+          minStock: item.minStock,
         }
       : {
           category: "General",

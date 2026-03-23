@@ -45,7 +45,15 @@ export default async function ItemDetailPage({
           </p>
         </div>
         <div className="flex gap-2">
-          <StockMovementDialog item={item} allowAdjustment />
+          <StockMovementDialog
+            item={{
+              id: item.id,
+              name: item.name,
+              sku: item.sku,
+              stockQty: item.stockQty,
+            }}
+            allowAdjustment
+          />
           <Button asChild>
             <Link href={`/inventory/${id}/edit`}>
               <Pencil className="mr-2 h-4 w-4" />

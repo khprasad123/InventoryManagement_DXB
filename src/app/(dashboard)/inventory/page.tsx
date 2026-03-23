@@ -134,7 +134,14 @@ export default async function InventoryPage({
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
-                              <StockMovementDialog item={item} />
+                              <StockMovementDialog
+                                item={{
+                                  id: item.id,
+                                  name: item.name,
+                                  sku: item.sku,
+                                  stockQty: item.stockQty,
+                                }}
+                              />
                               <Button variant="ghost" size="icon" asChild title="View details & documents">
                                 <Link href={`/inventory/${item.id}`}>
                                   <Eye className="h-4 w-4" />

@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -68,6 +69,7 @@ export default async function PurchaseOrdersPage() {
                   <TableRow>
                     <TableHead>PO No</TableHead>
                     <TableHead>Date</TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead>PR</TableHead>
                     <TableHead>Supplier</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -86,6 +88,19 @@ export default async function PurchaseOrdersPage() {
                       </TableCell>
                       <TableCell>
                         {new Date(po.orderDate).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            (po as any).grnStatus === "FULFILLED"
+                              ? "default"
+                              : "secondary"
+                          }
+                        >
+                          {(po as any).grnStatus === "FULFILLED"
+                            ? "Fulfilled"
+                            : "Pending GRN"}
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         <Link

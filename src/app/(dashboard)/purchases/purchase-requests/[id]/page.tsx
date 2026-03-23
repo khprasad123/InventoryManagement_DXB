@@ -77,11 +77,17 @@ export default async function PurchaseRequestDetailPage({
           <ApproveRejectPr prId={pr.id} />
         )}
         {pr.status === "APPROVED" && (
-          <Button asChild>
-            <Link href={`/purchases/purchase-orders/add?prId=${pr.id}`}>
-              Create PO from PR
-            </Link>
-          </Button>
+          hasRemaining ? (
+            <Button asChild>
+              <Link href={`/purchases/purchase-orders/add?prId=${pr.id}`}>
+                Create PO from PR
+              </Link>
+            </Button>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Fulfilled - no purchase order required
+            </p>
+          )
         )}
       </div>
 

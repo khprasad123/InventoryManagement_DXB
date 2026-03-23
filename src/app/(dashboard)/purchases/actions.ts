@@ -93,6 +93,26 @@ export async function createGrn(formData: FormData) {
 
   const { supplierId, purchaseOrderId, receivedDate, grnNo, notes, items: grnItems } = parsed.data;
 
+  // If this GRN is linked to a Purchase Order, do not allow creating GRNs
+  // once the PO is fully fulfilled (no GRN creation required).
+  if (purchaseOrderId) {
+    const po = await prisma.purchaseOrder.findFirst({
+      where: { id: purchaseOrderId, organizationId: orgId, deletedAt: null },
+      include: {
+        items: true,
+        grns: { where: { deletedAt: null }, include: { items: true } },
+      },
+    });
+
+    if (po && getPurchaseOrderGrnStatus(po as unknown as PurchaseOrderForFulfillment) === "FULFILLED") {
+      return {
+        error: {
+          _form: ["This purchase order is already fulfilled; no further GRN creation is required."],
+        },
+      };
+    }
+  }
+
   const existing = await prisma.grn.findFirst({
     where: { organizationId: orgId, grnNo, deletedAt: null },
   });
@@ -184,17 +204,55 @@ export async function createGrn(formData: FormData) {
   redirect("/purchases/grn");
 }
 
+type PurchaseOrderForFulfillment = {
+  items: Array<{ itemId: string; quantity: number }>;
+  grns?: Array<{ items: Array<{ itemId: string; quantity: number }> }>;
+};
+
+function getPurchaseOrderGrnStatus(
+  po: PurchaseOrderForFulfillment
+): "PENDING_GRN" | "FULFILLED" {
+  const orderedByItem = new Map<string, number>();
+  for (const it of po.items ?? []) {
+    orderedByItem.set(it.itemId, (orderedByItem.get(it.itemId) ?? 0) + Number(it.quantity));
+  }
+
+  const receivedByItem = new Map<string, number>();
+  for (const grn of po.grns ?? []) {
+    for (const gi of grn.items ?? []) {
+      receivedByItem.set(gi.itemId, (receivedByItem.get(gi.itemId) ?? 0) + Number(gi.quantity));
+    }
+  }
+
+  // Fulfilled only when every ordered item is fully received.
+  const orderedEntries = Array.from(orderedByItem.entries());
+  for (let idx = 0; idx < orderedEntries.length; idx++) {
+    const [itemId, orderedQty] = orderedEntries[idx];
+    const receivedQty = receivedByItem.get(itemId) ?? 0;
+    if (receivedQty < orderedQty) return "PENDING_GRN";
+  }
+
+  return "FULFILLED";
+}
+
 export async function getPurchaseOrdersForGrn() {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
-  return prisma.purchaseOrder.findMany({
+  const pos = await prisma.purchaseOrder.findMany({
     where: { organizationId: orgId, deletedAt: null },
     include: {
       supplier: true,
       items: { include: { item: true } },
+      grns: {
+        where: { deletedAt: null },
+        include: { items: true },
+      },
     },
     orderBy: { orderDate: "desc" },
   });
+
+  // Only show POs that still need GRN creation.
+  return pos.filter((po) => getPurchaseOrderGrnStatus(po as unknown as PurchaseOrderForFulfillment) === "PENDING_GRN");
 }
 
 export async function getPurchaseInvoices() {
@@ -804,28 +862,54 @@ export async function rejectPurchaseRequest(id: string, remarks: string) {
 export async function getPurchaseOrders() {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
-  return prisma.purchaseOrder.findMany({
+  const pos = await prisma.purchaseOrder.findMany({
     where: { organizationId: orgId, deletedAt: null },
     include: {
       purchaseRequest: true,
       supplier: true,
       items: { include: { item: true } },
+      grns: {
+        where: { deletedAt: null },
+        include: { items: true },
+      },
     },
     orderBy: { orderDate: "desc" },
   });
+
+  return pos
+    .map((po) => ({
+      ...po,
+      grnStatus: getPurchaseOrderGrnStatus(po as unknown as PurchaseOrderForFulfillment),
+    }))
+    .sort((a: any, b: any) => {
+      const aPending = a.grnStatus === "PENDING_GRN";
+      const bPending = b.grnStatus === "PENDING_GRN";
+      if (aPending !== bPending) return aPending ? -1 : 1;
+      return new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime();
+    });
 }
 
 export async function getPurchaseOrderById(id: string) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
-  return prisma.purchaseOrder.findFirst({
+  const po = await prisma.purchaseOrder.findFirst({
     where: { id, organizationId: orgId, deletedAt: null },
     include: {
       purchaseRequest: { include: { items: { include: { item: true } } } },
       supplier: true,
       items: { include: { item: true } },
+      grns: {
+        where: { deletedAt: null },
+        include: { items: true },
+      },
     },
   });
+
+  if (!po) return po;
+  return {
+    ...po,
+    grnStatus: getPurchaseOrderGrnStatus(po as unknown as PurchaseOrderForFulfillment),
+  };
 }
 
 export async function getApprovedPurchaseRequests() {
@@ -879,6 +963,14 @@ export async function createPurchaseOrder(formData: FormData) {
     include: { items: true },
   });
   if (!pr) return { error: { _form: ["Approved purchase request not found"] } };
+
+  // If PR is fully fulfilled already (all PR item quantities reached), no PO is required.
+  const hasRemaining = pr.items.some(
+    (i) => i.quantity > (i.fulfilledQuantity ?? 0)
+  );
+  if (!hasRemaining) {
+    return { error: { _form: ["Purchase request is already fully fulfilled; no purchase order is required."] } };
+  }
 
   const prItemMap = new Map(pr.items.map((i) => [i.itemId, i]));
   const validItems = items.filter((i) => prItemMap.has(i.itemId));

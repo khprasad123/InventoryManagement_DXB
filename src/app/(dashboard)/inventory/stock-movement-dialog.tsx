@@ -23,10 +23,16 @@ import {
 import { ArrowUpFromLine } from "lucide-react";
 import { createStockMovement } from "./actions";
 import { useRouter } from "next/navigation";
-import type { Item } from "@prisma/client";
 
 interface StockMovementDialogProps {
-  item: Item;
+  // Keep this as a plain-serializable object: Prisma Decimal fields are not allowed
+  // as props from Server Components to Client Components.
+  item: {
+    id: string;
+    name: string;
+    sku: string;
+    stockQty: number;
+  };
   allowAdjustment?: boolean;
 }
 

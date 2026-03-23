@@ -64,7 +64,7 @@ export async function getQuotations() {
 export async function getQuotationById(id: string) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
-  return prisma.quotation.findFirst({
+  const quotation = await prisma.quotation.findFirst({
     where: { id, organizationId: orgId, deletedAt: null },
     include: {
       client: true,
@@ -72,6 +72,20 @@ export async function getQuotationById(id: string) {
       salesOrder: { include: { salesInvoices: true } },
     },
   });
+  if (!quotation) return null;
+
+  // Quotation has `approvedById` but no `approvedBy` relation field in Prisma.
+  // Fetch approver name separately for UI + print rendering.
+  let approvedByName: string | null = null;
+  if (quotation.approvedById) {
+    const approver = await prisma.user.findFirst({
+      where: { id: quotation.approvedById, deletedAt: null },
+      select: { name: true },
+    });
+    approvedByName = approver?.name ?? null;
+  }
+
+  return { ...quotation, approvedByName };
 }
 
 export async function getNextQuotationNo() {
