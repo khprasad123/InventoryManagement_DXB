@@ -26,9 +26,13 @@ export async function DocumentSection({
   documentableType,
   documentableId,
 }: DocumentSectionProps) {
-  const docs = await getDocumentsFor(documentableType, documentableId);
-  const user = await getCurrentUser();
+  const [docs, user, timezone] = await Promise.all([
+    getDocumentsFor(documentableType, documentableId),
+    getCurrentUser(),
+    getOrgTimezone(),
+  ]);
   const isAdmin = canManageUsers(user);
+  const tz = timezone ?? "UTC";
 
   async function uploadAction(formData: FormData) {
     "use server";

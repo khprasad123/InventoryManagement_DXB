@@ -82,6 +82,30 @@ export async function createOrgUser(formData: FormData) {
   }
 
   const canSetSuperAdmin = isSuperAdmin(currentUser);
+  const newUserIsSuperAdmin = canSetSuperAdmin && addAsSuperAdmin;
+
+  // Check org plan max users (excluding super admin)
+  const plan = await prisma.orgPlan.findUnique({
+    where: { organizationId: orgId },
+  });
+  if (plan) {
+    const nonSuperAdminCount = await prisma.userOrganization.count({
+      where: {
+        organizationId: orgId,
+        isSuperAdmin: false,
+      },
+    });
+    const willExceed = !newUserIsSuperAdmin && nonSuperAdminCount >= plan.maxUsers;
+    if (willExceed) {
+      return {
+        error: {
+          _form: [
+            `Organization plan allows max ${plan.maxUsers} users (excluding super admin). You have ${nonSuperAdminCount}. Upgrade the plan in Settings > Plan to add more users.`,
+          ],
+        },
+      };
+    }
+  }
 
   if (existingUser) {
     const existingLink = await prisma.userOrganization.findUnique({
@@ -114,7 +138,7 @@ export async function createOrgUser(formData: FormData) {
         userId: newUser.id,
         organizationId: orgId,
         roleId: role.id,
-        isSuperAdmin: canSetSuperAdmin && addAsSuperAdmin ? true : false,
+        isSuperAdmin: newUserIsSuperAdmin,
       },
     });
   }

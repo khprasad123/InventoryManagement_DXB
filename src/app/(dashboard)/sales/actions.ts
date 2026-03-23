@@ -573,21 +573,28 @@ export type SalesInvoiceWithRelations = Prisma.SalesInvoiceGetPayload<{
 export async function getOrgForInvoice() {
   const orgId = await getOrganizationId();
   if (!orgId) return null;
-  return prisma.organization.findFirst({
-    where: { id: orgId, deletedAt: null },
-    select: {
-      name: true,
-      address: true,
-      logoUrl: true,
-      sealUrl: true,
-      phone: true,
-      fax: true,
-      website: true,
-      taxRegistrationNo: true,
-      bankDetails: true,
-      timezone: true,
-    },
-  });
+  const [org, invoiceSettings] = await Promise.all([
+    prisma.organization.findFirst({
+      where: { id: orgId, deletedAt: null },
+      select: { timezone: true, name: true },
+    }),
+    prisma.invoiceSettings.findUnique({
+      where: { organizationId: orgId },
+    }),
+  ]);
+  if (!org) return null;
+  return {
+    name: invoiceSettings?.companyName ?? org.name,
+    address: invoiceSettings?.address ?? null,
+    logoUrl: invoiceSettings?.invoiceLogoUrl ?? null,
+    sealUrl: invoiceSettings?.sealUrl ?? null,
+    phone: invoiceSettings?.phone ?? null,
+    fax: invoiceSettings?.fax ?? null,
+    website: invoiceSettings?.website ?? null,
+    taxRegistrationNo: invoiceSettings?.taxRegistrationNo ?? null,
+    bankDetails: invoiceSettings?.bankDetails ?? null,
+    timezone: org.timezone ?? "UTC",
+  };
 }
 
 export async function getSalesInvoiceById(

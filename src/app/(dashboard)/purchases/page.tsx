@@ -21,7 +21,11 @@ export default async function PurchasesPage() {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
-  const invoices = await getPurchaseInvoices();
+  const [invoices, timezone] = await Promise.all([
+    getPurchaseInvoices(),
+    getOrgTimezone(),
+  ]);
+  const tz = timezone ?? "UTC";
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 

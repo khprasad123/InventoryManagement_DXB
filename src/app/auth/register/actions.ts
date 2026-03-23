@@ -85,23 +85,19 @@ export async function registerUser(formData: FormData) {
     ? undefined
     : await hash(password, 12);
 
-  // Create org first to get org ID for blob paths
+  // Create org (org details only)
   const org = await prisma.organization.create({
     data: {
       name: companyName.trim(),
       slug,
-      address: address.trim(),
       logoUrl: null,
-      sealUrl: null,
       phone: phone?.trim() || null,
       fax: fax?.trim() || null,
       website: website?.trim() || null,
-      taxRegistrationNo: taxRegistrationNo?.trim() || null,
-      bankDetails: bankDetails?.trim() || null,
     },
   });
 
-  // Upload logo and seal with org-id path for easy blob organization
+  // Upload org logo
   if (logoFile && logoFile.size > 0 && logoFile.size <= MAX_SIZE && IMAGE_TYPES.includes(logoFile.type)) {
     const ext = logoFile.name.split(".").pop() || "png";
     const blob = await put(`org-${org.id}/logo/${Date.now()}.${ext}`, logoFile, {
@@ -114,6 +110,8 @@ export async function registerUser(formData: FormData) {
       data: { logoUrl },
     });
   }
+
+  // Upload invoice seal
   if (sealFile && sealFile.size > 0 && sealFile.size <= MAX_SIZE && IMAGE_TYPES.includes(sealFile.type)) {
     const ext = sealFile.name.split(".").pop() || "png";
     const blob = await put(`org-${org.id}/seal/${Date.now()}.${ext}`, sealFile, {
@@ -121,11 +119,23 @@ export async function registerUser(formData: FormData) {
       token: process.env.BLOB_READ_WRITE_TOKEN,
     });
     sealUrl = blob.url;
-    await prisma.organization.update({
-      where: { id: org.id },
-      data: { sealUrl },
-    });
   }
+
+  // Create invoice settings (company info, bank, address, logo, stamp for invoicing)
+  await prisma.invoiceSettings.create({
+    data: {
+      organizationId: org.id,
+      companyName: companyName.trim(),
+      address: address.trim(),
+      phone: phone?.trim() || null,
+      fax: fax?.trim() || null,
+      website: website?.trim() || null,
+      taxRegistrationNo: taxRegistrationNo?.trim() || null,
+      bankDetails: bankDetails?.trim() || null,
+      invoiceLogoUrl: logoUrl || null,
+      sealUrl: sealUrl || null,
+    },
+  });
 
   await prisma.$transaction(async (tx) => {
     const [adminRole, inventoryRole, financeRole, salesRole] = await Promise.all([

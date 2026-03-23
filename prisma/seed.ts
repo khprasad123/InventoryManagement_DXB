@@ -55,6 +55,16 @@ async function main() {
     },
   });
 
+  // Create invoice settings for the org
+  await prisma.invoiceSettings.upsert({
+    where: { organizationId: org.id },
+    update: {},
+    create: {
+      organizationId: org.id,
+      companyName: org.name,
+    },
+  });
+
   // Create currencies: AED (default) and USD
   const [aedCurrency, usdCurrency] = await Promise.all([
     prisma.currency.upsert({

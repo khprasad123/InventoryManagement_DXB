@@ -20,7 +20,11 @@ export default async function ExpensesPage() {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
-  const expenses = await getExpenses();
+  const [expenses, timezone] = await Promise.all([
+    getExpenses(),
+    getOrgTimezone(),
+  ]);
+  const tz = timezone ?? "UTC";
 
   return (
     <div className="space-y-6">

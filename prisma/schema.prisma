@@ -55,23 +55,21 @@ enum SalesInvoiceStatus {
 // =============================================================================
 
 model Organization {
-  id                String    @id @default(cuid())
-  name              String
-  slug              String    @unique
-  logoUrl           String?   @map("logo_url")
-  sealUrl           String?   @map("seal_url")
-  address           String?   // Full address (PO Box, city, etc.)
-  phone             String?
-  fax               String?
-  website           String?
-  taxRegistrationNo String?   @map("tax_registration_no")
-  bankDetails       String?   @map("bank_details") // Acct Name, Bank, Acct#, IBAN
-  timezone          String?   @default("UTC") @map("timezone") // IANA timezone for display (e.g. Asia/Dubai)
-  createdAt         DateTime  @default(now()) @map("created_at")
-  updatedAt         DateTime  @updatedAt @map("updated_at")
-  deletedAt         DateTime? @map("deleted_at")
+  id       String    @id @default(cuid())
+  name     String
+  slug     String    @unique
+  logoUrl  String?   @map("logo_url")
+  phone    String?
+  fax      String?
+  website  String?
+  timezone String?   @default("UTC") @map("timezone") // IANA timezone for display
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt  DateTime? @map("deleted_at")
 
-  users             UserOrganization[]
+  invoiceSettings InvoiceSettings?
+  orgPlan         OrgPlan?
+  users           UserOrganization[]
   roles             Role[]
   currencies        Currency[]
   items             Item[]
@@ -95,6 +93,41 @@ model Organization {
   @@index([slug])
   @@index([deletedAt])
   @@map("organizations")
+}
+
+model InvoiceSettings {
+  id               String   @id @default(cuid())
+  organizationId   String   @unique @map("organization_id")
+  companyName      String   @map("company_name")
+  address          String?
+  phone            String?
+  fax              String?
+  website          String?
+  taxRegistrationNo String? @map("tax_registration_no")
+  bankDetails      String?  @map("bank_details")
+  invoiceLogoUrl   String?  @map("invoice_logo_url")
+  sealUrl          String?  @map("seal_url") // Stamp - optional
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("invoice_settings")
+}
+
+model OrgPlan {
+  id                String    @id @default(cuid())
+  organizationId    String    @unique @map("organization_id")
+  monthlyAmount     Decimal   @map("monthly_amount") @db.Decimal(12, 2)
+  maxUsers          Int       @map("max_users") // Excluding super admin
+  contractStartDate DateTime  @map("contract_start_date")
+  contractEndDate   DateTime? @map("contract_end_date")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("org_plans")
 }
 
 model Currency {

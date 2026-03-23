@@ -26,10 +26,10 @@ export default async function SettingsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Building2 className="h-5 w-5" />
-              Company details for invoicing
+              Organization & Billing
             </CardTitle>
             <p className="text-sm text-muted-foreground">
-              Configure your organization name, address, logo, seal (stamp), tax registration, and bank details. These appear on all sales invoices.
+              Org details, invoice settings (company info, bank, address, logo, stamp), and plan (monthly amount, max users, contract dates).
             </p>
           </CardHeader>
           <CardContent>

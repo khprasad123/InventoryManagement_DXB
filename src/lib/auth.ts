@@ -139,7 +139,9 @@ export const authOptions: NextAuthOptions = {
           select: { sessionToken: true },
         });
         if (!dbUser || dbUser.sessionToken !== (token.sessionToken as string)) {
-          return {};
+          // Invalid/revoked session: clear id so session callback treats as expired
+          (token as { id?: string }).id = undefined;
+          return token;
         }
       }
       if (trigger === "update" && session?.organizationId) {
