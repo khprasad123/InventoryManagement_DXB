@@ -7,7 +7,6 @@ import { Label } from "@/components/ui/label";
 import { createQuotation } from "./actions";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
-import type { Client } from "@prisma/client";
 
 type ItemWithDefaults = {
   id: string;
@@ -43,7 +42,10 @@ interface QuotationFormDefaultValues {
 }
 
 interface QuotationFormProps {
-  clients: Client[];
+  clients: Array<{
+    id: string;
+    name: string;
+  }>;
   items: ItemWithDefaults[];
   defaultQuotationNo: string;
   defaultTaxPercent?: number;

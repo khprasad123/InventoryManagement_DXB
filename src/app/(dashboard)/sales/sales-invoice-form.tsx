@@ -7,7 +7,6 @@ import { Label } from "@/components/ui/label";
 import { createSalesInvoice, createInvoiceFromSalesOrder } from "./actions";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
-import type { Client } from "@prisma/client";
 
 type ItemWithStock = {
   id: string;
@@ -41,7 +40,12 @@ type SalesOrderOption = {
 };
 
 interface SalesInvoiceFormProps {
-  clients: Client[];
+  clients: Array<{
+    id: string;
+    name: string;
+    agreedDueDays: number | null;
+    defaultPaymentTerms: string | null;
+  }>;
   items: ItemWithStock[];
   quotations: QuotationOption[];
   salesOrders: SalesOrderOption[];

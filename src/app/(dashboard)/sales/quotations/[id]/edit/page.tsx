@@ -24,6 +24,10 @@ export default async function EditQuotationPage({
     prisma.client.findMany({
       where: { organizationId: orgId, deletedAt: null },
       orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+      },
     }),
     prisma.item
       .findMany({

@@ -18,6 +18,12 @@ export default async function AddSalesInvoicePage() {
     prisma.client.findMany({
       where: { organizationId: orgId, deletedAt: null },
       orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        agreedDueDays: true,
+        defaultPaymentTerms: true,
+      },
     }),
     prisma.item
       .findMany({

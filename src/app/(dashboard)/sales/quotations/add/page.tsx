@@ -13,6 +13,10 @@ export default async function AddQuotationPage() {
     prisma.client.findMany({
       where: { organizationId: orgId, deletedAt: null },
       orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+      },
     }),
     prisma.item
       .findMany({
