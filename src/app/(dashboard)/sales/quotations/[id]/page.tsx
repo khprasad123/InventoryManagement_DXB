@@ -49,8 +49,9 @@ export default async function QuotationDetailPage({
   const tz = org?.timezone ?? "UTC";
 
   return (
-    <div className="space-y-6">
-      <div>
+    <>
+      <div className="space-y-6 print:hidden">
+        <div>
         <Button variant="ghost" size="sm" asChild>
           <Link href="/sales/quotations">
             <ArrowLeft className="mr-2 h-4 w-4" />
@@ -100,79 +101,85 @@ export default async function QuotationDetailPage({
           {quotation.client.name} • Job ID: {quotation.jobId || "-"} •{" "}
           {formatInTimezone(quotation.quotationDate, tz)}
         </p>
-      </div>
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Items</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Item</TableHead>
-                  <TableHead className="text-right">Qty</TableHead>
-                  <TableHead className="text-right">Purchase (cost)</TableHead>
-                  <TableHead className="text-right">Margin %</TableHead>
-                  <TableHead className="text-right">Price</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead className="text-right">VAT %</TableHead>
-                  <TableHead className="text-right">VAT Amount</TableHead>
-                  <TableHead className="text-right">Gross Amount</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {quotation.items.map((qi) => (
-                  <TableRow key={qi.id}>
-                    <TableCell>
-                      {qi.item.sku} - {qi.item.name}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {qi.quantity}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {Number(qi.purchaseCost).toFixed(2)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {Number(qi.margin).toFixed(2)}%
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {Number(qi.unitPrice).toFixed(2)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {Number(qi.total).toFixed(2)}
-                    </TableCell>
-                    {(() => {
-                      const netAmount = Number(qi.total ?? 0);
-                      const taxAmt = (netAmount * vatPct) / 100;
-                      const gross = netAmount + taxAmt;
-                      return (
-                        <>
-                          <TableCell className="text-right">
-                            {vatPct.toFixed(2)}%
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {taxAmt.toFixed(2)}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {gross.toFixed(2)}
-                          </TableCell>
-                        </>
-                      );
-                    })()}
+        <Card>
+          <CardHeader>
+            <CardTitle>Items</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Item</TableHead>
+                    <TableHead className="text-right">Qty</TableHead>
+                    <TableHead className="text-right">Purchase (cost)</TableHead>
+                    <TableHead className="text-right">Margin %</TableHead>
+                    <TableHead className="text-right">Price</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="text-right">VAT %</TableHead>
+                    <TableHead className="text-right">VAT Amount</TableHead>
+                    <TableHead className="text-right">Gross Amount</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-          <div className="mt-4 flex flex-col items-end gap-1 text-right">
-            <p className="text-sm text-muted-foreground">Taxable Value: {subtotal.toFixed(2)}</p>
-            <p className="text-sm text-muted-foreground">VAT ({vatPct}%): {taxAmount.toFixed(2)}</p>
-            <p className="text-lg font-medium">Total: {totalAmount.toFixed(2)}</p>
-          </div>
-        </CardContent>
-      </Card>
+                </TableHeader>
+                <TableBody>
+                  {quotation.items.map((qi) => (
+                    <TableRow key={qi.id}>
+                      <TableCell>
+                        {qi.item.sku} - {qi.item.name}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {qi.quantity}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {Number(qi.purchaseCost).toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {Number(qi.margin).toFixed(2)}%
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {Number(qi.unitPrice).toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {Number(qi.total).toFixed(2)}
+                      </TableCell>
+                      {(() => {
+                        const netAmount = Number(qi.total ?? 0);
+                        const taxAmt = (netAmount * vatPct) / 100;
+                        const gross = netAmount + taxAmt;
+                        return (
+                          <>
+                            <TableCell className="text-right">
+                              {vatPct.toFixed(2)}%
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {taxAmt.toFixed(2)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {gross.toFixed(2)}
+                            </TableCell>
+                          </>
+                        );
+                      })()}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <div className="mt-4 flex flex-col items-end gap-1 text-right">
+              <p className="text-sm text-muted-foreground">
+                Taxable Value: {subtotal.toFixed(2)}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                VAT ({vatPct}%): {taxAmount.toFixed(2)}
+              </p>
+              <p className="text-lg font-medium">
+                Total: {totalAmount.toFixed(2)}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
 
       {quotation.notes && (
         <Card>
@@ -279,11 +286,13 @@ export default async function QuotationDetailPage({
         </>
       )}
 
-      {/* Printable quotation - shown only when printing */}
+        {/* Printable quotation - shown only when printing */}
+        {/* Rendered outside this `print:hidden` wrapper below */}
+      </div>
+
       <div className="hidden print:block">
         <QuotationPrintLayout quotation={quotation} org={org} />
       </div>
-
-    </div>
+    </>
   );
 }

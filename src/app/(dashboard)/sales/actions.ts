@@ -570,7 +570,6 @@ export async function createInvoiceFromSalesOrder(
     }
   }
 
-  const nextInvNo = await getNextInvoiceNo();
   const invDate = new Date();
   const dueDate = calculateDueDate(invDate, quotation.client.agreedDueDays);
   const subtotal = salesOrder.items.reduce((s, i) => s + Number(i.total), 0);
@@ -588,62 +587,121 @@ export async function createInvoiceFromSalesOrder(
   const user = await getCurrentUser();
   const userId = (user as { id?: string } | null)?.id ?? null;
 
-  await prisma.$transaction(async (tx) => {
-    const invoice = await tx.salesInvoice.create({
-      data: {
-        organizationId: orgId,
-        salesOrderId: salesOrder.id,
-        clientId: salesOrder.clientId,
-        jobId: salesOrder.jobId,
-        invoiceNo: nextInvNo,
-        invoiceDate: invDate,
-        dueDate,
-        subtotal,
-        taxAmount,
-        totalAmount,
-        paidAmount: 0,
-        paymentStatus: "UNPAID",
-        notes: salesOrder.notes,
-        status: sendForApproval ? "PENDING_APPROVAL" : "APPROVED",
-        defaultTaxPercent: vatPercent,
-        taxRegistrationNo,
-        sealUrl,
-        approvedById: sendForApproval ? undefined : userId ?? undefined,
-        approvedAt: sendForApproval ? undefined : new Date(),
-        createdById: userId ?? undefined,
-        updatedById: userId ?? undefined,
-      },
-    });
-
-    for (const soi of salesOrder.items) {
-      const item = soi.item;
-      await tx.salesInvoiceItem.create({
-        data: {
-          salesInvoiceId: invoice.id,
-          itemId: soi.itemId,
-          quantity: soi.quantity,
-          unitPrice: soi.unitPrice,
-          taxPercent: vatPercent,
-          total: soi.quantity * Number(soi.unitPrice),
-        },
-      });
-      await tx.stockMovement.create({
-        data: {
-          organizationId: orgId,
-          itemId: soi.itemId,
-          type: "OUT",
-          quantity: soi.quantity,
-          referenceType: "SalesInvoice",
-          referenceId: invoice.id,
-          notes: `Sales Invoice ${nextInvNo}`,
-        },
-      });
-      await tx.item.update({
-        where: { id: soi.itemId },
-        data: { stockQty: item.stockQty - soi.quantity },
-      });
+  // Retry on invoice number collisions (e.g. double-click / concurrent requests).
+  const maxAttempts = 5;
+  const isInvoiceNoUniqueCollision = (err: unknown) => {
+    if (!(err instanceof Prisma.PrismaClientKnownRequestError)) return false;
+    if (err.code !== "P2002") return false;
+    // Message usually contains the duplicated unique index ("invoice_no").
+    const msg = err.message.toLowerCase();
+    if (msg.includes("invoice_no") || msg.includes("invoice no")) return true;
+    const target = (err as any).meta?.target;
+    if (Array.isArray(target)) {
+      return target.join(",").toLowerCase().includes("invoice");
     }
-  });
+    return false;
+  };
+
+  let didCreateInvoiceOverall = false;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const nextInvNo = await getNextInvoiceNo();
+
+    let didCreateInvoice = false;
+    let alreadyHadInvoice = false;
+
+    try {
+      await prisma.$transaction(async (tx) => {
+        // Re-check inside the transaction to reduce duplicate invoice creation per SO.
+        const existingForOrder = await tx.salesInvoice.findFirst({
+          where: {
+            organizationId: orgId,
+            salesOrderId: salesOrder.id,
+            deletedAt: null,
+          },
+          select: { id: true },
+        });
+
+        if (existingForOrder) {
+          alreadyHadInvoice = true;
+          return;
+        }
+
+        const invoice = await tx.salesInvoice.create({
+          data: {
+            organizationId: orgId,
+            salesOrderId: salesOrder.id,
+            clientId: salesOrder.clientId,
+            jobId: salesOrder.jobId,
+            invoiceNo: nextInvNo,
+            invoiceDate: invDate,
+            dueDate,
+            subtotal,
+            taxAmount,
+            totalAmount,
+            paidAmount: 0,
+            paymentStatus: "UNPAID",
+            notes: salesOrder.notes,
+            status: sendForApproval ? "PENDING_APPROVAL" : "APPROVED",
+            defaultTaxPercent: vatPercent,
+            taxRegistrationNo,
+            sealUrl,
+            approvedById: sendForApproval ? undefined : userId ?? undefined,
+            approvedAt: sendForApproval ? undefined : new Date(),
+            createdById: userId ?? undefined,
+            updatedById: userId ?? undefined,
+          },
+        });
+
+        didCreateInvoice = true;
+
+        for (const soi of salesOrder.items) {
+          const item = soi.item;
+          await tx.salesInvoiceItem.create({
+            data: {
+              salesInvoiceId: invoice.id,
+              itemId: soi.itemId,
+              quantity: soi.quantity,
+              unitPrice: soi.unitPrice,
+              taxPercent: vatPercent,
+              total: soi.quantity * Number(soi.unitPrice),
+            },
+          });
+          await tx.stockMovement.create({
+            data: {
+              organizationId: orgId,
+              itemId: soi.itemId,
+              type: "OUT",
+              quantity: soi.quantity,
+              referenceType: "SalesInvoice",
+              referenceId: invoice.id,
+              notes: `Sales Invoice ${nextInvNo}`,
+            },
+          });
+          await tx.item.update({
+            where: { id: soi.itemId },
+            data: { stockQty: item.stockQty - soi.quantity },
+          });
+        }
+      });
+
+      if (alreadyHadInvoice) return { error: "Invoice already created for this sales order" };
+      if (didCreateInvoice) {
+        didCreateInvoiceOverall = true;
+        break;
+      }
+    } catch (err) {
+      if (isInvoiceNoUniqueCollision(err)) {
+        // Try again with a new invoice number.
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  // If we reached here, either invoice was created in the loop or we failed all attempts.
+  if (!didCreateInvoiceOverall) {
+    return { error: "Could not create invoice due to invoice number collision. Please try again." };
+  }
 
   revalidatePath("/sales");
   revalidatePath("/sales/sales-orders");
@@ -798,12 +856,39 @@ export async function rejectSalesInvoice(id: string, remarks: string) {
 export async function getNextInvoiceNo() {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
-  const last = await prisma.salesInvoice.findFirst({
-    where: { organizationId: orgId, deletedAt: null },
-    orderBy: { createdAt: "desc" },
-  });
-  const n = last ? parseInt(last.invoiceNo.replace(/\D/g, ""), 10) || 0 : 0;
-  return `INV-${String(n + 1).padStart(5, "0")}`;
+  // Use max numeric part of existing `invoice_no` (not `createdAt`),
+  // because `invoice_no` might not be strictly increasing by `createdAt`.
+  const rows = await prisma.$queryRaw<Array<{ max_num: number | null }>>`
+    SELECT
+      COALESCE(
+        MAX(
+          CAST(
+            NULLIF(regexp_replace(invoice_no, '[^0-9]', '', 'g'), '') AS INTEGER
+          )
+        ),
+        0
+      ) AS max_num
+    FROM sales_invoices
+    WHERE organization_id = ${orgId}
+  `;
+
+  const maxNumeric = rows?.[0]?.max_num ?? 0;
+  // Ensure we return an invoice_no that is NOT already taken.
+  // (Under concurrency, we still rely on the unique constraint + retry.)
+  const start = maxNumeric + 1;
+  const maxTries = 100;
+  for (let i = 0; i < maxTries; i++) {
+    const candidate = `INV-${String(start + i).padStart(5, "0")}`;
+    const exists = await prisma.salesInvoice.findFirst({
+      // DB-level uniqueness doesn't exclude soft-deleted rows,
+      // so we must check regardless of `deletedAt`.
+      where: { organizationId: orgId, invoiceNo: candidate },
+      select: { id: true },
+    });
+    if (!exists) return candidate;
+  }
+
+  throw new Error("Unable to generate a unique invoice number");
 }
 
 export async function createSalesInvoice(formData: FormData) {
@@ -853,7 +938,8 @@ export async function createSalesInvoice(formData: FormData) {
   } = parsed.data;
 
   const existing = await prisma.salesInvoice.findFirst({
-    where: { organizationId: orgId, invoiceNo, deletedAt: null },
+    // DB-level uniqueness doesn't exclude soft-deleted rows.
+    where: { organizationId: orgId, invoiceNo },
   });
   if (existing) {
     return { error: { invoiceNo: ["Invoice number already exists"] } };
@@ -1002,7 +1088,7 @@ export async function createSalesInvoice(formData: FormData) {
   });
 
   const created = await prisma.salesInvoice.findFirst({
-    where: { organizationId: orgId, invoiceNo, deletedAt: null },
+    where: { organizationId: orgId, invoiceNo },
     select: { id: true },
   });
   if (created) {

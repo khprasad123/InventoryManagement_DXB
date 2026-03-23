@@ -69,12 +69,16 @@ export function InvoicePrintLayout({
   const amountWords = numberToWords(totalAmount);
 
   return (
-    <div className="invoice-container w-[210mm] min-h-[297mm] p-[10mm] mx-auto bg-white font-sans text-sm">
+    <div className="invoice-container w-[210mm] p-[10mm] mx-auto bg-white font-sans text-sm">
       <style>{`
+        @page { size: A4; margin: 0; }
         @media print {
+          html, body { margin: 0; padding: 0; }
           body { background: none; padding: 0; }
           .invoice-container { border: none; margin: 0; width: 100%; }
           .no-print { display: none !important; }
+          .invoice-container { page-break-inside: avoid; }
+          .invoice-container { page-break-after: avoid; break-after: avoid; }
         }
         .invoice-container table { border-collapse: collapse; width: 100%; }
         .invoice-container th, .invoice-container td { border: 1px solid #333; padding: 4px 8px; font-size: 11px; }
@@ -106,9 +110,15 @@ export function InvoicePrintLayout({
               {org?.fax && <span className="ml-4">Fax: {org.fax}</span>}
               {org?.website && (
                 <p>
-                  <a href={org.website} className="text-blue-600">
-                    {org.website}
-                  </a>
+                  {/* Avoid printing external URLs that may include sensitive tokens/IDs */}
+                  {(() => {
+                    try {
+                      const u = new URL(org.website);
+                      return u.hostname;
+                    } catch {
+                      return "Website";
+                    }
+                  })()}
                 </p>
               )}
               {(invoice.taxRegistrationNo ?? org?.taxRegistrationNo) && (
@@ -267,7 +277,7 @@ export function InvoicePrintLayout({
       </div>
 
       {/* Signature section: Prepared by, Approved by + stamp */}
-      <div className="mt-12 grid grid-cols-3 gap-8 text-xs">
+      <div className="mt-8 grid grid-cols-3 gap-8 text-xs">
         <div className="border-t border-gray-400 pt-2">
           <p className="font-medium">Prepared By</p>
           <p className="mt-2 font-medium">{invoice.createdBy?.name ?? "—"}</p>
@@ -311,7 +321,7 @@ export function InvoicePrintLayout({
       </div>
 
       {/* Footer */}
-      <div className="mt-12 pt-4 border-t text-xs text-gray-500 text-center">
+      <div className="mt-8 pt-4 border-t text-xs text-gray-500 text-center">
         <p>Generated on {formatDateTimeInTimezone(new Date(), tz)}</p>
         {invoice.jobId && <p>Job ID: {invoice.jobId}</p>}
       </div>
