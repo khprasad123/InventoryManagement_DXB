@@ -240,6 +240,59 @@ export default async function SalesInvoiceDetailPage({
           </CardContent>
         </Card>
       )}
+
+      {/* Actions / approval flow (hidden during print) */}
+      {invoice.status === "DRAFT" && (
+        <>
+          <SubmitInvoiceButton invoiceId={invoice.id} />
+          <p className="text-sm text-muted-foreground">
+            Submit for approval. Only Pending Approval can be approved or rejected (reject requires remarks).
+          </p>
+        </>
+      )}
+
+      {invoice.status === "PENDING_APPROVAL" && (
+        <>
+          <ApproveRejectInvoice invoiceId={invoice.id} />
+          <p className="text-sm text-muted-foreground">
+            Approve (optional remarks) or Reject (remarks required). Once rejected, this invoice cannot be amended.
+          </p>
+        </>
+      )}
+
+      {invoice.status === "REJECTED" && invoice.approvalRemarks && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Rejection reason</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">{invoice.approvalRemarks}</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Rejected invoices cannot be amended.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {invoice.status === "APPROVED" && invoice.approvalRemarks && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Approval remarks</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">{invoice.approvalRemarks}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Optional admin action */}
+      {invoice.status === "DRAFT" && (
+        <DeleteSalesInvoiceButton
+          invoiceId={invoice.id}
+          invoiceNo={invoice.invoiceNo}
+          canDelete={invoice.paymentStatus !== "PAID"}
+        />
+      )}
       </div>
 
       {/* Printable invoice - shown only when printing */}
