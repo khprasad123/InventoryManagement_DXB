@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import Link from "next/link";
 import { signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,7 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Bell, ChevronDown, LogOut } from "lucide-react";
+import { Bell, ChevronDown, KeyRound, LogOut } from "lucide-react";
 import type { Session } from "next-auth";
 
 const pathToTitle: Record<string, string> = {
@@ -91,6 +92,12 @@ export function Header({ session }: HeaderProps) {
               <p className="text-sm font-medium">{session?.user?.name ?? "Admin"}</p>
               <p className="text-xs text-muted-foreground">{session?.user?.email}</p>
             </div>
+            <DropdownMenuItem asChild>
+              <Link href="/settings/profile" className="cursor-pointer">
+                <KeyRound className="mr-2 h-4 w-4" />
+                Change password
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => signOut()}>
               <LogOut className="mr-2 h-4 w-4" />
               Sign out
