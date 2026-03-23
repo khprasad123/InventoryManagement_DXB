@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
+import { InactivityLogout } from "@/components/inactivity-logout";
 
 export default function SelectOrgPage() {
   const { data: session, status, update } = useSession();
@@ -52,6 +53,7 @@ export default function SelectOrgPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
+      <InactivityLogout />
       <div className="w-full max-w-md space-y-8 rounded-lg border border-border bg-card p-8 shadow-lg">
         <div className="flex flex-col items-center space-y-2">
           <div className="flex h-16 w-16 items-center justify-center">

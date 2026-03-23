@@ -23,6 +23,7 @@ function LoginForm({ showRegisterLink }: { showRegisterLink: boolean }) {
   const searchParams = useSearchParams();
   const registered = searchParams.get("registered") === "1";
   const deleted = searchParams.get("deleted") === "1";
+  const inactive = searchParams.get("inactive") === "1";
   const [error, setError] = useState<string | null>(null);
 
   const {
@@ -58,11 +59,13 @@ function LoginForm({ showRegisterLink }: { showRegisterLink: boolean }) {
           </div>
           <h1 className="text-2xl font-semibold">KaHa Enterprise Cloud</h1>
           <p className="text-sm text-muted-foreground">
-            {deleted
-              ? "Organization deleted. You have been logged out."
-              : registered
-                ? "Registration successful. Sign in to your account."
-                : "Sign in to your account"}
+            {inactive
+              ? "You were logged out due to 15 minutes of inactivity."
+              : deleted
+                ? "Organization deleted. You have been logged out."
+                : registered
+                  ? "Registration successful. Sign in to your account."
+                  : "Sign in to your account"}
           </p>
         </div>
 

@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
+import { InactivityLogout } from "../inactivity-logout";
 
 export default async function AppShell({
   children,
@@ -14,6 +15,7 @@ export default async function AppShell({
 
   return (
     <div className="min-h-screen bg-background">
+      <InactivityLogout />
       <div className="print:hidden">
         <Sidebar />
       </div>
