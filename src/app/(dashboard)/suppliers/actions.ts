@@ -234,6 +234,8 @@ export async function updateSupplier(id: string, formData: FormData) {
 export async function deleteSupplier(id: string) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
+  const currentUser = await getCurrentUser();
+  const currentUserId = (currentUser as { id?: string } | null)?.id ?? null;
 
   const supplier = await prisma.supplier.findFirst({
     where: { id, organizationId: orgId, deletedAt: null },
@@ -254,7 +256,7 @@ export async function deleteSupplier(id: string) {
 
   await prisma.supplier.update({
     where: { id },
-    data: { deletedAt: new Date() },
+    data: { deletedAt: new Date(), deletedById: currentUserId ?? undefined },
   });
 
   await createAuditLog({

@@ -3,7 +3,12 @@
 import { prisma } from "@/lib/prisma";
 import { getOrganizationId, getCurrentUser } from "@/lib/auth-utils";
 import { redirect } from "next/navigation";
-import { canRecordPayments } from "@/lib/permissions";
+import {
+  PERMISSIONS,
+  canRecordPayments,
+  isSuperAdmin,
+  requirePermission,
+} from "@/lib/permissions";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { calculateDueDate } from "@/lib/date-utils";
@@ -41,6 +46,7 @@ const PAGE_SIZE = 10;
 const searchMode = "insensitive" as const;
 
 export async function getGrns() {
+  await requirePermission(PERMISSIONS.PURCHASES_READ);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
   return prisma.grn.findMany({
@@ -51,6 +57,7 @@ export async function getGrns() {
 }
 
 export async function getGrnById(id: string) {
+  await requirePermission(PERMISSIONS.PURCHASES_READ);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
   return prisma.grn.findFirst({
@@ -64,6 +71,7 @@ export async function getGrnById(id: string) {
 }
 
 export async function getNextGrnNo() {
+  await requirePermission(PERMISSIONS.PURCHASES_CREATE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
   const last = await prisma.grn.findFirst({
@@ -75,6 +83,7 @@ export async function getNextGrnNo() {
 }
 
 export async function createGrn(formData: FormData) {
+  await requirePermission(PERMISSIONS.PURCHASES_CREATE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -239,6 +248,7 @@ function getPurchaseOrderGrnStatus(
 }
 
 export async function getPurchaseOrdersForGrn() {
+  await requirePermission(PERMISSIONS.PURCHASES_READ);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
   const pos = await prisma.purchaseOrder.findMany({
@@ -259,6 +269,7 @@ export async function getPurchaseOrdersForGrn() {
 }
 
 export async function getGrnsPaginated(page: number, search?: string) {
+  await requirePermission(PERMISSIONS.PURCHASES_READ);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -298,6 +309,7 @@ export async function getGrnsPaginated(page: number, search?: string) {
 }
 
 export async function getPurchaseInvoices() {
+  await requirePermission(PERMISSIONS.PURCHASES_READ);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
   return prisma.purchaseInvoice.findMany({
@@ -308,6 +320,7 @@ export async function getPurchaseInvoices() {
 }
 
 export async function getPurchaseInvoicesPaginated(page: number, search?: string) {
+  await requirePermission(PERMISSIONS.PURCHASES_READ);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -347,6 +360,7 @@ export async function getPurchaseInvoicesPaginated(page: number, search?: string
 }
 
 export async function getPurchaseInvoiceById(id: string) {
+  await requirePermission(PERMISSIONS.PURCHASES_READ);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
   return prisma.purchaseInvoice.findFirst({
@@ -360,6 +374,7 @@ export async function getPurchaseInvoiceById(id: string) {
 }
 
 export async function getNextInvoiceNo() {
+  await requirePermission(PERMISSIONS.PURCHASES_CREATE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
   const last = await prisma.purchaseInvoice.findFirst({
@@ -371,6 +386,7 @@ export async function getNextInvoiceNo() {
 }
 
 export async function createPurchaseInvoice(formData: FormData) {
+  await requirePermission(PERMISSIONS.PURCHASES_CREATE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -458,6 +474,7 @@ export async function createPurchaseInvoice(formData: FormData) {
 }
 
 export async function updatePurchaseInvoice(id: string, formData: FormData) {
+  await requirePermission(PERMISSIONS.PURCHASES_UPDATE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -524,6 +541,10 @@ export async function updatePurchaseInvoice(id: string, formData: FormData) {
 export async function deletePurchaseInvoice(id: string) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
+  const currentUser = await getCurrentUser();
+  if (!isSuperAdmin(currentUser)) {
+    return { error: "Only super admin can delete purchase invoices." };
+  }
 
   const inv = await prisma.purchaseInvoice.findFirst({
     where: { id, organizationId: orgId, deletedAt: null },
@@ -532,7 +553,10 @@ export async function deletePurchaseInvoice(id: string) {
 
   await prisma.purchaseInvoice.update({
     where: { id },
-    data: { deletedAt: new Date() },
+    data: {
+      deletedAt: new Date(),
+      deletedById: (currentUser as { id?: string }).id ?? undefined,
+    },
   });
 
   await createAuditLog({
@@ -639,12 +663,13 @@ export async function recordSupplierPayment(formData: FormData) {
 // ============ Purchase Requests ============
 
 export async function getPurchaseRequests() {
+  await requirePermission(PERMISSIONS.PURCHASES_READ);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
   return prisma.purchaseRequest.findMany({
     where: { organizationId: orgId, deletedAt: null },
     include: {
-      items: { include: { item: true } },
+      items: { where: { deletedAt: null }, include: { item: true } },
       salesOrder: { include: { quotation: { include: { client: true } } } },
     },
     orderBy: { createdAt: "desc" },
@@ -652,6 +677,7 @@ export async function getPurchaseRequests() {
 }
 
 export async function getPurchaseRequestsPaginated(page: number, search?: string) {
+  await requirePermission(PERMISSIONS.PURCHASES_READ);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -665,7 +691,14 @@ export async function getPurchaseRequestsPaginated(page: number, search?: string
           OR: [
             { prNo: { contains: q, mode: searchMode } },
             { jobId: { contains: q, mode: searchMode } },
-            { items: { some: { item: { OR: [{ sku: { contains: q, mode: searchMode } }, { name: { contains: q, mode: searchMode } }] } } } },
+            {
+              items: {
+                some: {
+                  deletedAt: null,
+                  item: { OR: [{ sku: { contains: q, mode: searchMode } }, { name: { contains: q, mode: searchMode } }] },
+                },
+              },
+            },
           ],
         }
       : {}),
@@ -676,7 +709,7 @@ export async function getPurchaseRequestsPaginated(page: number, search?: string
   const purchaseRequests = await prisma.purchaseRequest.findMany({
     where,
     include: {
-      items: { include: { item: true } },
+      items: { where: { deletedAt: null }, include: { item: true } },
       salesOrder: { include: { quotation: { include: { client: true } } } },
     },
     orderBy: { createdAt: "desc" },
@@ -694,18 +727,20 @@ export async function getPurchaseRequestsPaginated(page: number, search?: string
 }
 
 export async function getPurchaseRequestById(id: string) {
+  await requirePermission(PERMISSIONS.PURCHASES_READ);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
   return prisma.purchaseRequest.findFirst({
     where: { id, organizationId: orgId, deletedAt: null },
     include: {
-      items: { include: { item: true } },
+      items: { where: { deletedAt: null }, include: { item: true } },
       purchaseOrders: { include: { supplier: true } },
     },
   });
 }
 
 export async function getSalesOrdersForPr() {
+  await requirePermission(PERMISSIONS.PURCHASES_READ);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
   return prisma.salesOrder.findMany({
@@ -719,6 +754,7 @@ export async function getSalesOrdersForPr() {
 }
 
 export async function getNextPrNo() {
+  await requirePermission(PERMISSIONS.PURCHASES_CREATE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
   const last = await prisma.purchaseRequest.findFirst({
@@ -735,6 +771,7 @@ const purchaseRequestItemSchema = z.object({
 });
 
 export async function createPurchaseRequest(formData: FormData) {
+  await requirePermission(PERMISSIONS.PURCHASES_CREATE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -813,6 +850,7 @@ export async function createPurchaseRequest(formData: FormData) {
 }
 
 export async function updatePurchaseRequest(prId: string, formData: FormData) {
+  await requirePermission(PERMISSIONS.PURCHASES_UPDATE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -860,6 +898,8 @@ export async function updatePurchaseRequest(prId: string, formData: FormData) {
     });
     if (!so) return { error: { _form: ["Sales order not found"] } };
   }
+  const currentUser = await getCurrentUser();
+  const currentUserId = (currentUser as { id?: string } | null)?.id ?? null;
 
   await prisma.$transaction(async (tx) => {
     await tx.purchaseRequest.update({
@@ -871,11 +911,25 @@ export async function updatePurchaseRequest(prId: string, formData: FormData) {
         jobId: jobId || null,
       },
     });
-    await tx.purchaseRequestItem.deleteMany({ where: { purchaseRequestId: prId } });
+    const now = new Date();
+    await tx.purchaseRequestItem.updateMany({
+      where: { purchaseRequestId: prId, deletedAt: null },
+      data: { deletedAt: now, deletedById: currentUserId ?? undefined },
+    });
     for (const it of mergedItems) {
-      await tx.purchaseRequestItem.create({
-        data: { purchaseRequestId: prId, itemId: it.itemId, quantity: it.quantity },
+      const row = await tx.purchaseRequestItem.findFirst({
+        where: { purchaseRequestId: prId, itemId: it.itemId },
       });
+      if (row) {
+        await tx.purchaseRequestItem.update({
+          where: { id: row.id },
+          data: { quantity: it.quantity, deletedAt: null, deletedById: null },
+        });
+      } else {
+        await tx.purchaseRequestItem.create({
+          data: { purchaseRequestId: prId, itemId: it.itemId, quantity: it.quantity },
+        });
+      }
     }
   });
 
@@ -887,6 +941,10 @@ export async function updatePurchaseRequest(prId: string, formData: FormData) {
 export async function deletePurchaseRequest(id: string) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
+  const currentUser = await getCurrentUser();
+  if (!isSuperAdmin(currentUser)) {
+    return { error: "Only super admin can delete purchase requests." };
+  }
 
   const pr = await prisma.purchaseRequest.findFirst({
     where: { id, organizationId: orgId, deletedAt: null },
@@ -898,7 +956,10 @@ export async function deletePurchaseRequest(id: string) {
 
   await prisma.purchaseRequest.update({
     where: { id },
-    data: { deletedAt: new Date() },
+    data: {
+      deletedAt: new Date(),
+      deletedById: (currentUser as { id?: string }).id ?? undefined,
+    },
   });
 
   revalidatePath("/purchases/purchase-requests");
@@ -907,6 +968,7 @@ export async function deletePurchaseRequest(id: string) {
 }
 
 export async function submitPurchaseRequestForApproval(id: string) {
+  await requirePermission(PERMISSIONS.PURCHASES_UPDATE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -927,6 +989,7 @@ export async function submitPurchaseRequestForApproval(id: string) {
 }
 
 export async function approvePurchaseRequest(id: string, remarks?: string) {
+  await requirePermission(PERMISSIONS.PURCHASES_APPROVE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -955,6 +1018,7 @@ export async function approvePurchaseRequest(id: string, remarks?: string) {
 }
 
 export async function rejectPurchaseRequest(id: string, remarks: string) {
+  await requirePermission(PERMISSIONS.PURCHASES_APPROVE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -983,6 +1047,7 @@ export async function rejectPurchaseRequest(id: string, remarks: string) {
 // ============ Purchase Orders ============
 
 export async function getPurchaseOrders() {
+  await requirePermission(PERMISSIONS.PURCHASES_READ);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
   const pos = await prisma.purchaseOrder.findMany({
@@ -1013,6 +1078,7 @@ export async function getPurchaseOrders() {
 }
 
 export async function getPurchaseOrdersPaginated(page: number, search?: string) {
+  await requirePermission(PERMISSIONS.PURCHASES_READ);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -1076,12 +1142,15 @@ export async function getPurchaseOrdersPaginated(page: number, search?: string) 
 }
 
 export async function getPurchaseOrderById(id: string) {
+  await requirePermission(PERMISSIONS.PURCHASES_READ);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
   const po = await prisma.purchaseOrder.findFirst({
     where: { id, organizationId: orgId, deletedAt: null },
     include: {
-      purchaseRequest: { include: { items: { include: { item: true } } } },
+      purchaseRequest: {
+        include: { items: { where: { deletedAt: null }, include: { item: true } } },
+      },
       supplier: true,
       items: { include: { item: true } },
       grns: {
@@ -1099,11 +1168,12 @@ export async function getPurchaseOrderById(id: string) {
 }
 
 export async function getApprovedPurchaseRequests() {
+  await requirePermission(PERMISSIONS.PURCHASES_READ);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
   const prs = await prisma.purchaseRequest.findMany({
     where: { organizationId: orgId, status: "APPROVED", deletedAt: null },
-    include: { items: { include: { item: true } } },
+    include: { items: { where: { deletedAt: null }, include: { item: true } } },
     orderBy: { createdAt: "desc" },
   });
   // Only return PRs that have at least one item with remaining quantity to fulfill
@@ -1113,6 +1183,7 @@ export async function getApprovedPurchaseRequests() {
 }
 
 export async function getNextPoNo() {
+  await requirePermission(PERMISSIONS.PURCHASES_CREATE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
   const last = await prisma.purchaseOrder.findFirst({
@@ -1130,6 +1201,7 @@ const purchaseOrderItemSchema = z.object({
 });
 
 export async function createPurchaseOrder(formData: FormData) {
+  await requirePermission(PERMISSIONS.PURCHASES_CREATE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -1212,7 +1284,7 @@ export async function createPurchaseOrder(formData: FormData) {
       });
       // Update PR item fulfilled quantity so PR can be fulfilled by multiple POs
       const prItem = await tx.purchaseRequestItem.findFirst({
-        where: { purchaseRequestId, itemId: it.itemId },
+        where: { purchaseRequestId, itemId: it.itemId, deletedAt: null },
       });
       if (prItem) {
         await tx.purchaseRequestItem.update({

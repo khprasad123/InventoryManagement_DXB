@@ -6,17 +6,15 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { hash } from "bcryptjs";
 import { z } from "zod";
-import { canManageUsers, isSuperAdmin } from "@/lib/permissions";
+import { isSuperAdmin, PERMISSIONS, requirePermission } from "@/lib/permissions";
 
 export async function getOrgUsers() {
+  await requirePermission(PERMISSIONS.SETTINGS_USERS_MANAGE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
-  const user = await getCurrentUser();
-  if (!canManageUsers(user)) redirect("/settings");
-
   return prisma.userOrganization.findMany({
-    where: { organizationId: orgId },
+    where: { organizationId: orgId, deletedAt: null },
     include: {
       user: { select: { id: true, email: true, name: true } },
       role: { select: { id: true, name: true } },
@@ -29,17 +27,16 @@ const PAGE_SIZE = 10;
 const searchMode = "insensitive" as const;
 
 export async function getOrgUsersPaginated(page: number, search?: string) {
+  await requirePermission(PERMISSIONS.SETTINGS_USERS_MANAGE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
-
-  const user = await getCurrentUser();
-  if (!canManageUsers(user)) redirect("/settings");
 
   const currentPage = Math.max(1, page);
   const q = (search ?? "").trim();
 
   const where = {
     organizationId: orgId,
+    deletedAt: null,
     ...(q
       ? {
           OR: [
@@ -73,6 +70,7 @@ export async function getOrgUsersPaginated(page: number, search?: string) {
 }
 
 export async function getRolesForOrg() {
+  await requirePermission(PERMISSIONS.SETTINGS_USERS_MANAGE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -95,13 +93,11 @@ const createUserSchema = z.object({
 
 export async function createOrgUser(formData: FormData) {
   try {
+  await requirePermission(PERMISSIONS.SETTINGS_USERS_MANAGE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
   const currentUser = await getCurrentUser();
-  if (!canManageUsers(currentUser)) {
-    return { error: { _form: ["You do not have permission to manage users."] } };
-  }
 
   const parsed = createUserSchema.safeParse({
     email: formData.get("email"),
@@ -131,14 +127,14 @@ export async function createOrgUser(formData: FormData) {
   const canSetSuperAdmin = isSuperAdmin(currentUser);
   const newUserIsSuperAdmin = canSetSuperAdmin && addAsSuperAdmin;
   
-  let existingLink: { id: string } | null = null;
+  let existingLink: { id: string; deletedAt: Date | null } | null = null;
   if (existingUser) {
     existingLink = await prisma.userOrganization.findUnique({
       where: {
         userId_organizationId: { userId: existingUser.id, organizationId: orgId },
       },
     });
-    if (existingLink) {
+    if (existingLink?.deletedAt == null) {
       return { error: { email: ["This user is already in your organization."] } };
     }
   }
@@ -152,6 +148,7 @@ export async function createOrgUser(formData: FormData) {
       where: {
         organizationId: orgId,
         isSuperAdmin: false,
+        deletedAt: null,
       },
     });
     if (nonSuperAdminCount >= plan.maxUsers) {
@@ -166,14 +163,26 @@ export async function createOrgUser(formData: FormData) {
   }
 
   if (existingUser) {
-    await prisma.userOrganization.create({
-      data: {
-        userId: existingUser.id,
-        organizationId: orgId,
-        roleId: role.id,
-        isSuperAdmin: newUserIsSuperAdmin,
-      },
-    });
+    if (existingLink?.deletedAt != null) {
+      await prisma.userOrganization.update({
+        where: { id: existingLink.id },
+        data: {
+          roleId: role.id,
+          isSuperAdmin: newUserIsSuperAdmin,
+          deletedAt: null,
+          deletedById: null,
+        },
+      });
+    } else {
+      await prisma.userOrganization.create({
+        data: {
+          userId: existingUser.id,
+          organizationId: orgId,
+          roleId: role.id,
+          isSuperAdmin: newUserIsSuperAdmin,
+        },
+      });
+    }
   } else {
     const passwordHash = await hash(password, 12);
     const newUser = await prisma.user.create({
@@ -209,13 +218,9 @@ const updateUserSchema = z.object({
 });
 
 export async function updateOrgUser(userOrgId: string, formData: FormData) {
+  await requirePermission(PERMISSIONS.SETTINGS_USERS_MANAGE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
-
-  const currentUser = await getCurrentUser();
-  if (!canManageUsers(currentUser)) {
-    return { error: { _form: ["You do not have permission to manage users."] } };
-  }
 
   const parsed = updateUserSchema.safeParse({
     roleId: formData.get("roleId"),
@@ -226,7 +231,7 @@ export async function updateOrgUser(userOrgId: string, formData: FormData) {
   }
 
   const userOrg = await prisma.userOrganization.findFirst({
-    where: { id: userOrgId, organizationId: orgId },
+    where: { id: userOrgId, organizationId: orgId, deletedAt: null },
     include: { user: true, role: true },
   });
 
@@ -255,16 +260,14 @@ export async function updateOrgUser(userOrgId: string, formData: FormData) {
 }
 
 export async function removeUserFromOrg(userOrgId: string) {
+  await requirePermission(PERMISSIONS.SETTINGS_USERS_MANAGE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
   const currentUser = await getCurrentUser();
-  if (!canManageUsers(currentUser)) {
-    return { error: "You do not have permission to manage users." };
-  }
 
   const userOrg = await prisma.userOrganization.findFirst({
-    where: { id: userOrgId, organizationId: orgId },
+    where: { id: userOrgId, organizationId: orgId, deletedAt: null },
   });
 
   if (!userOrg) {
@@ -280,8 +283,12 @@ export async function removeUserFromOrg(userOrgId: string) {
     return { error: "You cannot remove yourself from the organization." };
   }
 
-  await prisma.userOrganization.delete({
+  await prisma.userOrganization.update({
     where: { id: userOrgId },
+    data: {
+      deletedAt: new Date(),
+      deletedById: currentUserId ?? undefined,
+    },
   });
 
   revalidatePath("/settings/users");
@@ -295,6 +302,7 @@ const resetPasswordSchema = z.object({
 });
 
 export async function resetUserPassword(formData: FormData): Promise<{ error?: string }> {
+  await requirePermission(PERMISSIONS.SETTINGS_USERS_MANAGE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -318,7 +326,7 @@ export async function resetUserPassword(formData: FormData): Promise<{ error?: s
   }
 
   const userOrg = await prisma.userOrganization.findFirst({
-    where: { userId: parsed.data.userId, organizationId: orgId },
+    where: { userId: parsed.data.userId, organizationId: orgId, deletedAt: null },
   });
   if (!userOrg) {
     return { error: "User not found in this organization." };
@@ -344,7 +352,7 @@ export async function setSuperAdmin(userOrgId: string, makeSuperAdmin: boolean) 
   }
 
   const userOrg = await prisma.userOrganization.findFirst({
-    where: { id: userOrgId, organizationId: orgId },
+    where: { id: userOrgId, organizationId: orgId, deletedAt: null },
   });
 
   if (!userOrg) {
@@ -353,7 +361,7 @@ export async function setSuperAdmin(userOrgId: string, makeSuperAdmin: boolean) 
 
   if (makeSuperAdmin) {
     await prisma.userOrganization.updateMany({
-      where: { organizationId: orgId },
+      where: { organizationId: orgId, deletedAt: null },
       data: { isSuperAdmin: false },
     });
   }

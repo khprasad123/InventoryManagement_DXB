@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { canUser, PERMISSIONS } from "@/lib/permissions";
 
 type AgingBuckets = {
   current: number;
@@ -39,6 +40,9 @@ export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.organizationId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!canUser(session.user, PERMISSIONS.VIEW_REPORTS)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const orgId = session.user.organizationId;

@@ -9,14 +9,15 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { getExpensesPaginated } from "./actions";
-import { getOrganizationId, getOrgTimezone } from "@/lib/auth-utils";
+import { getCurrentUser, getOrganizationId, getOrgTimezone } from "@/lib/auth-utils";
 import { formatInTimezone } from "@/lib/date-utils";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Plus, Pencil, Trash2, FolderTree, FileText, Eye } from "lucide-react";
+import { Plus, Pencil, FolderTree, Eye } from "lucide-react";
 import { DeleteExpenseButton } from "./delete-expense-button";
 import { PaginationLinks } from "@/components/ui/pagination-links";
 import { SearchInput } from "@/components/ui/search-input";
+import { canUser, PERMISSIONS } from "@/lib/permissions";
 
 export default async function ExpensesPage({
   searchParams,
@@ -25,6 +26,11 @@ export default async function ExpensesPage({
 }) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
+  const user = await getCurrentUser();
+  if (!canUser(user, PERMISSIONS.EXPENSES_READ)) redirect("/dashboard");
+  const canCreateExpenses = canUser(user, PERMISSIONS.EXPENSES_CREATE);
+  const canUpdateExpenses = canUser(user, PERMISSIONS.EXPENSES_UPDATE);
+  const canDeleteExpenses = canUser(user, PERMISSIONS.EXPENSES_DELETE);
 
   const params = await searchParams;
   const page = Math.max(1, parseInt(params.page ?? "1", 10));
@@ -51,18 +57,22 @@ export default async function ExpensesPage({
           <div className="w-full sm:w-[240px]">
             <SearchInput value={search} placeholder="Search expenses / categories..." />
           </div>
-          <Button variant="outline" asChild>
-            <Link href="/expenses/categories">
-              <FolderTree className="mr-2 h-4 w-4" />
-              Categories
-            </Link>
-          </Button>
-          <Button asChild>
-            <Link href="/expenses/add">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Expense
-            </Link>
-          </Button>
+          {canUpdateExpenses && (
+            <Button variant="outline" asChild>
+              <Link href="/expenses/categories">
+                <FolderTree className="mr-2 h-4 w-4" />
+                Categories
+              </Link>
+            </Button>
+          )}
+          {canCreateExpenses && (
+            <Button asChild>
+              <Link href="/expenses/add">
+                <Plus className="mr-2 h-4 w-4" />
+                Add Expense
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -77,12 +87,16 @@ export default async function ExpensesPage({
                 No expenses yet. Add a category first, then record expenses.
               </p>
               <div className="mt-4 flex gap-2">
-                <Button asChild variant="outline">
-                  <Link href="/expenses/categories">Manage Categories</Link>
-                </Button>
-                <Button asChild>
-                  <Link href="/expenses/add">Add Expense</Link>
-                </Button>
+                {canUpdateExpenses && (
+                  <Button asChild variant="outline">
+                    <Link href="/expenses/categories">Manage Categories</Link>
+                  </Button>
+                )}
+                {canCreateExpenses && (
+                  <Button asChild>
+                    <Link href="/expenses/add">Add Expense</Link>
+                  </Button>
+                )}
               </div>
             </div>
           ) : (
@@ -121,15 +135,19 @@ export default async function ExpensesPage({
                               <Eye className="h-4 w-4" />
                             </Link>
                           </Button>
-                          <Button variant="ghost" size="icon" asChild title="Edit">
-                            <Link href={`/expenses/${expense.id}/edit`}>
-                              <Pencil className="h-4 w-4" />
-                            </Link>
-                          </Button>
-                          <DeleteExpenseButton
-                            expenseId={expense.id}
-                            expenseLabel={`${expense.category.name} - ${Number(expense.amount).toFixed(2)} on ${formatInTimezone(expense.expenseDate, tz)}`}
-                          />
+                          {canUpdateExpenses && (
+                            <Button variant="ghost" size="icon" asChild title="Edit">
+                              <Link href={`/expenses/${expense.id}/edit`}>
+                                <Pencil className="h-4 w-4" />
+                              </Link>
+                            </Button>
+                          )}
+                          {canDeleteExpenses && (
+                            <DeleteExpenseButton
+                              expenseId={expense.id}
+                              expenseLabel={`${expense.category.name} - ${Number(expense.amount).toFixed(2)} on ${formatInTimezone(expense.expenseDate, tz)}`}
+                            />
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

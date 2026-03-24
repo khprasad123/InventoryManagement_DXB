@@ -28,12 +28,15 @@ export const authOptions: NextAuthOptions = {
           },
           include: {
             organizations: {
-              where: { organization: { deletedAt: null } },
+              where: { deletedAt: null, organization: { deletedAt: null } },
               include: {
                 organization: true,
                 role: {
                   include: {
-                    permissions: { include: { permission: true } },
+                    permissions: {
+                      where: { deletedAt: null },
+                      include: { permission: true },
+                    },
                   },
                 },
               },

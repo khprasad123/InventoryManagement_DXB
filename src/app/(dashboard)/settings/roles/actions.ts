@@ -17,6 +17,7 @@ export async function getRolesWithPermissions() {
     where: { organizationId: orgId, deletedAt: null },
     include: {
       permissions: {
+        where: { deletedAt: null },
         include: { permission: true },
       },
     },
@@ -50,6 +51,7 @@ export async function getRolesWithPermissionsPaginated(page: number, search?: st
     where,
     include: {
       permissions: {
+        where: { deletedAt: null },
         include: { permission: true },
       },
     },
@@ -99,16 +101,31 @@ export async function updateRolePermissions(
     return { error: "Role not found." };
   }
 
-  await prisma.$transaction([
-    prisma.rolePermission.deleteMany({ where: { roleId } }),
-    ...(permissionIds.length > 0
-      ? [
-          prisma.rolePermission.createMany({
-            data: permissionIds.map((permissionId) => ({ roleId, permissionId })),
-          }),
-        ]
-      : []),
-  ]);
+  await prisma.$transaction(async (tx) => {
+    const now = new Date();
+    const currentUserId = (user as { id?: string } | null)?.id ?? null;
+    await tx.rolePermission.updateMany({
+      where: { roleId },
+      data: { deletedAt: now, deletedById: currentUserId ?? undefined },
+    });
+    for (const permissionId of permissionIds) {
+      const existing = await tx.rolePermission.findUnique({
+        where: {
+          roleId_permissionId: { roleId, permissionId },
+        },
+      });
+      if (existing) {
+        await tx.rolePermission.update({
+          where: { roleId_permissionId: { roleId, permissionId } },
+          data: { deletedAt: null, deletedById: null },
+        });
+      } else {
+        await tx.rolePermission.create({
+          data: { roleId, permissionId },
+        });
+      }
+    }
+  });
 
   revalidatePath("/settings/roles");
   return { success: true };
@@ -150,7 +167,11 @@ export async function deleteRole(roleId: string) {
 
   const role = await prisma.role.findFirst({
     where: { id: roleId, organizationId: orgId, deletedAt: null },
-    include: { userOrganizations: true },
+    include: {
+      userOrganizations: {
+        where: { deletedAt: null },
+      },
+    },
   });
   if (!role) return { error: "Role not found." };
   if (role.userOrganizations?.length) {
@@ -159,7 +180,10 @@ export async function deleteRole(roleId: string) {
 
   await prisma.role.update({
     where: { id: roleId },
-    data: { deletedAt: new Date() },
+    data: {
+      deletedAt: new Date(),
+      deletedById: (user as { id?: string }).id ?? undefined,
+    },
   });
 
   revalidatePath("/settings/roles");

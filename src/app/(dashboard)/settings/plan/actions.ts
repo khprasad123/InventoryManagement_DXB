@@ -87,6 +87,7 @@ export async function getOrgPlanUserUsage() {
     where: {
       organizationId: orgId,
       isSuperAdmin: false, // super admin is excluded from the cap
+      deletedAt: null,
     },
   });
 

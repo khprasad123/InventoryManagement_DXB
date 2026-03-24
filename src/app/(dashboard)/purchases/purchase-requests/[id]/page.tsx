@@ -10,7 +10,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getPurchaseRequestById } from "@/app/(dashboard)/purchases/actions";
-import { getOrganizationId } from "@/lib/auth-utils";
+import { getCurrentUser, getOrganizationId } from "@/lib/auth-utils";
+import { canUser, PERMISSIONS } from "@/lib/permissions";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Pencil } from "lucide-react";
@@ -25,10 +26,15 @@ export default async function PurchaseRequestDetailPage({
 }) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
+  const currentUser = await getCurrentUser();
+  if (!canUser(currentUser, PERMISSIONS.PURCHASES_READ)) redirect("/settings");
 
   const { id } = await Promise.resolve(params);
   const pr = await getPurchaseRequestById(id);
   if (!pr) notFound();
+  const canUpdatePurchases = canUser(currentUser, PERMISSIONS.PURCHASES_UPDATE);
+  const canApprovePurchases = canUser(currentUser, PERMISSIONS.PURCHASES_APPROVE);
+  const canCreatePurchaseOrder = canUser(currentUser, PERMISSIONS.PURCHASES_CREATE);
 
   const items = pr.items.filter((it) => it.item != null);
   const hasRemaining = items.some(
@@ -61,7 +67,7 @@ export default async function PurchaseRequestDetailPage({
             {pr.jobId && ` • Job: ${pr.jobId}`}
           </p>
         </div>
-        {pr.status === "DRAFT" && (
+        {pr.status === "DRAFT" && canUpdatePurchases && (
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" asChild>
               <Link href={`/purchases/purchase-requests/${pr.id}/edit`}>
@@ -73,16 +79,18 @@ export default async function PurchaseRequestDetailPage({
             <DeletePrButton prId={pr.id} prNo={pr.prNo} />
           </div>
         )}
-        {pr.status === "PENDING_APPROVAL" && (
+        {pr.status === "PENDING_APPROVAL" && canApprovePurchases && (
           <ApproveRejectPr prId={pr.id} />
         )}
         {pr.status === "APPROVED" && (
           hasRemaining ? (
-            <Button asChild>
-              <Link href={`/purchases/purchase-orders/add?prId=${pr.id}`}>
-                Create PO from PR
-              </Link>
-            </Button>
+            canCreatePurchaseOrder ? (
+              <Button asChild>
+                <Link href={`/purchases/purchase-orders/add?prId=${pr.id}`}>
+                  Create PO from PR
+                </Link>
+              </Button>
+            ) : null
           ) : (
             <p className="text-sm text-muted-foreground">
               Fulfilled - no purchase order required

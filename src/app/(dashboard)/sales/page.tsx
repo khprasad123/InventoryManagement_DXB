@@ -8,7 +8,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getSalesInvoicesPaginated } from "./actions";
-import { getOrganizationId, getOrgTimezone } from "@/lib/auth-utils";
+import { getCurrentUser, getOrganizationId, getOrgTimezone } from "@/lib/auth-utils";
 import { formatInTimezone } from "@/lib/date-utils";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { DeleteSalesInvoiceButton } from "./delete-sales-invoice-button";
 import { PaginationLinks } from "@/components/ui/pagination-links";
 import { SearchInput } from "@/components/ui/search-input";
+import { canUser, PERMISSIONS } from "@/lib/permissions";
 
 export default async function SalesPage({
   searchParams,
@@ -26,6 +27,11 @@ export default async function SalesPage({
 }) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
+  const user = await getCurrentUser();
+  if (!canUser(user, PERMISSIONS.SALES_READ)) redirect("/dashboard");
+  const canCreateSales = canUser(user, PERMISSIONS.SALES_CREATE);
+  const canUpdateSales = canUser(user, PERMISSIONS.SALES_UPDATE);
+  const canDeleteSales = canUser(user, PERMISSIONS.SALES_DELETE);
 
   const params = await searchParams;
   const page = Math.max(1, parseInt(params.page ?? "1", 10));
@@ -66,18 +72,22 @@ export default async function SalesPage({
               Sales Orders
             </Link>
           </Button>
-          <Button asChild>
-            <Link href="/sales/quotations/add">
-              <Plus className="mr-2 h-4 w-4" />
-              New Quotation
-            </Link>
-          </Button>
-          <Button variant="outline" asChild>
-            <Link href="/sales/add">
-              <FileText className="mr-2 h-4 w-4" />
-              Direct Invoice
-            </Link>
-          </Button>
+          {canCreateSales && (
+            <Button asChild>
+              <Link href="/sales/quotations/add">
+                <Plus className="mr-2 h-4 w-4" />
+                New Quotation
+              </Link>
+            </Button>
+          )}
+          {canCreateSales && (
+            <Button variant="outline" asChild>
+              <Link href="/sales/add">
+                <FileText className="mr-2 h-4 w-4" />
+                Direct Invoice
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -96,13 +106,16 @@ export default async function SalesPage({
                 No sales invoices yet. Create a quotation or invoice directly.
               </p>
               <div className="mt-4 flex gap-2">
-                <Button asChild variant="outline">
-                  <Link href="/sales/quotations/add">Create Quotation</Link>
-
-                </Button>
-                <Button asChild>
-                  <Link href="/sales/add">Create Invoice</Link>
-                </Button>
+                {canCreateSales && (
+                  <Button asChild variant="outline">
+                    <Link href="/sales/quotations/add">Create Quotation</Link>
+                  </Button>
+                )}
+                {canCreateSales && (
+                  <Button asChild>
+                    <Link href="/sales/add">Create Invoice</Link>
+                  </Button>
+                )}
               </div>
             </div>
           ) : (
@@ -189,22 +202,24 @@ export default async function SalesPage({
                               <Eye className="h-4 w-4" />
                             </Link>
                           </Button>
-                          {inv.status === "DRAFT" && (
+                          {canUpdateSales && inv.status === "DRAFT" && (
                             <Button variant="ghost" size="icon" asChild title="Edit">
                               <Link href={`/sales/${inv.id}/edit`}>
                                 <Pencil className="h-4 w-4" />
                               </Link>
                             </Button>
                           )}
-                          <DeleteSalesInvoiceButton
-                            invoiceId={inv.id}
-                            invoiceNo={inv.invoiceNo}
-                            canDelete={
-                              inv.status === "DRAFT" &&
-                              inv.paymentStatus !== "PAID" &&
-                              Number(inv.paidAmount) < Number(inv.totalAmount)
-                            }
-                          />
+                          {canDeleteSales && (
+                            <DeleteSalesInvoiceButton
+                              invoiceId={inv.id}
+                              invoiceNo={inv.invoiceNo}
+                              canDelete={
+                                inv.status === "DRAFT" &&
+                                inv.paymentStatus !== "PAID" &&
+                                Number(inv.paidAmount) < Number(inv.totalAmount)
+                              }
+                            />
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

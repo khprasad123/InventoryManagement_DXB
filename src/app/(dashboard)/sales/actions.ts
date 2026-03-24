@@ -59,7 +59,7 @@ export async function getQuotations() {
     where: { organizationId: orgId, deletedAt: null },
     include: {
       client: true,
-      items: { include: { item: true } },
+      items: { where: { deletedAt: null }, include: { item: true } },
       salesOrder: { include: { salesInvoices: true } },
     },
     orderBy: { quotationDate: "desc" },
@@ -80,7 +80,14 @@ export async function getQuotationsPaginated(page: number, search?: string) {
           OR: [
             { quotationNo: { contains: q, mode: searchMode } },
             { client: { name: { contains: q, mode: searchMode } } },
-            { items: { some: { item: { OR: [{ sku: { contains: q, mode: searchMode } }, { name: { contains: q, mode: searchMode } }] } } } },
+            {
+              items: {
+                some: {
+                  deletedAt: null,
+                  item: { OR: [{ sku: { contains: q, mode: searchMode } }, { name: { contains: q, mode: searchMode } }] },
+                },
+              },
+            },
           ],
         }
       : {}),
@@ -92,7 +99,7 @@ export async function getQuotationsPaginated(page: number, search?: string) {
     where,
     include: {
       client: true,
-      items: { include: { item: true } },
+      items: { where: { deletedAt: null }, include: { item: true } },
       salesOrder: { include: { salesInvoices: true } },
     },
     orderBy: { quotationDate: "desc" },
@@ -116,7 +123,7 @@ export async function getQuotationById(id: string) {
     where: { id, organizationId: orgId, deletedAt: null },
     include: {
       client: true,
-      items: { include: { item: true } },
+      items: { where: { deletedAt: null }, include: { item: true } },
       salesOrder: { include: { salesInvoices: true } },
       createdBy: { select: { name: true, signatureUrl: true } },
     },
@@ -362,9 +369,13 @@ export async function updateQuotation(id: string, formData: FormData) {
   const taxAmount = (subtotal * finalTaxPercent) / 100;
   const totalAmount = subtotal + taxAmount;
 
-  await prisma.$transaction([
-    prisma.quotationItem.deleteMany({ where: { quotationId: id } }),
-    prisma.quotation.update({
+  await prisma.$transaction(async (tx) => {
+    const now = new Date();
+    await tx.quotationItem.updateMany({
+      where: { quotationId: id, deletedAt: null },
+      data: { deletedAt: now, deletedById: userId ?? undefined },
+    });
+    await tx.quotation.update({
       where: { id },
       data: {
         clientId,
@@ -377,19 +388,20 @@ export async function updateQuotation(id: string, formData: FormData) {
         taxAmount,
         totalAmount,
         updatedById: userId ?? undefined,
-        items: {
-          create: computedQuoteItems.map((it) => ({
-            itemId: it.itemId,
-            quantity: it.quantity,
-            purchaseCost: it.purchaseCost,
-            margin: it.margin,
-            unitPrice: it.unitPrice,
-            total: it.total,
-          })),
-        },
       },
-    }),
-  ]);
+    });
+    await tx.quotationItem.createMany({
+      data: computedQuoteItems.map((it) => ({
+        quotationId: id,
+        itemId: it.itemId,
+        quantity: it.quantity,
+        purchaseCost: it.purchaseCost,
+        margin: it.margin,
+        unitPrice: it.unitPrice,
+        total: it.total,
+      })),
+    });
+  });
 
   await createAuditLog({
     action: "UPDATE_Quotation",
@@ -407,6 +419,8 @@ export async function updateQuotation(id: string, formData: FormData) {
 export async function deleteQuotation(id: string) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
+  const currentUser = await getCurrentUser();
+  const currentUserId = (currentUser as { id?: string } | null)?.id ?? null;
 
   const q = await prisma.quotation.findFirst({
     where: { id, organizationId: orgId, deletedAt: null },
@@ -418,7 +432,7 @@ export async function deleteQuotation(id: string) {
 
   await prisma.quotation.update({
     where: { id },
-    data: { deletedAt: new Date() },
+    data: { deletedAt: new Date(), deletedById: currentUserId ?? undefined },
   });
 
   await createAuditLog({
@@ -459,7 +473,7 @@ export async function approveQuotation(id: string, remarks?: string) {
 
   const q = await prisma.quotation.findFirst({
     where: { id, organizationId: orgId, deletedAt: null },
-    include: { items: { include: { item: true } } },
+    include: { items: { where: { deletedAt: null }, include: { item: true } } },
   });
   if (!q) return { error: "Quotation not found" };
   if (q.status !== "PENDING_APPROVAL") return { error: "Only pending approval quotations can be approved" };
@@ -589,7 +603,7 @@ export async function createSalesOrderFromQuotation(quotationId: string) {
     where: { id: quotationId, organizationId: orgId, deletedAt: null },
     include: {
       client: true,
-      items: { include: { item: true } },
+      items: { where: { deletedAt: null }, include: { item: true } },
       salesOrder: { include: { salesInvoices: true } },
     },
   });
@@ -1128,7 +1142,10 @@ export async function createSalesInvoice(formData: FormData) {
 
   const quotation = await prisma.quotation.findFirst({
     where: { id: quotationId, organizationId: orgId, deletedAt: null, status: "APPROVED" },
-    include: { items: { include: { item: true } }, salesOrder: { include: { salesInvoices: true } } },
+    include: {
+      items: { where: { deletedAt: null }, include: { item: true } },
+      salesOrder: { include: { salesInvoices: true } },
+    },
   });
   if (!quotation) return { error: { _form: ["Quotation not found or not approved"] } };
   if (quotation.salesOrder?.salesInvoices?.length) return { error: { _form: ["Quotation already converted to invoice"] } };
@@ -1331,6 +1348,8 @@ export async function updateSalesInvoice(id: string, formData: FormData) {
 export async function deleteSalesInvoice(id: string) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
+  const currentUser = await getCurrentUser();
+  const currentUserId = (currentUser as { id?: string } | null)?.id ?? null;
 
   const inv = await prisma.salesInvoice.findFirst({
     where: { id, organizationId: orgId, deletedAt: null },
@@ -1346,7 +1365,7 @@ export async function deleteSalesInvoice(id: string) {
 
   await prisma.salesInvoice.update({
     where: { id },
-    data: { deletedAt: new Date() },
+    data: { deletedAt: new Date(), deletedById: currentUserId ?? undefined },
   });
 
   await createAuditLog({

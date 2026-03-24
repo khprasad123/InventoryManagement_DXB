@@ -12,17 +12,17 @@ import {
 import {
   getItemsPaginated,
   getItemCategories,
-  deleteItem,
 } from "./actions";
-import { getOrganizationId } from "@/lib/auth-utils";
+import { getCurrentUser, getOrganizationId } from "@/lib/auth-utils";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Plus, Pencil, Trash2, Package, Eye } from "lucide-react";
+import { Plus, Pencil, Package, Eye } from "lucide-react";
 import { Suspense } from "react";
 import { InventoryFilters } from "./inventory-filters";
 import { DeleteItemButton } from "./delete-item-button";
 import { StockMovementDialog } from "./stock-movement-dialog";
 import { CsvBulkImportCard } from "@/components/bulk-import/csv-bulk-import-card";
+import { canAdjustStock, canUser, PERMISSIONS } from "@/lib/permissions";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -33,6 +33,13 @@ export default async function InventoryPage({
 }) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
+  const user = await getCurrentUser();
+  if (!canUser(user, PERMISSIONS.INVENTORY_READ)) redirect("/dashboard");
+  const canCreateInventory = canUser(user, PERMISSIONS.INVENTORY_CREATE);
+  const canUpdateInventory = canUser(user, PERMISSIONS.INVENTORY_UPDATE);
+  const canDeleteInventory = canUser(user, PERMISSIONS.INVENTORY_DELETE);
+  const canUploadTemplate = canCreateInventory || canUpdateInventory;
+  const canAdjustInventoryStock = canAdjustStock(user);
 
   const params = await searchParams;
   const page = Math.max(1, parseInt(params.page ?? "1", 10));
@@ -52,27 +59,31 @@ export default async function InventoryPage({
             Manage your product inventory
           </p>
         </div>
-        <Button asChild>
-          <Link href="/inventory/add">
-            <Plus className="mr-2 h-4 w-4" />
-            Add Item
-          </Link>
-        </Button>
+        {canCreateInventory && (
+          <Button asChild>
+            <Link href="/inventory/add">
+              <Plus className="mr-2 h-4 w-4" />
+              Add Item
+            </Link>
+          </Button>
+        )}
       </div>
 
-      <CsvBulkImportCard
-        title="Bulk Import Inventory"
-        subtitle="Download the CSV template, edit it, then upload to upsert items by SKU. A per-row import log is generated."
-        endpoint="/api/bulk-import/inventory-items"
-        templateFileName="inventory-items-template.csv"
-        entityLabel="Inventory Items"
-        templateCsv={
-          [
-            "sku,name,description,category,unit,defaultPurchaseCost,defaultMargin,minStock",
-            "ITM-001,Item name,Optional description,General,pcs,0,0,0",
-          ].join("\n") + "\n"
-        }
-      />
+      {canUploadTemplate && (
+        <CsvBulkImportCard
+          title="Bulk Import Inventory"
+          subtitle="Download the CSV template, edit it, then upload to upsert items by SKU. A per-row import log is generated."
+          endpoint="/api/bulk-import/inventory-items"
+          templateFileName="inventory-items-template.csv"
+          entityLabel="Inventory Items"
+          templateCsv={
+            [
+              "sku,name,description,category,unit,defaultPurchaseCost,defaultMargin,minStock",
+              "ITM-001,Item name,Optional description,General,pcs,0,0,0",
+            ].join("\n") + "\n"
+          }
+        />
+      )}
 
       <Card>
         <CardHeader>
@@ -91,12 +102,14 @@ export default async function InventoryPage({
               <p className="mt-2 text-sm text-muted-foreground">
                 No items yet. Add items to manage your inventory.
               </p>
-              <Button asChild className="mt-4">
-                <Link href="/inventory/add">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Item
-                </Link>
-              </Button>
+              {canCreateInventory && (
+                <Button asChild className="mt-4">
+                  <Link href="/inventory/add">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Item
+                  </Link>
+                </Button>
+              )}
             </div>
           ) : (
             <>
@@ -149,25 +162,31 @@ export default async function InventoryPage({
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
-                              <StockMovementDialog
-                                item={{
-                                  id: item.id,
-                                  name: item.name,
-                                  sku: item.sku,
-                                  stockQty: item.stockQty,
-                                }}
-                              />
+                              {canAdjustInventoryStock && (
+                                <StockMovementDialog
+                                  item={{
+                                    id: item.id,
+                                    name: item.name,
+                                    sku: item.sku,
+                                    stockQty: item.stockQty,
+                                  }}
+                                />
+                              )}
                               <Button variant="ghost" size="icon" asChild title="View details & documents">
                                 <Link href={`/inventory/${item.id}`}>
                                   <Eye className="h-4 w-4" />
                                 </Link>
                               </Button>
-                              <Button variant="ghost" size="icon" asChild title="Edit">
-                                <Link href={`/inventory/${item.id}/edit`}>
-                                  <Pencil className="h-4 w-4" />
-                                </Link>
-                              </Button>
-                              <DeleteItemButton itemId={item.id} itemName={item.name} />
+                              {canUpdateInventory && (
+                                <Button variant="ghost" size="icon" asChild title="Edit">
+                                  <Link href={`/inventory/${item.id}/edit`}>
+                                    <Pencil className="h-4 w-4" />
+                                  </Link>
+                                </Button>
+                              )}
+                              {canDeleteInventory && (
+                                <DeleteItemButton itemId={item.id} itemName={item.name} />
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>

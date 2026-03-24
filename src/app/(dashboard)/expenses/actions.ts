@@ -161,6 +161,8 @@ export async function updateExpenseCategory(id: string, formData: FormData) {
 export async function deleteExpenseCategory(id: string) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
+  const currentUser = await getCurrentUser();
+  const currentUserId = (currentUser as { id?: string } | null)?.id ?? null;
 
   const category = await prisma.expenseCategory.findFirst({
     where: { id, organizationId: orgId, deletedAt: null },
@@ -177,7 +179,7 @@ export async function deleteExpenseCategory(id: string) {
 
   await prisma.expenseCategory.update({
     where: { id },
-    data: { deletedAt: new Date() },
+    data: { deletedAt: new Date(), deletedById: currentUserId ?? undefined },
   });
 
   revalidatePath("/expenses");
@@ -389,6 +391,8 @@ export async function updateExpense(id: string, formData: FormData) {
 export async function deleteExpense(id: string) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
+  const currentUser = await getCurrentUser();
+  const currentUserId = (currentUser as { id?: string } | null)?.id ?? null;
 
   const existing = await prisma.expense.findFirst({
     where: { id, organizationId: orgId, deletedAt: null },
@@ -399,7 +403,7 @@ export async function deleteExpense(id: string) {
 
   await prisma.expense.update({
     where: { id },
-    data: { deletedAt: new Date() },
+    data: { deletedAt: new Date(), deletedById: currentUserId ?? undefined },
   });
 
   await createAuditLog({

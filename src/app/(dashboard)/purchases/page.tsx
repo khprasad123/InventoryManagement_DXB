@@ -10,7 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getPurchaseInvoicesPaginated } from "./actions";
-import { getOrganizationId, getOrgTimezone } from "@/lib/auth-utils";
+import { getCurrentUser, getOrganizationId, getOrgTimezone } from "@/lib/auth-utils";
 import { formatInTimezone } from "@/lib/date-utils";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -18,6 +18,7 @@ import { Plus, Package, FileText, Eye, Pencil } from "lucide-react";
 import { DeletePurchaseInvoiceButton } from "./delete-purchase-invoice-button";
 import { PaginationLinks } from "@/components/ui/pagination-links";
 import { SearchInput } from "@/components/ui/search-input";
+import { canUser, PERMISSIONS } from "@/lib/permissions";
 
 export default async function PurchasesPage({
   searchParams,
@@ -26,6 +27,13 @@ export default async function PurchasesPage({
 }) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
+  const user = await getCurrentUser();
+  if (!canUser(user, PERMISSIONS.PURCHASES_READ)) {
+    redirect("/dashboard");
+  }
+  const canCreatePurchases = canUser(user, PERMISSIONS.PURCHASES_CREATE);
+  const canUpdatePurchases = canUser(user, PERMISSIONS.PURCHASES_UPDATE);
+  const canDeletePurchases = canUser(user, PERMISSIONS.PURCHASES_DELETE);
 
   const params = await searchParams;
   const page = Math.max(1, parseInt(params.page ?? "1", 10));
@@ -54,12 +62,14 @@ export default async function PurchasesPage({
           <div className="w-full sm:w-[240px]">
             <SearchInput value={search} placeholder="Search invoices / suppliers..." />
           </div>
-          <Button asChild>
-            <Link href="/purchases/purchase-requests/add">
-              <Plus className="mr-2 h-4 w-4" />
-              Create Purchase Request
-            </Link>
-          </Button>
+          {canCreatePurchases && (
+            <Button asChild>
+              <Link href="/purchases/purchase-requests/add">
+                <Plus className="mr-2 h-4 w-4" />
+                Create Purchase Request
+              </Link>
+            </Button>
+          )}
           <Button variant="outline" asChild>
             <Link href="/purchases/purchase-requests">Purchase Requests</Link>
           </Button>
@@ -90,12 +100,16 @@ export default async function PurchasesPage({
                 Supplier invoices (optional) can be recorded for finance tracking.
               </p>
               <div className="mt-4 flex gap-2">
-                <Button asChild>
-                  <Link href="/purchases/purchase-requests/add">Create Purchase Request</Link>
-                </Button>
-                <Button asChild variant="outline">
-                  <Link href="/purchases/add">Record supplier invoice</Link>
-                </Button>
+                {canCreatePurchases && (
+                  <Button asChild>
+                    <Link href="/purchases/purchase-requests/add">Create Purchase Request</Link>
+                  </Button>
+                )}
+                {canCreatePurchases && (
+                  <Button asChild variant="outline">
+                    <Link href="/purchases/add">Record supplier invoice</Link>
+                  </Button>
+                )}
               </div>
             </div>
           ) : (
@@ -168,12 +182,16 @@ export default async function PurchasesPage({
                               <Eye className="h-4 w-4" />
                             </Link>
                           </Button>
-                          <Button variant="ghost" size="icon" asChild title="Edit">
-                            <Link href={`/purchases/${inv.id}/edit`}>
-                              <Pencil className="h-4 w-4" />
-                            </Link>
-                          </Button>
-                          <DeletePurchaseInvoiceButton invoiceId={inv.id} invoiceNo={inv.invoiceNo} />
+                          {canUpdatePurchases && (
+                            <Button variant="ghost" size="icon" asChild title="Edit">
+                              <Link href={`/purchases/${inv.id}/edit`}>
+                                <Pencil className="h-4 w-4" />
+                              </Link>
+                            </Button>
+                          )}
+                          {canDeletePurchases && (
+                            <DeletePurchaseInvoiceButton invoiceId={inv.id} invoiceNo={inv.invoiceNo} />
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

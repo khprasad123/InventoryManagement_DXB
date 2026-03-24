@@ -157,7 +157,10 @@ export async function deleteDocument(id: string) {
 
   await prisma.document.update({
     where: { id },
-    data: { deletedAt: new Date() },
+    data: {
+      deletedAt: new Date(),
+      deletedById: (user as { id?: string }).id ?? null,
+    },
   });
 
   await createAuditLog({

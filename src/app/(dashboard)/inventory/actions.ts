@@ -245,6 +245,8 @@ export async function updateItem(id: string, formData: FormData) {
 export async function deleteItem(id: string) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
+  const currentUser = await getCurrentUser();
+  const currentUserId = (currentUser as { id?: string } | null)?.id ?? null;
 
   const item = await prisma.item.findFirst({
     where: { id, organizationId: orgId, deletedAt: null },
@@ -255,7 +257,7 @@ export async function deleteItem(id: string) {
 
   await prisma.item.update({
     where: { id },
-    data: { deletedAt: new Date() },
+    data: { deletedAt: new Date(), deletedById: currentUserId ?? undefined },
   });
 
   await createAuditLog({

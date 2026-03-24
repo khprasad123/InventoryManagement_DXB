@@ -1,18 +1,20 @@
-/**
- * Permission-based access. Permissions are stored in DB and assigned to roles.
- * Session includes user.permissions (codes) and user.isSuperAdmin.
- */
+import { getCurrentUser } from "@/lib/auth-utils";
+import { redirect } from "next/navigation";
 
-export const ROLES = {
-  ADMIN: "ADMIN",
-  INVENTORY: "INVENTORY",
-  FINANCE: "FINANCE",
-  SALES: "SALES",
+export const APP_ROLES = {
+  OWNER: "OWNER",
+  MANAGER: "MANAGER",
+  OPERATOR: "OPERATOR",
+  VIEWER: "VIEWER",
 } as const;
 
-export type RoleName = (typeof ROLES)[keyof typeof ROLES];
+export type AppRole = (typeof APP_ROLES)[keyof typeof APP_ROLES];
 
 export const PERMISSIONS = {
+  SETTINGS_USERS_MANAGE: "settings_users_manage",
+  SETTINGS_ROLES_MANAGE: "settings_roles_manage",
+  PURCHASES_APPROVE: "purchases_approve",
+  HARD_DELETE_ANY_ORG: "hard_delete_any_org",
   MANAGE_USERS: "manage_users",
   MANAGE_ROLES: "manage_roles",
   RECORD_PAYMENTS: "record_payments",
@@ -50,11 +52,76 @@ export const PERMISSIONS = {
   EXPENSES_READ: "expenses_read",
   EXPENSES_UPDATE: "expenses_update",
   EXPENSES_DELETE: "expenses_delete",
+  APPROVE_PURCHASE_REQUEST: "approve_purchase_request",
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 
-type SessionUser = { permissions?: string[]; isSuperAdmin?: boolean } | null;
+type SessionUser = {
+  role?: string;
+  permissions?: string[];
+  isSuperAdmin?: boolean;
+} | null;
+
+const permissionRoleMap: Record<PermissionCode, AppRole[]> = {
+  settings_users_manage: [APP_ROLES.OWNER, APP_ROLES.MANAGER],
+  settings_roles_manage: [APP_ROLES.OWNER],
+  purchases_approve: [APP_ROLES.OWNER, APP_ROLES.MANAGER],
+  hard_delete_any_org: [APP_ROLES.OWNER],
+  manage_users: [APP_ROLES.OWNER, APP_ROLES.MANAGER],
+  manage_roles: [APP_ROLES.OWNER],
+  record_payments: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
+  adjust_stock: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
+  manage_inventory: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
+  manage_suppliers: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
+  manage_clients: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
+  manage_purchases: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
+  manage_sales: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
+  manage_expenses: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
+  view_reports: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
+  view_audit: [APP_ROLES.OWNER, APP_ROLES.MANAGER],
+  inventory_create: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
+  inventory_read: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
+  inventory_update: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
+  inventory_delete: [APP_ROLES.OWNER, APP_ROLES.MANAGER],
+  suppliers_create: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
+  suppliers_read: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
+  suppliers_update: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
+  suppliers_delete: [APP_ROLES.OWNER, APP_ROLES.MANAGER],
+  clients_create: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
+  clients_read: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
+  clients_update: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
+  clients_delete: [APP_ROLES.OWNER, APP_ROLES.MANAGER],
+  purchases_create: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
+  purchases_read: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
+  purchases_update: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
+  purchases_delete: [APP_ROLES.OWNER, APP_ROLES.MANAGER],
+  sales_create: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
+  sales_read: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
+  sales_update: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
+  sales_delete: [APP_ROLES.OWNER, APP_ROLES.MANAGER],
+  expenses_create: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
+  expenses_read: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
+  expenses_update: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
+  expenses_delete: [APP_ROLES.OWNER, APP_ROLES.MANAGER],
+  approve_purchase_request: [APP_ROLES.OWNER, APP_ROLES.MANAGER],
+};
+
+const roleAliasMap: Record<string, AppRole> = {
+  OWNER: APP_ROLES.OWNER,
+  MANAGER: APP_ROLES.MANAGER,
+  OPERATOR: APP_ROLES.OPERATOR,
+  VIEWER: APP_ROLES.VIEWER,
+  ADMIN: APP_ROLES.OWNER,
+  FINANCE: APP_ROLES.OPERATOR,
+  INVENTORY: APP_ROLES.OPERATOR,
+  SALES: APP_ROLES.OPERATOR,
+};
+
+export function normalizeRole(role?: string | null): AppRole {
+  if (!role) return APP_ROLES.VIEWER;
+  return roleAliasMap[role.toUpperCase()] ?? APP_ROLES.VIEWER;
+}
 
 /** Check if user has a permission (from session). Super admin bypasses all checks. */
 export function hasPermission(user: SessionUser, code: string): boolean {
@@ -92,6 +159,34 @@ export function hasPermission(user: SessionUser, code: string): boolean {
   return fallback ? user.permissions.includes(fallback) : false;
 }
 
+export function can(role: string | null | undefined, permission: PermissionCode): boolean {
+  const normalized = normalizeRole(role);
+  return (permissionRoleMap[permission] ?? []).includes(normalized);
+}
+
+export function canUser(user: SessionUser, permission: PermissionCode): boolean {
+  if (user?.isSuperAdmin) return true;
+  // If explicit permissions are present (role-permission links), enforce them strictly.
+  // Fallback to static role matrix only for legacy sessions without permissions payload.
+  if (Array.isArray(user?.permissions)) {
+    return hasPermission(user, permission);
+  }
+  return can(user?.role, permission);
+}
+
+export async function requirePermission(
+  permission: PermissionCode,
+  options?: { redirectTo?: string }
+) {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+  if (!canUser(user, permission)) {
+    if (options?.redirectTo) redirect(options.redirectTo);
+    throw new Error(`Forbidden: missing permission '${permission}'`);
+  }
+  return user;
+}
+
 /** Is the current user the org super admin (only they can edit/remove other super admins) */
 export function isSuperAdmin(user: SessionUser): boolean {
   return Boolean(user?.isSuperAdmin);
@@ -99,20 +194,20 @@ export function isSuperAdmin(user: SessionUser): boolean {
 
 /** Can record supplier/client payments */
 export function canRecordPayments(user: SessionUser): boolean {
-  return hasPermission(user, PERMISSIONS.RECORD_PAYMENTS);
+  return canUser(user, PERMISSIONS.RECORD_PAYMENTS);
 }
 
 /** Can adjust stock (ADJUSTMENT movement type) */
 export function canAdjustStock(user: SessionUser): boolean {
-  return hasPermission(user, PERMISSIONS.ADJUST_STOCK);
+  return canUser(user, PERMISSIONS.ADJUST_STOCK);
 }
 
 /** Can access user management (list, add, edit, remove org users) */
 export function canManageUsers(user: SessionUser): boolean {
-  return hasPermission(user, PERMISSIONS.MANAGE_USERS);
+  return canUser(user, PERMISSIONS.SETTINGS_USERS_MANAGE);
 }
 
 /** Can access role management (edit role permissions) */
 export function canManageRoles(user: SessionUser): boolean {
-  return hasPermission(user, PERMISSIONS.MANAGE_ROLES);
+  return canUser(user, PERMISSIONS.SETTINGS_ROLES_MANAGE);
 }

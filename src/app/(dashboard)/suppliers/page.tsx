@@ -9,14 +9,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getSuppliersPaginated } from "./actions";
-import { getOrganizationId } from "@/lib/auth-utils";
+import { getCurrentUser, getOrganizationId } from "@/lib/auth-utils";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Plus, Pencil, Trash2, Eye } from "lucide-react";
+import { Plus, Pencil, Eye } from "lucide-react";
 import { DeleteSupplierButton } from "./delete-supplier-button";
 import { CsvBulkImportCard } from "@/components/bulk-import/csv-bulk-import-card";
 import { PaginationLinks } from "@/components/ui/pagination-links";
 import { SearchInput } from "@/components/ui/search-input";
+import { canUser, PERMISSIONS } from "@/lib/permissions";
 
 export default async function SuppliersPage({
   searchParams,
@@ -25,6 +26,12 @@ export default async function SuppliersPage({
 }) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
+  const user = await getCurrentUser();
+  if (!canUser(user, PERMISSIONS.SUPPLIERS_READ)) redirect("/dashboard");
+  const canCreateSuppliers = canUser(user, PERMISSIONS.SUPPLIERS_CREATE);
+  const canUpdateSuppliers = canUser(user, PERMISSIONS.SUPPLIERS_UPDATE);
+  const canDeleteSuppliers = canUser(user, PERMISSIONS.SUPPLIERS_DELETE);
+  const canUploadTemplate = canCreateSuppliers || canUpdateSuppliers;
 
   const params = await searchParams;
   const page = Math.max(1, parseInt(params.page ?? "1", 10));
@@ -45,28 +52,32 @@ export default async function SuppliersPage({
           <div className="w-full sm:w-[240px]">
             <SearchInput value={search} placeholder="Search suppliers..." />
           </div>
-          <Button asChild>
-            <Link href="/suppliers/add">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Supplier
-            </Link>
-          </Button>
+          {canCreateSuppliers && (
+            <Button asChild>
+              <Link href="/suppliers/add">
+                <Plus className="mr-2 h-4 w-4" />
+                Add Supplier
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
 
-      <CsvBulkImportCard
-        title="Bulk Import Suppliers"
-        subtitle="Download the CSV template, edit it, then upload to upsert suppliers. Import key: email if present, otherwise phone, otherwise name."
-        endpoint="/api/bulk-import/suppliers"
-        templateFileName="suppliers-template.csv"
-        entityLabel="Suppliers"
-        templateCsv={
-          [
-            "name,contactName,email,phone,address,paymentTerms,taxNumber,defaultPaymentTerms,creditLimit",
-            "Supplier Co,Jane Doe,supplier@example.com,+971 50 123 4567,Main street,NET 30,TRN123,30,10000",
-          ].join("\n") + "\n"
-        }
-      />
+      {canUploadTemplate && (
+        <CsvBulkImportCard
+          title="Bulk Import Suppliers"
+          subtitle="Download the CSV template, edit it, then upload to upsert suppliers. Import key: email if present, otherwise phone, otherwise name."
+          endpoint="/api/bulk-import/suppliers"
+          templateFileName="suppliers-template.csv"
+          entityLabel="Suppliers"
+          templateCsv={
+            [
+              "name,contactName,email,phone,address,paymentTerms,taxNumber,defaultPaymentTerms,creditLimit",
+              "Supplier Co,Jane Doe,supplier@example.com,+971 50 123 4567,Main street,NET 30,TRN123,30,10000",
+            ].join("\n") + "\n"
+          }
+        />
+      )}
 
       <Card>
         <CardHeader>
@@ -78,12 +89,14 @@ export default async function SuppliersPage({
               <p className="text-sm text-muted-foreground">
                 No suppliers yet. Add suppliers to track your purchase orders.
               </p>
-              <Button asChild className="mt-4">
-                <Link href="/suppliers/add">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Supplier
-                </Link>
-              </Button>
+              {canCreateSuppliers && (
+                <Button asChild className="mt-4">
+                  <Link href="/suppliers/add">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Supplier
+                  </Link>
+                </Button>
+              )}
             </div>
           ) : (
             <div className="rounded-md border">
@@ -130,15 +143,19 @@ export default async function SuppliersPage({
                               <Eye className="h-4 w-4" />
                             </Link>
                           </Button>
-                          <Button variant="ghost" size="icon" asChild title="Edit">
-                            <Link href={`/suppliers/${supplier.id}/edit`}>
-                              <Pencil className="h-4 w-4" />
-                            </Link>
-                          </Button>
-                          <DeleteSupplierButton
-                            supplierId={supplier.id}
-                            supplierName={supplier.name}
-                          />
+                          {canUpdateSuppliers && (
+                            <Button variant="ghost" size="icon" asChild title="Edit">
+                              <Link href={`/suppliers/${supplier.id}/edit`}>
+                                <Pencil className="h-4 w-4" />
+                              </Link>
+                            </Button>
+                          )}
+                          {canDeleteSuppliers && (
+                            <DeleteSupplierButton
+                              supplierId={supplier.id}
+                              supplierName={supplier.name}
+                            />
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
