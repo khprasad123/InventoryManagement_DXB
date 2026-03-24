@@ -16,7 +16,7 @@ import {
 import { getCurrentUser, getOrganizationId } from "@/lib/auth-utils";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Plus, Pencil, Package, Eye } from "lucide-react";
+import { Plus, Pencil, Package, Eye, Download } from "lucide-react";
 import { Suspense } from "react";
 import { InventoryFilters } from "./inventory-filters";
 import { DeleteItemButton } from "./delete-item-button";
@@ -59,14 +59,24 @@ export default async function InventoryPage({
             Manage your product inventory
           </p>
         </div>
-        {canCreateInventory && (
-          <Button asChild>
-            <Link href="/inventory/add">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Item
+        <div className="flex gap-2">
+          <Button variant="outline" asChild>
+            <Link
+              href={`/api/exports/inventory?search=${encodeURIComponent(search)}&category=${encodeURIComponent(categoryFilter)}`}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Export CSV
             </Link>
           </Button>
-        )}
+          {canCreateInventory && (
+            <Button asChild>
+              <Link href="/inventory/add">
+                <Plus className="mr-2 h-4 w-4" />
+                Add Item
+              </Link>
+            </Button>
+          )}
+        </div>
       </div>
 
       {canUploadTemplate && (

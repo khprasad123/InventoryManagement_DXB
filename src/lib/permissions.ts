@@ -13,6 +13,14 @@ export type AppRole = (typeof APP_ROLES)[keyof typeof APP_ROLES];
 export const PERMISSIONS = {
   SETTINGS_USERS_MANAGE: "settings_users_manage",
   SETTINGS_ROLES_MANAGE: "settings_roles_manage",
+  SETTINGS_USERS_READ: "settings_users_read",
+  SETTINGS_USERS_CREATE: "settings_users_create",
+  SETTINGS_USERS_UPDATE: "settings_users_update",
+  SETTINGS_USERS_DELETE: "settings_users_delete",
+  SETTINGS_USERS_RESET_PASSWORD: "settings_users_reset_password",
+  SETTINGS_ROLES_CREATE: "settings_roles_create",
+  SETTINGS_ROLES_UPDATE: "settings_roles_update",
+  SETTINGS_ROLES_DELETE: "settings_roles_delete",
   PURCHASES_APPROVE: "purchases_approve",
   HARD_DELETE_ANY_ORG: "hard_delete_any_org",
   MANAGE_USERS: "manage_users",
@@ -73,6 +81,14 @@ type SessionUser = {
 const permissionRoleMap: Record<PermissionCode, AppRole[]> = {
   settings_users_manage: [APP_ROLES.OWNER, APP_ROLES.MANAGER],
   settings_roles_manage: [APP_ROLES.OWNER],
+  settings_users_read: [APP_ROLES.OWNER, APP_ROLES.MANAGER],
+  settings_users_create: [APP_ROLES.OWNER, APP_ROLES.MANAGER],
+  settings_users_update: [APP_ROLES.OWNER, APP_ROLES.MANAGER],
+  settings_users_delete: [APP_ROLES.OWNER, APP_ROLES.MANAGER],
+  settings_users_reset_password: [APP_ROLES.OWNER],
+  settings_roles_create: [APP_ROLES.OWNER],
+  settings_roles_update: [APP_ROLES.OWNER],
+  settings_roles_delete: [APP_ROLES.OWNER],
   purchases_approve: [APP_ROLES.OWNER, APP_ROLES.MANAGER],
   hard_delete_any_org: [APP_ROLES.OWNER],
   manage_users: [APP_ROLES.OWNER, APP_ROLES.MANAGER],
@@ -142,6 +158,29 @@ export function hasPermission(user: SessionUser, code: string): boolean {
   if (user?.isSuperAdmin) return true;
   if (!user?.permissions) return false;
   if (user.permissions.includes(code)) return true;
+
+  const hasAnySettingsUsersGranular = user.permissions.some((p) =>
+    p.startsWith("settings_users_")
+  );
+  // settings_users_*: if granular settings permissions exist, enforce them strictly.
+  // fallback to legacy manage_users only when no granular settings_users_* are present.
+  if (code.startsWith("settings_users_")) {
+    if (user.permissions.includes("settings_users_manage")) return true;
+    if (!hasAnySettingsUsersGranular && user.permissions.includes("manage_users")) {
+      return true;
+    }
+  }
+
+  const hasAnySettingsRolesGranular = user.permissions.some((p) =>
+    p.startsWith("settings_roles_")
+  );
+  // settings_roles_*: strict with granular; fallback to manage_roles only if granular absent.
+  if (code.startsWith("settings_roles_")) {
+    if (user.permissions.includes("settings_roles_manage")) return true;
+    if (!hasAnySettingsRolesGranular && user.permissions.includes("manage_roles")) {
+      return true;
+    }
+  }
   // reports_X: view_reports grants all (backward compat)
   const reportTypeMap: Record<string, string> = {
     reports_overview: "view_reports",
@@ -156,6 +195,16 @@ export function hasPermission(user: SessionUser, code: string): boolean {
 
   // manage_X implies all actions for that menu (backward compat)
   const menuMap: Record<string, string> = {
+    settings_users_manage: "manage_users",
+    settings_roles_manage: "manage_roles",
+    settings_users_read: "manage_users",
+    settings_users_create: "manage_users",
+    settings_users_update: "manage_users",
+    settings_users_delete: "manage_users",
+    settings_users_reset_password: "manage_users",
+    settings_roles_create: "manage_roles",
+    settings_roles_update: "manage_roles",
+    settings_roles_delete: "manage_roles",
     inventory_create: "manage_inventory",
     inventory_read: "manage_inventory",
     inventory_update: "manage_inventory",
@@ -246,12 +295,20 @@ export function canAdjustStock(user: SessionUser): boolean {
 
 /** Can access user management (list, add, edit, remove org users) */
 export function canManageUsers(user: SessionUser): boolean {
-  return canUser(user, PERMISSIONS.SETTINGS_USERS_MANAGE);
+  return (
+    canUser(user, PERMISSIONS.SETTINGS_USERS_MANAGE) ||
+    canUser(user, PERMISSIONS.SETTINGS_USERS_READ)
+  );
 }
 
 /** Can access role management (edit role permissions) */
 export function canManageRoles(user: SessionUser): boolean {
-  return canUser(user, PERMISSIONS.SETTINGS_ROLES_MANAGE);
+  return (
+    canUser(user, PERMISSIONS.SETTINGS_ROLES_MANAGE) ||
+    canUser(user, PERMISSIONS.SETTINGS_ROLES_UPDATE) ||
+    canUser(user, PERMISSIONS.SETTINGS_ROLES_CREATE) ||
+    canUser(user, PERMISSIONS.SETTINGS_ROLES_DELETE)
+  );
 }
 
 export type ReportType =

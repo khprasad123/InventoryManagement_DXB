@@ -6,6 +6,42 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { canManageRoles } from "@/lib/permissions";
 
+function hasAnyPermission(user: unknown, codes: string[]) {
+  const perms = (user as { permissions?: string[] } | null)?.permissions ?? [];
+  return codes.some((code) => perms.includes(code));
+}
+
+async function ensureRoleManagementPermissionCatalog() {
+  const required = [
+    { code: "settings_users_manage", name: "Settings - Users Manage", description: "Manage users in settings" },
+    { code: "settings_roles_manage", name: "Settings - Roles Manage", description: "Manage roles in settings" },
+    { code: "settings_users_read", name: "Settings - Users Read", description: "View users in settings" },
+    { code: "settings_users_create", name: "Settings - Users Create", description: "Create users in settings" },
+    { code: "settings_users_update", name: "Settings - Users Update", description: "Update users in settings" },
+    { code: "settings_users_delete", name: "Settings - Users Delete", description: "Remove users in settings" },
+    { code: "settings_users_reset_password", name: "Settings - Users Reset Password", description: "Reset user passwords" },
+    { code: "settings_roles_create", name: "Settings - Roles Create", description: "Create roles in settings" },
+    { code: "settings_roles_update", name: "Settings - Roles Update", description: "Update role permissions" },
+    { code: "settings_roles_delete", name: "Settings - Roles Delete", description: "Delete roles in settings" },
+    { code: "reports_overview", name: "Reports - Overview", description: "Generate overview reports" },
+    { code: "reports_sales", name: "Reports - Sales", description: "Generate sales reports" },
+    { code: "reports_purchases", name: "Reports - Purchases", description: "Generate purchase reports" },
+    { code: "reports_profit_loss", name: "Reports - Profit & Loss", description: "Generate P&L reports" },
+    { code: "reports_suppliers", name: "Reports - Suppliers", description: "Generate supplier reports" },
+    { code: "reports_inventory", name: "Reports - Inventory", description: "Generate inventory reports" },
+  ];
+
+  await Promise.all(
+    required.map((p) =>
+      prisma.permission.upsert({
+        where: { code: p.code },
+        update: { name: p.name, description: p.description },
+        create: p,
+      })
+    )
+  );
+}
+
 function expandPermissionCodes(codes: Set<string>, allCodes: string[]): Set<string> {
   const expanded = new Set(codes);
 
@@ -31,8 +67,20 @@ function expandPermissionCodes(codes: Set<string>, allCodes: string[]): Set<stri
     expanded.add("approve_quotation");
   }
   if (expanded.has("manage_expenses")) addByPrefix("expenses_");
-  if (expanded.has("manage_users")) expanded.add("settings_users_manage");
-  if (expanded.has("manage_roles")) expanded.add("settings_roles_manage");
+  if (expanded.has("manage_users")) {
+    expanded.add("settings_users_manage");
+    expanded.add("settings_users_read");
+    expanded.add("settings_users_create");
+    expanded.add("settings_users_update");
+    expanded.add("settings_users_delete");
+    expanded.add("settings_users_reset_password");
+  }
+  if (expanded.has("manage_roles")) {
+    expanded.add("settings_roles_manage");
+    expanded.add("settings_roles_create");
+    expanded.add("settings_roles_update");
+    expanded.add("settings_roles_delete");
+  }
   if (expanded.has("view_reports")) {
     expanded.add("reports_overview");
     expanded.add("reports_sales");
@@ -115,6 +163,7 @@ export async function getAllPermissions() {
   const user = await getCurrentUser();
   if (!canManageRoles(user)) redirect("/settings");
 
+  await ensureRoleManagementPermissionCatalog();
   return prisma.permission.findMany({
     orderBy: { code: "asc" },
   });
@@ -131,6 +180,15 @@ export async function updateRolePermissions(
   if (!canManageRoles(user)) {
     return { error: "You do not have permission to manage roles." };
   }
+  if (
+    !hasAnyPermission(user, [
+      "settings_roles_update",
+      "settings_roles_manage",
+      "manage_roles",
+    ])
+  ) {
+    return { error: "Missing permission: settings_roles_update" };
+  }
 
   const role = await prisma.role.findFirst({
     where: { id: roleId, organizationId: orgId, deletedAt: null },
@@ -140,6 +198,7 @@ export async function updateRolePermissions(
     return { error: "Role not found." };
   }
 
+  await ensureRoleManagementPermissionCatalog();
   const allPermissions = await prisma.permission.findMany({
     select: { id: true, code: true },
   });
@@ -195,6 +254,15 @@ export async function createRole(formData: FormData) {
   if (!canManageRoles(user)) {
     return { error: "You do not have permission to manage roles." };
   }
+  if (
+    !hasAnyPermission(user, [
+      "settings_roles_create",
+      "settings_roles_manage",
+      "manage_roles",
+    ])
+  ) {
+    return { error: "Missing permission: settings_roles_create" };
+  }
 
   const name = (formData.get("name") as string)?.trim();
   if (!name) return { error: "Role name is required." };
@@ -219,6 +287,15 @@ export async function deleteRole(roleId: string) {
   const user = await getCurrentUser();
   if (!canManageRoles(user)) {
     return { error: "You do not have permission to manage roles." };
+  }
+  if (
+    !hasAnyPermission(user, [
+      "settings_roles_delete",
+      "settings_roles_manage",
+      "manage_roles",
+    ])
+  ) {
+    return { error: "Missing permission: settings_roles_delete" };
   }
 
   const role = await prisma.role.findFirst({

@@ -12,7 +12,7 @@ import { getSuppliersPaginated } from "./actions";
 import { getCurrentUser, getOrganizationId } from "@/lib/auth-utils";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Plus, Pencil, Eye } from "lucide-react";
+import { Plus, Pencil, Eye, Download } from "lucide-react";
 import { DeleteSupplierButton } from "./delete-supplier-button";
 import { CsvBulkImportCard } from "@/components/bulk-import/csv-bulk-import-card";
 import { PaginationLinks } from "@/components/ui/pagination-links";
@@ -60,6 +60,12 @@ export default async function SuppliersPage({
               </Link>
             </Button>
           )}
+          <Button variant="outline" asChild>
+            <Link href={`/api/exports/suppliers?search=${encodeURIComponent(search)}`}>
+              <Download className="mr-2 h-4 w-4" />
+              Export CSV
+            </Link>
+          </Button>
         </div>
       </div>
 

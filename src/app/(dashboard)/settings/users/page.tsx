@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ArrowLeft, Users, Shield, UserPlus } from "lucide-react";
 import { getOrgUsersPaginated, getRolesForOrg } from "./actions";
 import { getCurrentUser } from "@/lib/auth-utils";
-import { canManageUsers, isSuperAdmin } from "@/lib/permissions";
+import { canManageUsers, canUser, isSuperAdmin, PERMISSIONS } from "@/lib/permissions";
 import { redirect } from "next/navigation";
 import { UsersTable } from "./users-table";
 import { AddUserDialog } from "./add-user-dialog";
@@ -31,6 +31,11 @@ export default async function SettingsUsersPage({
   const { total, pageSize, totalPages, currentPage } = orgUsersResult;
 
   const currentUserIsSuperAdmin = isSuperAdmin(user);
+  const canCreateUsers = canUser(user, PERMISSIONS.SETTINGS_USERS_CREATE);
+  const canUpdateUsers = canUser(user, PERMISSIONS.SETTINGS_USERS_UPDATE);
+  const canDeleteUsers = canUser(user, PERMISSIONS.SETTINGS_USERS_DELETE);
+  const canResetPasswords =
+    canUser(user, PERMISSIONS.SETTINGS_USERS_RESET_PASSWORD) && currentUserIsSuperAdmin;
 
   return (
     <div className="space-y-6">
@@ -50,7 +55,9 @@ export default async function SettingsUsersPage({
             Add org users, assign roles, and manage access. Only the org super admin can edit or remove other super admins.
           </p>
         </div>
-        <AddUserDialog roles={roles} currentUserIsSuperAdmin={currentUserIsSuperAdmin} />
+        {canCreateUsers ? (
+          <AddUserDialog roles={roles} currentUserIsSuperAdmin={currentUserIsSuperAdmin} />
+        ) : null}
       </div>
 
       <Card>
@@ -69,6 +76,9 @@ export default async function SettingsUsersPage({
             roles={roles}
             currentUserIsSuperAdmin={currentUserIsSuperAdmin}
             currentUserId={(user as { id?: string })?.id}
+            canUpdateUsers={canUpdateUsers}
+            canDeleteUsers={canDeleteUsers}
+            canResetPasswords={canResetPasswords}
           />
 
           <PaginationLinks

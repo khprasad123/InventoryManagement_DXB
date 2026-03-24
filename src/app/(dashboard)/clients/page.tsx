@@ -12,7 +12,7 @@ import { getClientsPaginated } from "./actions";
 import { getCurrentUser, getOrganizationId } from "@/lib/auth-utils";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Plus, Pencil, Eye } from "lucide-react";
+import { Plus, Pencil, Eye, Download } from "lucide-react";
 import { DeleteClientButton } from "./delete-client-button";
 import { CsvBulkImportCard } from "@/components/bulk-import/csv-bulk-import-card";
 import { PaginationLinks } from "@/components/ui/pagination-links";
@@ -60,6 +60,12 @@ export default async function ClientsPage({
               </Link>
             </Button>
           )}
+          <Button variant="outline" asChild>
+            <Link href={`/api/exports/clients?search=${encodeURIComponent(search)}`}>
+              <Download className="mr-2 h-4 w-4" />
+              Export CSV
+            </Link>
+          </Button>
         </div>
       </div>
 

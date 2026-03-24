@@ -52,3 +52,13 @@ test("super admin bypasses permission checks", () => {
   assert.equal(canUser(superAdminViewer, PERMISSIONS.PURCHASES_DELETE), true);
   assert.equal(canUser(superAdminViewer, PERMISSIONS.SETTINGS_ROLES_MANAGE), true);
 });
+
+test("legacy manage_users/manage_roles grant settings visibility", () => {
+  const adminLikeUser = {
+    role: APP_ROLES.OPERATOR,
+    permissions: [PERMISSIONS.MANAGE_USERS, PERMISSIONS.MANAGE_ROLES],
+    isSuperAdmin: false,
+  };
+  assert.equal(canUser(adminLikeUser, PERMISSIONS.SETTINGS_USERS_MANAGE), true);
+  assert.equal(canUser(adminLikeUser, PERMISSIONS.SETTINGS_ROLES_MANAGE), true);
+});

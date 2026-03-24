@@ -13,7 +13,7 @@ import { formatInTimezone } from "@/lib/date-utils";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Plus, FileText, FileSignature, Eye, Pencil } from "lucide-react";
+import { Plus, FileText, FileSignature, Eye, Pencil, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { DeleteSalesInvoiceButton } from "./delete-sales-invoice-button";
 import { PaginationLinks } from "@/components/ui/pagination-links";
@@ -88,6 +88,12 @@ export default async function SalesPage({
               </Link>
             </Button>
           )}
+          <Button variant="outline" asChild>
+            <Link href={`/api/exports/sales?search=${encodeURIComponent(search)}`}>
+              <Download className="mr-2 h-4 w-4" />
+              Export CSV
+            </Link>
+          </Button>
         </div>
       </div>
 

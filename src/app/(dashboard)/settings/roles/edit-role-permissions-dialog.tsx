@@ -33,9 +33,18 @@ function getMenuForPermission(code: string): string {
   if (code.startsWith("sales_") || code === "manage_sales" || code === "approve_quotation")
     return "Sales";
   if (code.startsWith("expenses_") || code === "manage_expenses") return "Expenses";
-  if (code.startsWith("manage_users") || code.startsWith("manage_roles")) return "Settings";
+  if (
+    code.startsWith("manage_users") ||
+    code.startsWith("manage_roles") ||
+    code.startsWith("settings_users_manage") ||
+    code.startsWith("settings_roles_manage") ||
+    code.startsWith("settings_users_") ||
+    code.startsWith("settings_roles_")
+  ) {
+    return "Settings";
+  }
   if (code.startsWith("record_payments")) return "Payments";
-  if (code.startsWith("view_reports")) return "Reports";
+  if (code.startsWith("view_reports") || code.startsWith("reports_")) return "Reports";
   if (code.startsWith("view_audit")) return "Audit";
   return "Other";
 }

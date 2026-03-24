@@ -9,7 +9,7 @@ import { z } from "zod";
 import { isSuperAdmin, PERMISSIONS, requirePermission } from "@/lib/permissions";
 
 export async function getOrgUsers() {
-  await requirePermission(PERMISSIONS.SETTINGS_USERS_MANAGE);
+  await requirePermission(PERMISSIONS.SETTINGS_USERS_READ);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -27,7 +27,7 @@ const PAGE_SIZE = 10;
 const searchMode = "insensitive" as const;
 
 export async function getOrgUsersPaginated(page: number, search?: string) {
-  await requirePermission(PERMISSIONS.SETTINGS_USERS_MANAGE);
+  await requirePermission(PERMISSIONS.SETTINGS_USERS_READ);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -70,7 +70,7 @@ export async function getOrgUsersPaginated(page: number, search?: string) {
 }
 
 export async function getRolesForOrg() {
-  await requirePermission(PERMISSIONS.SETTINGS_USERS_MANAGE);
+  await requirePermission(PERMISSIONS.SETTINGS_USERS_READ);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -93,7 +93,7 @@ const createUserSchema = z.object({
 
 export async function createOrgUser(formData: FormData) {
   try {
-  await requirePermission(PERMISSIONS.SETTINGS_USERS_MANAGE);
+  await requirePermission(PERMISSIONS.SETTINGS_USERS_CREATE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -218,7 +218,7 @@ const updateUserSchema = z.object({
 });
 
 export async function updateOrgUser(userOrgId: string, formData: FormData) {
-  await requirePermission(PERMISSIONS.SETTINGS_USERS_MANAGE);
+  await requirePermission(PERMISSIONS.SETTINGS_USERS_UPDATE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -260,7 +260,7 @@ export async function updateOrgUser(userOrgId: string, formData: FormData) {
 }
 
 export async function removeUserFromOrg(userOrgId: string) {
-  await requirePermission(PERMISSIONS.SETTINGS_USERS_MANAGE);
+  await requirePermission(PERMISSIONS.SETTINGS_USERS_DELETE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -302,7 +302,7 @@ const resetPasswordSchema = z.object({
 });
 
 export async function resetUserPassword(formData: FormData): Promise<{ error?: string }> {
-  await requirePermission(PERMISSIONS.SETTINGS_USERS_MANAGE);
+  await requirePermission(PERMISSIONS.SETTINGS_USERS_RESET_PASSWORD);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 

@@ -14,7 +14,7 @@ import { getCurrentUser, getOrganizationId, getOrgTimezone } from "@/lib/auth-ut
 import { formatInTimezone } from "@/lib/date-utils";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Plus, Package, FileText, Eye, Pencil } from "lucide-react";
+import { Plus, Package, FileText, Eye, Pencil, Download } from "lucide-react";
 import { DeletePurchaseInvoiceButton } from "./delete-purchase-invoice-button";
 import { PaginationLinks } from "@/components/ui/pagination-links";
 import { SearchInput } from "@/components/ui/search-input";
@@ -80,6 +80,12 @@ export default async function PurchasesPage({
             <Link href="/purchases/grn">
               <Package className="mr-2 h-4 w-4" />
               GRNs
+            </Link>
+          </Button>
+          <Button variant="outline" asChild>
+            <Link href={`/api/exports/purchases?search=${encodeURIComponent(search)}`}>
+              <Download className="mr-2 h-4 w-4" />
+              Export CSV
             </Link>
           </Button>
         </div>

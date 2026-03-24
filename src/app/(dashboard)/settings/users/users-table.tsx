@@ -29,6 +29,9 @@ interface UsersTableProps {
   roles: Role[];
   currentUserIsSuperAdmin: boolean;
   currentUserId?: string;
+  canUpdateUsers: boolean;
+  canDeleteUsers: boolean;
+  canResetPasswords: boolean;
 }
 
 export function UsersTable({
@@ -36,6 +39,9 @@ export function UsersTable({
   roles,
   currentUserIsSuperAdmin,
   currentUserId,
+  canUpdateUsers,
+  canDeleteUsers,
+  canResetPasswords,
 }: UsersTableProps) {
   return (
     <div className="rounded-md border">
@@ -65,12 +71,16 @@ export function UsersTable({
                   </div>
                 </TableCell>
                 <TableCell>
-                  <EditUserRoleForm
-                    userOrgId={ou.id}
-                    currentRoleId={ou.role.id}
-                    roles={roles}
-                    disabled={ou.isSuperAdmin}
-                  />
+                  {canUpdateUsers ? (
+                    <EditUserRoleForm
+                      userOrgId={ou.id}
+                      currentRoleId={ou.role.id}
+                      roles={roles}
+                      disabled={ou.isSuperAdmin}
+                    />
+                  ) : (
+                    <span className="text-sm text-muted-foreground">{ou.role.name}</span>
+                  )}
                 </TableCell>
                 <TableCell>
                   {ou.isSuperAdmin ? (
@@ -91,17 +101,19 @@ export function UsersTable({
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-2">
-                    {currentUserIsSuperAdmin && (
+                    {canResetPasswords && (
                       <ResetPasswordButton
                         userId={ou.user.id}
                         userName={ou.user.name || ou.user.email}
                       />
                     )}
-                    <RemoveUserButton
-                      userOrgId={ou.id}
-                      userName={ou.user.name || ou.user.email}
-                      disabled={ou.isSuperAdmin || ou.user.id === currentUserId}
-                    />
+                    {canDeleteUsers ? (
+                      <RemoveUserButton
+                        userOrgId={ou.id}
+                        userName={ou.user.name || ou.user.email}
+                        disabled={ou.isSuperAdmin || ou.user.id === currentUserId}
+                      />
+                    ) : null}
                   </div>
                 </TableCell>
               </TableRow>
