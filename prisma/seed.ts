@@ -141,7 +141,13 @@ async function main() {
     { code: "expenses_delete", name: "Expenses - Delete", description: "Delete expenses" },
     { code: "approve_quotation", name: "Approve quotation", description: "Approve quotations" },
     { code: "approve_purchase_request", name: "Approve purchase request", description: "Approve purchase requests" },
-    { code: "view_reports", name: "View reports", description: "Access reports" },
+    { code: "view_reports", name: "View reports", description: "Access reports (all types)" },
+    { code: "reports_overview", name: "Reports - Overview", description: "Generate overview reports" },
+    { code: "reports_sales", name: "Reports - Sales", description: "Generate sales reports" },
+    { code: "reports_purchases", name: "Reports - Purchases", description: "Generate purchase reports" },
+    { code: "reports_profit_loss", name: "Reports - Profit & Loss", description: "Generate P&L reports" },
+    { code: "reports_suppliers", name: "Reports - Suppliers", description: "Generate supplier reports" },
+    { code: "reports_inventory", name: "Reports - Inventory", description: "Generate inventory reports" },
     { code: "view_audit", name: "View audit log", description: "Access audit log" },
   ];
   const permissions: { id: string; code: string }[] = [];

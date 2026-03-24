@@ -33,6 +33,14 @@ function expandPermissionCodes(codes: Set<string>, allCodes: string[]): Set<stri
   if (expanded.has("manage_expenses")) addByPrefix("expenses_");
   if (expanded.has("manage_users")) expanded.add("settings_users_manage");
   if (expanded.has("manage_roles")) expanded.add("settings_roles_manage");
+  if (expanded.has("view_reports")) {
+    expanded.add("reports_overview");
+    expanded.add("reports_sales");
+    expanded.add("reports_purchases");
+    expanded.add("reports_profit_loss");
+    expanded.add("reports_suppliers");
+    expanded.add("reports_inventory");
+  }
 
   return expanded;
 }

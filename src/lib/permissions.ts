@@ -26,6 +26,12 @@ export const PERMISSIONS = {
   MANAGE_SALES: "manage_sales",
   MANAGE_EXPENSES: "manage_expenses",
   VIEW_REPORTS: "view_reports",
+  REPORTS_OVERVIEW: "reports_overview",
+  REPORTS_SALES: "reports_sales",
+  REPORTS_PURCHASES: "reports_purchases",
+  REPORTS_PROFIT_LOSS: "reports_profit_loss",
+  REPORTS_SUPPLIERS: "reports_suppliers",
+  REPORTS_INVENTORY: "reports_inventory",
   VIEW_AUDIT: "view_audit",
   // Menu + action (granular): menu_action
   INVENTORY_CREATE: "inventory_create",
@@ -80,6 +86,12 @@ const permissionRoleMap: Record<PermissionCode, AppRole[]> = {
   manage_sales: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
   manage_expenses: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
   view_reports: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
+  reports_overview: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
+  reports_sales: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
+  reports_purchases: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
+  reports_profit_loss: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
+  reports_suppliers: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
+  reports_inventory: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
   view_audit: [APP_ROLES.OWNER, APP_ROLES.MANAGER],
   inventory_create: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
   inventory_read: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
@@ -130,6 +142,18 @@ export function hasPermission(user: SessionUser, code: string): boolean {
   if (user?.isSuperAdmin) return true;
   if (!user?.permissions) return false;
   if (user.permissions.includes(code)) return true;
+  // reports_X: view_reports grants all (backward compat)
+  const reportTypeMap: Record<string, string> = {
+    reports_overview: "view_reports",
+    reports_sales: "view_reports",
+    reports_purchases: "view_reports",
+    reports_profit_loss: "view_reports",
+    reports_suppliers: "view_reports",
+    reports_inventory: "view_reports",
+  };
+  const reportFallback = reportTypeMap[code];
+  if (reportFallback && user.permissions!.includes(reportFallback)) return true;
+
   // manage_X implies all actions for that menu (backward compat)
   const menuMap: Record<string, string> = {
     inventory_create: "manage_inventory",
@@ -228,4 +252,35 @@ export function canManageUsers(user: SessionUser): boolean {
 /** Can access role management (edit role permissions) */
 export function canManageRoles(user: SessionUser): boolean {
   return canUser(user, PERMISSIONS.SETTINGS_ROLES_MANAGE);
+}
+
+export type ReportType =
+  | "overview"
+  | "sales"
+  | "purchases"
+  | "profit_loss"
+  | "suppliers"
+  | "inventory";
+
+const REPORT_TYPE_PERMISSIONS: Record<ReportType, PermissionCode> = {
+  overview: PERMISSIONS.REPORTS_OVERVIEW,
+  sales: PERMISSIONS.REPORTS_SALES,
+  purchases: PERMISSIONS.REPORTS_PURCHASES,
+  profit_loss: PERMISSIONS.REPORTS_PROFIT_LOSS,
+  suppliers: PERMISSIONS.REPORTS_SUPPLIERS,
+  inventory: PERMISSIONS.REPORTS_INVENTORY,
+};
+
+/** Can generate a specific report type. view_reports grants all; otherwise requires reports_X. */
+export function canGenerateReportType(user: SessionUser, type: ReportType): boolean {
+  if (canUser(user, PERMISSIONS.VIEW_REPORTS)) return true;
+  return canUser(user, REPORT_TYPE_PERMISSIONS[type]);
+}
+
+/** Report types the user is allowed to generate. */
+export function getAllowedReportTypes(user: SessionUser): ReportType[] {
+  const all: ReportType[] = ["overview", "sales", "purchases", "profit_loss", "suppliers", "inventory"];
+  if (!user) return [];
+  if (canUser(user, PERMISSIONS.VIEW_REPORTS)) return all;
+  return all.filter((t) => canUser(user, REPORT_TYPE_PERMISSIONS[t]));
 }

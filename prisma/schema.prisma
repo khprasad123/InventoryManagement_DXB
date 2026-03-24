@@ -89,6 +89,7 @@ model Organization {
   supplierPayments  SupplierPayment[]
   clientPayments    ClientPayment[]
   documents         Document[]
+  reportExports     ReportExport[]
   auditLogs         AuditLog[]
 
   @@index([slug])
@@ -230,6 +231,7 @@ model User {
   updatedExpenses          Expense[]          @relation("ExpenseUpdatedBy")
   createdDocuments         Document[]         @relation("DocumentCreatedBy")
   updatedDocuments         Document[]         @relation("DocumentUpdatedBy")
+  generatedReportExports   ReportExport[]     @relation("ReportExportGeneratedBy")
 
   @@unique([email])
   @@index([email])
@@ -910,11 +912,33 @@ model Document {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdBy    User?         @relation("DocumentCreatedBy", fields: [createdById], references: [id])
   updatedBy    User?         @relation("DocumentUpdatedBy", fields: [updatedById], references: [id])
+  reportExports ReportExport[]
 
   @@index([organizationId])
   @@index([documentableType, documentableId])
   @@index([deletedAt])
   @@map("documents")
+}
+
+model ReportExport {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  documentId     String   @map("document_id")
+  reportType     String   @map("report_type")
+  format         String   @default("XLSX")
+  metadata       Json?
+  generatedById  String?  @map("generated_by_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  expiresAt      DateTime @map("expires_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  document     Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  generatedBy  User?        @relation("ReportExportGeneratedBy", fields: [generatedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, expiresAt])
+  @@index([documentId])
+  @@map("report_exports")
 }
 
 // =============================================================================
