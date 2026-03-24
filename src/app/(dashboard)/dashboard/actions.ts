@@ -1,12 +1,13 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { getOrganizationId } from "@/lib/auth-utils";
+import { getCurrentUser, getOrganizationId } from "@/lib/auth-utils";
 import { redirect } from "next/navigation";
 import { getDefaultCurrencyCodeForOrg } from "@/lib/currency";
 import { convertAmountToCurrency } from "@/lib/fx";
-import { getAllowedWidgets, type DashboardWidgetId } from "./widgets";
+import { DASHBOARD_WIDGETS, getAllowedWidgets, type DashboardWidgetId } from "./widgets";
 import { canUser, PERMISSIONS } from "@/lib/permissions";
+import { revalidatePath } from "next/cache";
 
 function getMonthStartEnd(monthOffset: number = 0) {
   const d = new Date();
@@ -41,6 +42,77 @@ type ApprovalRow = {
   amount: number;
   href: string;
 };
+
+const ALL_WIDGET_IDS = new Set<string>(DASHBOARD_WIDGETS.map((w) => w.id));
+
+function sanitizeWidgetIds(ids: unknown): DashboardWidgetId[] {
+  if (!Array.isArray(ids)) return [];
+  const unique = new Set<string>();
+  for (const x of ids) {
+    if (typeof x !== "string") continue;
+    if (!ALL_WIDGET_IDS.has(x)) continue;
+    unique.add(x);
+  }
+  return Array.from(unique) as DashboardWidgetId[];
+}
+
+export async function getSavedDashboardWidgets(): Promise<DashboardWidgetId[] | null> {
+  const [orgId, user] = await Promise.all([getOrganizationId(), getCurrentUser()]);
+  if (!orgId || !user?.id) return null;
+
+  const pref = await prisma.userDashboardPreference.findUnique({
+    where: {
+      userId_organizationId: {
+        userId: user.id,
+        organizationId: orgId,
+      },
+    },
+    select: { widgetIds: true },
+  });
+
+  if (!pref) return null;
+  return sanitizeWidgetIds(pref.widgetIds);
+}
+
+export async function saveDashboardWidgets(widgetIds: string[]) {
+  const [orgId, user] = await Promise.all([getOrganizationId(), getCurrentUser()]);
+  if (!orgId || !user?.id) redirect("/login");
+
+  const sanitized = sanitizeWidgetIds(widgetIds);
+
+  await prisma.userDashboardPreference.upsert({
+    where: {
+      userId_organizationId: {
+        userId: user.id,
+        organizationId: orgId,
+      },
+    },
+    update: { widgetIds: sanitized },
+    create: {
+      userId: user.id,
+      organizationId: orgId,
+      widgetIds: sanitized,
+    },
+  });
+
+  revalidatePath("/dashboard");
+  return { success: true };
+}
+
+export async function resetDashboardWidgets() {
+  const [orgId, user] = await Promise.all([getOrganizationId(), getCurrentUser()]);
+  if (!orgId || !user?.id) redirect("/login");
+
+  await prisma.userDashboardPreference.deleteMany({
+    where: {
+      userId: user.id,
+      organizationId: orgId,
+    },
+  });
+
+  revalidatePath("/dashboard");
+  return { success: true };
+}
 
 export async function getDashboardData(user: SessionUser) {
   const orgId = await getOrganizationId();

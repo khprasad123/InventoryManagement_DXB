@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -12,9 +12,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { resetDashboardWidgets, saveDashboardWidgets } from "./actions";
 import type { DashboardWidgetDef, DashboardWidgetId } from "./widgets";
-
-const STORAGE_KEY = "dashboard.widgets";
 
 export function CustomizeDashboard({
   allowedDefs,
@@ -25,11 +24,14 @@ export function CustomizeDashboard({
 }) {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set(selectedWidgets));
-  const pathname = usePathname();
-  const params = useSearchParams();
+  const [isSaving, startTransition] = useTransition();
   const router = useRouter();
 
   const allVisible = useMemo(() => selected.size === allowedDefs.length, [selected.size, allowedDefs.length]);
+
+  useEffect(() => {
+    setSelected(new Set(selectedWidgets));
+  }, [selectedWidgets]);
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -41,17 +43,27 @@ export function CustomizeDashboard({
   }
 
   function applySelection(next: Set<string>) {
-    const qp = new URLSearchParams(params.toString());
-    qp.set("widgets", Array.from(next).join(","));
-    localStorage.setItem(STORAGE_KEY, Array.from(next).join(","));
-    router.replace(`${pathname}?${qp.toString()}`);
-    setOpen(false);
+    const payload = Array.from(next) as DashboardWidgetId[];
+    startTransition(async () => {
+      await saveDashboardWidgets(payload);
+      setOpen(false);
+      router.refresh();
+    });
   }
 
   function resetSelection() {
     const next = new Set(allowedDefs.map((d) => d.id));
     setSelected(next);
     applySelection(next);
+  }
+
+  function resetToDefaultLayout() {
+    startTransition(async () => {
+      await resetDashboardWidgets();
+      setSelected(new Set(allowedDefs.map((d) => d.id)));
+      setOpen(false);
+      router.refresh();
+    });
   }
 
   return (
@@ -87,13 +99,21 @@ export function CustomizeDashboard({
           </Button>
           <Button
             variant="outline"
+            onClick={resetToDefaultLayout}
+            disabled={isSaving}
+            title="Clear saved dashboard layout and use role defaults"
+          >
+            Reset to Role Default
+          </Button>
+          <Button
+            variant="outline"
             onClick={() => setSelected(new Set())}
-            disabled={selected.size === 0}
+            disabled={selected.size === 0 || isSaving}
           >
             Hide All
           </Button>
-          <Button onClick={() => applySelection(selected)} disabled={allVisible}>
-            Apply
+          <Button onClick={() => applySelection(selected)} disabled={allVisible || isSaving}>
+            {isSaving ? "Saving..." : "Apply"}
           </Button>
         </DialogFooter>
       </DialogContent>

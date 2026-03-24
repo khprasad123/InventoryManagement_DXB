@@ -90,6 +90,7 @@ model Organization {
   clientPayments    ClientPayment[]
   documents         Document[]
   reportExports     ReportExport[]
+  dashboardPreferences UserDashboardPreference[]
   auditLogs         AuditLog[]
 
   @@index([slug])
@@ -232,11 +233,28 @@ model User {
   createdDocuments         Document[]         @relation("DocumentCreatedBy")
   updatedDocuments         Document[]         @relation("DocumentUpdatedBy")
   generatedReportExports   ReportExport[]     @relation("ReportExportGeneratedBy")
+  dashboardPreferences     UserDashboardPreference[]
 
   @@unique([email])
   @@index([email])
   @@index([deletedAt])
   @@map("users")
+}
+
+model UserDashboardPreference {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  organizationId String   @map("organization_id")
+  widgetIds      Json     @default("[]") @map("widget_ids")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+  @@map("user_dashboard_preferences")
 }
 
 model UserOrganization {

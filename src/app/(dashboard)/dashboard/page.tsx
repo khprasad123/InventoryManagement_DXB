@@ -11,29 +11,22 @@ import {
 } from "lucide-react";
 import { requireAuth, getOrgTimezone } from "@/lib/auth-utils";
 import { formatInTimezone } from "@/lib/date-utils";
-import { getDashboardData } from "./actions";
+import { getDashboardData, getSavedDashboardWidgets } from "./actions";
 import { RevenueExpenseChart } from "./revenue-expense-chart";
 import Link from "next/link";
 import { DASHBOARD_WIDGETS, type DashboardWidgetId } from "./widgets";
 import { CustomizeDashboard } from "./customize-dashboard";
 
-export default async function DashboardPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ widgets?: string }>;
-}) {
+export default async function DashboardPage() {
   const user = await requireAuth();
-  const params = await searchParams;
-  const [data, timezone] = await Promise.all([getDashboardData(user), getOrgTimezone()]);
+  const [data, timezone, savedWidgets] = await Promise.all([
+    getDashboardData(user),
+    getOrgTimezone(),
+    getSavedDashboardWidgets(),
+  ]);
   const tz = timezone ?? "UTC";
   const allowed = data.allowedWidgets;
-  const requested = (params.widgets ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean) as DashboardWidgetId[];
-  const visible = requested.length
-    ? allowed.filter((id) => requested.includes(id))
-    : allowed;
+  const visible = savedWidgets ? allowed.filter((id) => savedWidgets.includes(id)) : allowed;
   const has = (id: DashboardWidgetId) => visible.includes(id);
   const allowedDefs = DASHBOARD_WIDGETS.filter((w) => allowed.includes(w.id));
 
