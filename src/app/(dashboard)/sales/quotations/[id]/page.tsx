@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { getOrgForInvoice, getQuotationById } from "../../actions";
-import { getOrganizationId } from "@/lib/auth-utils";
+import { getCurrentUser, getOrganizationId } from "@/lib/auth-utils";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Pencil } from "lucide-react";
@@ -22,6 +22,7 @@ import { DeleteQuotationButton } from "../../delete-quotation-button";
 import { formatInTimezone, formatDateTimeInTimezone } from "@/lib/date-utils";
 import { PrintQuotationButton } from "../../print-quotation-button";
 import { QuotationPrintLayout } from "../../quotation-print-layout";
+import { canUser, PERMISSIONS } from "@/lib/permissions";
 
 export default async function QuotationDetailPage({
   params,
@@ -30,6 +31,11 @@ export default async function QuotationDetailPage({
 }) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
+  const user = await getCurrentUser();
+  const canUpdateSales = canUser(user, PERMISSIONS.SALES_UPDATE);
+  const canDeleteSales = canUser(user, PERMISSIONS.SALES_DELETE);
+  const canApproveSales = canUser(user, PERMISSIONS.APPROVE_QUOTATION);
+  const canCreateSales = canUser(user, PERMISSIONS.SALES_CREATE);
 
   const { id } = await Promise.resolve(params);
   const [quotation, org] = await Promise.all([
@@ -62,7 +68,7 @@ export default async function QuotationDetailPage({
           <h1 className="text-3xl font-bold tracking-tight">
             {quotation.quotationNo}
           </h1>
-          {quotation.status === "DRAFT" && !quotation.salesOrder?.salesInvoices?.length && (
+          {quotation.status === "DRAFT" && !quotation.salesOrder?.salesInvoices?.length && canUpdateSales && (
             <>
               <Button asChild size="sm" variant="outline">
                 <Link href={`/sales/quotations/${quotation.id}/edit`}>
@@ -70,10 +76,12 @@ export default async function QuotationDetailPage({
                   Edit
                 </Link>
               </Button>
-              <DeleteQuotationButton
-                quotationId={quotation.id}
-                quotationNo={quotation.quotationNo}
-              />
+              {canDeleteSales && (
+                <DeleteQuotationButton
+                  quotationId={quotation.id}
+                  quotationNo={quotation.quotationNo}
+                />
+              )}
             </>
           )}
           <Badge
@@ -227,7 +235,7 @@ export default async function QuotationDetailPage({
         </Card>
       )}
 
-      {quotation.status === "DRAFT" && !quotation.salesOrder?.salesInvoices?.length && (
+      {quotation.status === "DRAFT" && !quotation.salesOrder?.salesInvoices?.length && canUpdateSales && (
         <>
           <SubmitQuotationButton quotationId={quotation.id} />
           <p className="text-sm text-muted-foreground">
@@ -236,7 +244,7 @@ export default async function QuotationDetailPage({
         </>
       )}
 
-      {quotation.status === "PENDING_APPROVAL" && !quotation.salesOrder?.salesInvoices?.length && (
+      {quotation.status === "PENDING_APPROVAL" && !quotation.salesOrder?.salesInvoices?.length && canApproveSales && (
         <>
           <ApproveRejectQuotation quotationId={quotation.id} />
           <p className="text-sm text-muted-foreground">
@@ -268,7 +276,7 @@ export default async function QuotationDetailPage({
         </Card>
       )}
 
-      {quotation.status === "APPROVED" && !quotation.salesOrder && (
+      {quotation.status === "APPROVED" && !quotation.salesOrder && canCreateSales && (
         <>
           <CreateSalesOrderButton quotationId={quotation.id} />
           <p className="text-sm text-muted-foreground">
@@ -277,7 +285,7 @@ export default async function QuotationDetailPage({
         </>
       )}
 
-      {quotation.status === "APPROVED" && quotation.salesOrder && !quotation.salesOrder.salesInvoices?.length && (
+      {quotation.status === "APPROVED" && quotation.salesOrder && !quotation.salesOrder.salesInvoices?.length && canCreateSales && (
         <>
           <CreateInvoiceFromSoButton salesOrderId={quotation.salesOrder.id} />
           <p className="text-sm text-muted-foreground">

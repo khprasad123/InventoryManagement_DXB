@@ -11,6 +11,7 @@ export default async function SettingsPage() {
   const showRolesLink = canManageRoles(user);
   const showAuditLink = hasPermission(user, "view_audit");
   const showOrgLink = isSuperAdmin(user);
+  const showCurrenciesLink = canManageUsers(user);
 
   return (
     <div className="space-y-6">
@@ -58,12 +59,14 @@ export default async function SettingsPage() {
                 Change PassWord & upload signature
               </Link>
             </Button>
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/settings/currencies">
-                <Coins className="mr-2 h-4 w-4" />
-                Currencies
-              </Link>
-            </Button>
+            {showCurrenciesLink && (
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/settings/currencies">
+                  <Coins className="mr-2 h-4 w-4" />
+                  Currencies
+                </Link>
+              </Button>
+            )}
             {showUsersLink && (
               <Button variant="outline" size="sm" asChild>
                 <Link href="/settings/users">

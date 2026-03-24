@@ -6,6 +6,37 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { canManageRoles } from "@/lib/permissions";
 
+function expandPermissionCodes(codes: Set<string>, allCodes: string[]): Set<string> {
+  const expanded = new Set(codes);
+
+  const addByPrefix = (prefix: string) => {
+    for (const code of allCodes) {
+      if (code.startsWith(prefix)) expanded.add(code);
+    }
+  };
+
+  if (expanded.has("manage_inventory")) {
+    addByPrefix("inventory_");
+    expanded.add("adjust_stock");
+  }
+  if (expanded.has("manage_suppliers")) addByPrefix("suppliers_");
+  if (expanded.has("manage_clients")) addByPrefix("clients_");
+  if (expanded.has("manage_purchases")) {
+    addByPrefix("purchases_");
+    expanded.add("approve_purchase_request");
+  }
+  if (expanded.has("manage_sales")) {
+    addByPrefix("sales_");
+    // Explicitly bind approval workflow to managed sales if selected.
+    expanded.add("approve_quotation");
+  }
+  if (expanded.has("manage_expenses")) addByPrefix("expenses_");
+  if (expanded.has("manage_users")) expanded.add("settings_users_manage");
+  if (expanded.has("manage_roles")) expanded.add("settings_roles_manage");
+
+  return expanded;
+}
+
 export async function getRolesWithPermissions() {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
@@ -101,6 +132,23 @@ export async function updateRolePermissions(
     return { error: "Role not found." };
   }
 
+  const allPermissions = await prisma.permission.findMany({
+    select: { id: true, code: true },
+  });
+  const selectedById = new Map(allPermissions.map((p) => [p.id, p.code]));
+  const selectedCodes = new Set(
+    permissionIds
+      .map((id) => selectedById.get(id))
+      .filter((code): code is string => Boolean(code))
+  );
+  const expandedCodes = expandPermissionCodes(
+    selectedCodes,
+    allPermissions.map((p) => p.code)
+  );
+  const expandedPermissionIds = allPermissions
+    .filter((p) => expandedCodes.has(p.code))
+    .map((p) => p.id);
+
   await prisma.$transaction(async (tx) => {
     const now = new Date();
     const currentUserId = (user as { id?: string } | null)?.id ?? null;
@@ -108,7 +156,7 @@ export async function updateRolePermissions(
       where: { roleId },
       data: { deletedAt: now, deletedById: currentUserId ?? undefined },
     });
-    for (const permissionId of permissionIds) {
+    for (const permissionId of expandedPermissionIds) {
       const existing = await tx.rolePermission.findUnique({
         where: {
           roleId_permissionId: { roleId, permissionId },

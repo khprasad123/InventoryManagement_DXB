@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { getSalesInvoiceById, getOrgForInvoice } from "../actions";
 import { getOrganizationId, getCurrentUser } from "@/lib/auth-utils";
-import { canRecordPayments } from "@/lib/permissions";
+import { canRecordPayments, canUser, PERMISSIONS } from "@/lib/permissions";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -42,6 +42,9 @@ export default async function SalesInvoiceDetailPage({
   const tz = org?.timezone ?? "UTC";
   const user = await getCurrentUser();
   const canRecord = canRecordPayments(user);
+  const canUpdateSales = canUser(user, PERMISSIONS.SALES_UPDATE);
+  const canDeleteSales = canUser(user, PERMISSIONS.SALES_DELETE);
+  const canApproveSales = canUser(user, PERMISSIONS.APPROVE_QUOTATION);
   const total = Number(invoice.totalAmount);
   const paid = Number(invoice.paidAmount);
   const outstanding = total - paid;
@@ -242,7 +245,7 @@ export default async function SalesInvoiceDetailPage({
       )}
 
       {/* Actions / approval flow (hidden during print) */}
-      {invoice.status === "DRAFT" && (
+      {invoice.status === "DRAFT" && canUpdateSales && (
         <>
           <SubmitInvoiceButton invoiceId={invoice.id} />
           <p className="text-sm text-muted-foreground">
@@ -251,7 +254,7 @@ export default async function SalesInvoiceDetailPage({
         </>
       )}
 
-      {invoice.status === "PENDING_APPROVAL" && (
+      {invoice.status === "PENDING_APPROVAL" && canApproveSales && (
         <>
           <ApproveRejectInvoice invoiceId={invoice.id} />
           <p className="text-sm text-muted-foreground">
@@ -286,7 +289,7 @@ export default async function SalesInvoiceDetailPage({
       )}
 
       {/* Optional admin action */}
-      {invoice.status === "DRAFT" && (
+      {invoice.status === "DRAFT" && canDeleteSales && (
         <DeleteSalesInvoiceButton
           invoiceId={invoice.id}
           invoiceNo={invoice.invoiceNo}

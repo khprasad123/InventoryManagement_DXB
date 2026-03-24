@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getOrganizationId, getCurrentUser } from "@/lib/auth-utils";
 import { redirect } from "next/navigation";
-import { canRecordPayments } from "@/lib/permissions";
+import { canRecordPayments, PERMISSIONS, requirePermission } from "@/lib/permissions";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { calculateDueDate } from "@/lib/date-utils";
@@ -164,6 +164,7 @@ export async function getNextQuotationNo() {
 }
 
 export async function createQuotation(formData: FormData) {
+  await requirePermission(PERMISSIONS.SALES_CREATE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -286,6 +287,7 @@ export async function createQuotation(formData: FormData) {
 }
 
 export async function updateQuotation(id: string, formData: FormData) {
+  await requirePermission(PERMISSIONS.SALES_UPDATE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -417,6 +419,7 @@ export async function updateQuotation(id: string, formData: FormData) {
 }
 
 export async function deleteQuotation(id: string) {
+  await requirePermission(PERMISSIONS.SALES_DELETE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
   const currentUser = await getCurrentUser();
@@ -447,6 +450,7 @@ export async function deleteQuotation(id: string) {
 }
 
 export async function submitQuotationForApproval(id: string) {
+  await requirePermission(PERMISSIONS.SALES_UPDATE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -468,6 +472,7 @@ export async function submitQuotationForApproval(id: string) {
 }
 
 export async function approveQuotation(id: string, remarks?: string) {
+  await requirePermission(PERMISSIONS.APPROVE_QUOTATION);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -498,6 +503,7 @@ export async function approveQuotation(id: string, remarks?: string) {
 }
 
 export async function rejectQuotation(id: string, remarks: string) {
+  await requirePermission(PERMISSIONS.APPROVE_QUOTATION);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -596,6 +602,7 @@ export async function getSalesOrderById(id: string) {
 }
 
 export async function createSalesOrderFromQuotation(quotationId: string) {
+  await requirePermission(PERMISSIONS.SALES_CREATE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -651,6 +658,7 @@ export async function createInvoiceFromSalesOrder(
   salesOrderId: string,
   sendForApproval: boolean = false
 ) {
+  await requirePermission(PERMISSIONS.SALES_CREATE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -932,6 +940,7 @@ export async function getSalesInvoiceById(
 }
 
 export async function submitSalesInvoiceForApproval(id: string) {
+  await requirePermission(PERMISSIONS.SALES_UPDATE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -952,6 +961,7 @@ export async function submitSalesInvoiceForApproval(id: string) {
 }
 
 export async function approveSalesInvoice(id: string, remarks?: string) {
+  await requirePermission(PERMISSIONS.APPROVE_QUOTATION);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -980,6 +990,7 @@ export async function approveSalesInvoice(id: string, remarks?: string) {
 }
 
 export async function rejectSalesInvoice(id: string, remarks: string) {
+  await requirePermission(PERMISSIONS.APPROVE_QUOTATION);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -1044,6 +1055,7 @@ export async function getNextInvoiceNo() {
 }
 
 export async function createSalesInvoice(formData: FormData) {
+  await requirePermission(PERMISSIONS.SALES_CREATE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -1278,6 +1290,7 @@ const updateSalesInvoiceSchema = z.object({
 });
 
 export async function updateSalesInvoice(id: string, formData: FormData) {
+  await requirePermission(PERMISSIONS.SALES_UPDATE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
 
@@ -1346,6 +1359,7 @@ export async function updateSalesInvoice(id: string, formData: FormData) {
 }
 
 export async function deleteSalesInvoice(id: string) {
+  await requirePermission(PERMISSIONS.SALES_DELETE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
   const currentUser = await getCurrentUser();

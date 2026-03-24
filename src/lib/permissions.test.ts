@@ -16,6 +16,13 @@ test("purchase approvals restricted to manager/owner", () => {
   assert.equal(can(APP_ROLES.VIEWER, PERMISSIONS.PURCHASES_APPROVE), false);
 });
 
+test("sales approvals restricted to manager/owner", () => {
+  assert.equal(can(APP_ROLES.OWNER, PERMISSIONS.APPROVE_QUOTATION), true);
+  assert.equal(can(APP_ROLES.MANAGER, PERMISSIONS.APPROVE_QUOTATION), true);
+  assert.equal(can(APP_ROLES.OPERATOR, PERMISSIONS.APPROVE_QUOTATION), false);
+  assert.equal(can(APP_ROLES.VIEWER, PERMISSIONS.APPROVE_QUOTATION), false);
+});
+
 test("viewer is read-only on critical purchase flow", () => {
   const viewerUser = { role: APP_ROLES.VIEWER, permissions: [PERMISSIONS.PURCHASES_READ], isSuperAdmin: false };
   assert.equal(canUser(viewerUser, PERMISSIONS.PURCHASES_READ), true);

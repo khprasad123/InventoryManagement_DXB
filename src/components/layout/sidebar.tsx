@@ -60,13 +60,7 @@ export function Sidebar() {
       href: "/settings",
       label: "Settings",
       icon: Settings,
-      visible: (u) =>
-        Boolean(
-          u?.isSuperAdmin ||
-            canUser(u ?? null, PERMISSIONS.SETTINGS_USERS_MANAGE) ||
-            canUser(u ?? null, PERMISSIONS.SETTINGS_ROLES_MANAGE) ||
-            canUser(u ?? null, PERMISSIONS.VIEW_AUDIT)
-        ),
+      visible: () => true,
     },
   ];
   const visibleNavItems = navItems.filter((item) => item.visible(user));

@@ -53,6 +53,7 @@ export const PERMISSIONS = {
   EXPENSES_UPDATE: "expenses_update",
   EXPENSES_DELETE: "expenses_delete",
   APPROVE_PURCHASE_REQUEST: "approve_purchase_request",
+  APPROVE_QUOTATION: "approve_quotation",
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -105,6 +106,7 @@ const permissionRoleMap: Record<PermissionCode, AppRole[]> = {
   expenses_update: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
   expenses_delete: [APP_ROLES.OWNER, APP_ROLES.MANAGER],
   approve_purchase_request: [APP_ROLES.OWNER, APP_ROLES.MANAGER],
+  approve_quotation: [APP_ROLES.OWNER, APP_ROLES.MANAGER],
 };
 
 const roleAliasMap: Record<string, AppRole> = {
@@ -184,6 +186,22 @@ export async function requirePermission(
     if (options?.redirectTo) redirect(options.redirectTo);
     throw new Error(`Forbidden: missing permission '${permission}'`);
   }
+  return user;
+}
+
+/** Route/layout helper for permission-protected pages */
+export async function requireModulePermission(
+  permission: PermissionCode,
+  redirectTo = "/dashboard"
+) {
+  return requirePermission(permission, { redirectTo });
+}
+
+/** Route/layout helper for org super-admin-only pages */
+export async function requireSuperAdmin(redirectTo = "/settings") {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+  if (!isSuperAdmin(user)) redirect(redirectTo);
   return user;
 }
 
