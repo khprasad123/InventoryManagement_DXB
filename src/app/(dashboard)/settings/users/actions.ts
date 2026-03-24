@@ -81,7 +81,7 @@ export async function getRolesForOrg() {
 }
 
 const createUserSchema = z.object({
-  email: z.string().email("Invalid email"),
+  email: z.string().trim().toLowerCase().email("Invalid email"),
   name: z.string().max(255).optional(),
   password: z.string().min(6, "Password must be at least 6 characters"),
   roleId: z.string().min(1, "Role is required"),
@@ -134,9 +134,6 @@ export async function createOrgUser(formData: FormData) {
         userId_organizationId: { userId: existingUser.id, organizationId: orgId },
       },
     });
-    if (existingLink?.deletedAt == null) {
-      return { error: { email: ["This user is already in your organization."] } };
-    }
   }
 
   // Enforce org plan max users (excluding super admin) only when we are about to create a new membership
@@ -163,26 +160,30 @@ export async function createOrgUser(formData: FormData) {
   }
 
   if (existingUser) {
-    if (existingLink?.deletedAt != null) {
-      await prisma.userOrganization.update({
-        where: { id: existingLink.id },
-        data: {
-          roleId: role.id,
-          isSuperAdmin: newUserIsSuperAdmin,
-          deletedAt: null,
-          deletedById: null,
-        },
-      });
-    } else {
-      await prisma.userOrganization.create({
-        data: {
+    // Idempotent org linking:
+    // - creates new membership if missing
+    // - reactivates if soft-deleted
+    // - updates role/super-admin if already linked
+    await prisma.userOrganization.upsert({
+      where: {
+        userId_organizationId: {
           userId: existingUser.id,
           organizationId: orgId,
-          roleId: role.id,
-          isSuperAdmin: newUserIsSuperAdmin,
         },
-      });
-    }
+      },
+      update: {
+        roleId: role.id,
+        isSuperAdmin: newUserIsSuperAdmin,
+        deletedAt: null,
+        deletedById: null,
+      },
+      create: {
+        userId: existingUser.id,
+        organizationId: orgId,
+        roleId: role.id,
+        isSuperAdmin: newUserIsSuperAdmin,
+      },
+    });
   } else {
     const passwordHash = await hash(password, 12);
     const newUser = await prisma.user.create({
