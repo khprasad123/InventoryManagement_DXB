@@ -59,9 +59,21 @@ export function PrForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [itemSearch, setItemSearch] = useState("");
+  const [salesOrderSearch, setSalesOrderSearch] = useState("");
 
   const selectedSo = salesOrders.find((s) => s.id === salesOrderId);
   const isLocked = salesOrderId !== NONE_SO_VALUE && Boolean(salesOrderId);
+  const filteredSalesOrdersBase = salesOrderSearch.trim()
+    ? salesOrders.filter((so) =>
+        `${so.orderNo} ${so.jobId ?? ""} ${so.quotation?.client?.name ?? ""}`
+          .toLowerCase()
+          .includes(salesOrderSearch.trim().toLowerCase())
+      )
+    : salesOrders;
+  const filteredSalesOrders =
+    selectedSo && !filteredSalesOrdersBase.some((so) => so.id === selectedSo.id)
+      ? [selectedSo, ...filteredSalesOrdersBase]
+      : filteredSalesOrdersBase;
 
   const filteredItems = itemSearch.trim()
     ? items.filter((it) => `${it.sku} ${it.name}`.toLowerCase().includes(itemSearch.trim().toLowerCase()))
@@ -139,13 +151,18 @@ export function PrForm({
         </div>
         <div className="space-y-2">
           <Label>Tag Sales Order (optional)</Label>
+          <Input
+            value={salesOrderSearch}
+            onChange={(e) => setSalesOrderSearch(e.target.value)}
+            placeholder="Search SO by number / job / client..."
+          />
           <Select value={salesOrderId} onValueChange={setSalesOrderId}>
             <SelectTrigger>
               <SelectValue placeholder="None – manual items" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={NONE_SO_VALUE}>None – manual items</SelectItem>
-              {salesOrders.map((so) => (
+              {filteredSalesOrders.map((so) => (
                 <SelectItem key={so.id} value={so.id}>
                   {so.orderNo} – {so.jobId || "—"} ({so.quotation?.client?.name || "—"})
                 </SelectItem>

@@ -744,7 +744,12 @@ export async function getSalesOrdersForPr() {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
   return prisma.salesOrder.findMany({
-    where: { organizationId: orgId, deletedAt: null },
+    where: {
+      organizationId: orgId,
+      deletedAt: null,
+      // Show only open SOs (not yet fulfilled/invoiced).
+      salesInvoices: { none: { deletedAt: null } },
+    },
     include: {
       items: { include: { item: true } },
       quotation: { include: { client: true } },
@@ -795,9 +800,14 @@ export async function createPurchaseRequest(formData: FormData) {
 
   if (salesOrderId) {
     const so = await prisma.salesOrder.findFirst({
-      where: { id: salesOrderId, organizationId: orgId, deletedAt: null },
+      where: {
+        id: salesOrderId,
+        organizationId: orgId,
+        deletedAt: null,
+        salesInvoices: { none: { deletedAt: null } },
+      },
     });
-    if (!so) return { error: { _form: ["Sales order not found"] } };
+    if (!so) return { error: { _form: ["Sales order not found or already fulfilled"] } };
   }
 
   // Merge duplicate items: one item per PR line (sum quantities for same itemId)
@@ -894,9 +904,14 @@ export async function updatePurchaseRequest(prId: string, formData: FormData) {
 
   if (salesOrderId) {
     const so = await prisma.salesOrder.findFirst({
-      where: { id: salesOrderId, organizationId: orgId, deletedAt: null },
+      where: {
+        id: salesOrderId,
+        organizationId: orgId,
+        deletedAt: null,
+        salesInvoices: { none: { deletedAt: null } },
+      },
     });
-    if (!so) return { error: { _form: ["Sales order not found"] } };
+    if (!so) return { error: { _form: ["Sales order not found or already fulfilled"] } };
   }
   const currentUser = await getCurrentUser();
   const currentUserId = (currentUser as { id?: string } | null)?.id ?? null;
