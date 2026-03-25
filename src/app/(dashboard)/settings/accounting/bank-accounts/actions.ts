@@ -26,6 +26,23 @@ function toMoneyAbs(n: unknown): { abs: number; isValid: boolean } {
   return { abs, isValid: true };
 }
 
+function normalizeRef(v: unknown): string {
+  return String(v ?? "").trim().toLowerCase();
+}
+
+function referenceMatchScore(txRef: string, candidateRef: string | null | undefined): number {
+  const c = normalizeRef(candidateRef);
+  if (!txRef || !c) return 0;
+  if (txRef === c) return 100;
+  if (c.includes(txRef) || txRef.includes(c)) return 50;
+
+  // Word overlap fallback (helps with longer references).
+  const txWords = txRef.split(/[\s\-_/]+/).filter((w) => w.length >= 4);
+  if (!txWords.length) return 0;
+  const hits = txWords.reduce((acc, w) => acc + (c.includes(w) ? 1 : 0), 0);
+  return hits > 0 ? 20 + hits * 5 : 0;
+}
+
 export async function getBankAccounts(search?: string) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
@@ -266,6 +283,22 @@ export async function getBankStatementMatchingData(bankStatementId: string) {
             orderBy: { paymentDate: "desc" },
           })
         : [];
+
+    const txRef = normalizeRef((t as any).reference ?? (t as any).description);
+    if (txRef) {
+      clientCandidates.sort((a: any, b: any) => {
+        const sb = referenceMatchScore(txRef, b.reference);
+        const sa = referenceMatchScore(txRef, a.reference);
+        if (sb !== sa) return sb - sa;
+        return new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime();
+      });
+      supplierCandidates.sort((a: any, b: any) => {
+        const sb = referenceMatchScore(txRef, b.reference);
+        const sa = referenceMatchScore(txRef, a.reference);
+        if (sb !== sa) return sb - sa;
+        return new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime();
+      });
+    }
 
     const match = matchedByTransactionId.get(t.id) ?? null;
     const matchedPayment =
