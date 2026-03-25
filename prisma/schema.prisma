@@ -50,6 +50,18 @@ enum SalesInvoiceStatus {
   REJECTED
 }
 
+enum SalesCreditNoteStatus {
+  DRAFT
+  POSTED
+  REVERSED
+}
+
+enum SalesDebitNoteStatus {
+  DRAFT
+  POSTED
+  REVERSED
+}
+
 // =============================================================================
 // CORE: ORGANIZATION (TENANT) & AUTH
 // =============================================================================
@@ -84,6 +96,8 @@ model Organization {
   quotations        Quotation[]
   salesOrders       SalesOrder[]
   salesInvoices     SalesInvoice[]
+  salesCreditNotes SalesCreditNote[]
+  salesDebitNotes  SalesDebitNote[]
   expenseCategories ExpenseCategory[]
   expenses          Expense[]
   supplierPayments  SupplierPayment[]
@@ -804,6 +818,8 @@ model SalesInvoice {
   approvedBy   User?              @relation("SalesInvoiceApprovedBy", fields: [approvedById], references: [id])
   items        SalesInvoiceItem[]
   payments     ClientPayment[]
+  creditNotes SalesCreditNote[]
+  debitNotes  SalesDebitNote[]
 
   @@unique([organizationId, invoiceNo])
   @@index([organizationId])
@@ -859,6 +875,62 @@ model ClientPayment {
   @@index([paymentDate])
   @@index([deletedAt])
   @@map("client_payments")
+}
+
+model SalesCreditNote {
+  id             String                 @id @default(cuid())
+  organizationId String                 @map("organization_id")
+  salesInvoiceId String                 @map("sales_invoice_id")
+  creditNoteNo   String               @map("credit_note_no")
+  noteDate       DateTime             @map("note_date")
+  amount         Decimal              @db.Decimal(12, 2)
+  currencyCode   String               @default("AED") @map("currency_code")
+  memo           String?
+  status         SalesCreditNoteStatus @default(DRAFT) @map("status")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  deletedById String? @map("deleted_by_id")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  salesInvoice SalesInvoice @relation(fields: [salesInvoiceId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, creditNoteNo])
+  @@index([organizationId])
+  @@index([salesInvoiceId])
+  @@index([noteDate])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("sales_credit_notes")
+}
+
+model SalesDebitNote {
+  id             String                @id @default(cuid())
+  organizationId String                @map("organization_id")
+  salesInvoiceId String               @map("sales_invoice_id")
+  debitNoteNo   String               @map("debit_note_no")
+  noteDate       DateTime            @map("note_date")
+  amount         Decimal             @db.Decimal(12, 2)
+  currencyCode   String              @default("AED") @map("currency_code")
+  memo           String?
+  status         SalesDebitNoteStatus @default(DRAFT) @map("status")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  deletedById String? @map("deleted_by_id")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  salesInvoice SalesInvoice @relation(fields: [salesInvoiceId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, debitNoteNo])
+  @@index([organizationId])
+  @@index([salesInvoiceId])
+  @@index([noteDate])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("sales_debit_notes")
 }
 
 // =============================================================================

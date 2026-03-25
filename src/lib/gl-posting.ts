@@ -22,7 +22,9 @@ export type GlReferenceType =
   | "PurchaseInvoice"
   | "Expense"
   | "ClientPayment"
-  | "SupplierPayment";
+  | "SupplierPayment"
+  | "SalesCreditNote"
+  | "SalesDebitNote";
 
 type JournalLineDraft = {
   accountCode: GlAccountCode;
@@ -266,6 +268,50 @@ export async function postSupplierPaymentToGl(args: {
   const lines: JournalLineDraft[] = [
     { accountCode: ACCOUNT_CODES.AP, description: "Reduce AP", debitAmount: args.amount },
     { accountCode: ACCOUNT_CODES.CASH, description: "Payment (supplier)", creditAmount: args.amount },
+  ];
+
+  await postJournalEntry(orgId, args.entryDate, args.memo, referenceType, referenceId, lines);
+}
+
+export async function postSalesCreditNoteToGl(args: {
+  organizationId: string;
+  salesCreditNoteId: string;
+  entryDate: Date;
+  memo: string;
+  amount: number; // in org default currency
+  createdById?: string | null;
+}) {
+  const orgId = args.organizationId;
+  const referenceType: GlReferenceType = "SalesCreditNote";
+  const referenceId = args.salesCreditNoteId;
+
+  await reversePostedEntriesForReference(orgId, referenceType, referenceId, args.createdById ?? null);
+
+  const lines: JournalLineDraft[] = [
+    { accountCode: ACCOUNT_CODES.AR, description: "Reduce AR (credit note)", creditAmount: args.amount },
+    { accountCode: ACCOUNT_CODES.SALES_REVENUE, description: "Reduce revenue (credit note)", debitAmount: args.amount },
+  ];
+
+  await postJournalEntry(orgId, args.entryDate, args.memo, referenceType, referenceId, lines);
+}
+
+export async function postSalesDebitNoteToGl(args: {
+  organizationId: string;
+  salesDebitNoteId: string;
+  entryDate: Date;
+  memo: string;
+  amount: number; // in org default currency
+  createdById?: string | null;
+}) {
+  const orgId = args.organizationId;
+  const referenceType: GlReferenceType = "SalesDebitNote";
+  const referenceId = args.salesDebitNoteId;
+
+  await reversePostedEntriesForReference(orgId, referenceType, referenceId, args.createdById ?? null);
+
+  const lines: JournalLineDraft[] = [
+    { accountCode: ACCOUNT_CODES.AR, description: "Increase AR (debit note)", debitAmount: args.amount },
+    { accountCode: ACCOUNT_CODES.SALES_REVENUE, description: "Increase revenue (debit note)", creditAmount: args.amount },
   ];
 
   await postJournalEntry(orgId, args.entryDate, args.memo, referenceType, referenceId, lines);
