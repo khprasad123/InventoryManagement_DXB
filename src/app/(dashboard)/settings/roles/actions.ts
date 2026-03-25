@@ -23,12 +23,27 @@ async function ensureRoleManagementPermissionCatalog() {
     { code: "settings_roles_create", name: "Settings - Roles Create", description: "Create roles in settings" },
     { code: "settings_roles_update", name: "Settings - Roles Update", description: "Update role permissions" },
     { code: "settings_roles_delete", name: "Settings - Roles Delete", description: "Delete roles in settings" },
+    { code: "manage_journals", name: "Accounting - Manage Journals", description: "Access General Journal (all journal actions)" },
+    { code: "gl_journals_read", name: "Journals - Read", description: "View journal entries" },
+    { code: "gl_journals_create", name: "Journals - Create", description: "Create manual journal entries" },
+    { code: "gl_journals_delete", name: "Journals - Delete/Reversal", description: "Reverse/undo posted journal entries" },
+    { code: "gl_accounts_read", name: "GL Accounts - Read", description: "View GL chart of accounts for journal entry" },
+    { code: "manage_banking", name: "Banking - Manage Accounts", description: "Access bank accounts, statements, and reconciliation matching" },
+    { code: "bank_accounts_read", name: "Bank Accounts - Read", description: "View bank accounts" },
+    { code: "bank_accounts_create", name: "Bank Accounts - Create", description: "Create bank accounts" },
+    { code: "bank_accounts_update", name: "Bank Accounts - Update", description: "Update bank accounts" },
+    { code: "bank_accounts_delete", name: "Bank Accounts - Delete", description: "Delete bank accounts" },
+    { code: "bank_statements_import", name: "Bank Statements - Import", description: "Import bank statements / transactions (CSV)" },
+    { code: "bank_reconciliations_read", name: "Bank Reconciliations - Read", description: "View reconciliation matches" },
+    { code: "bank_reconciliations_match", name: "Bank Reconciliations - Match", description: "Create/update reconciliation matches" },
     { code: "reports_overview", name: "Reports - Overview", description: "Generate overview reports" },
     { code: "reports_sales", name: "Reports - Sales", description: "Generate sales reports" },
     { code: "reports_purchases", name: "Reports - Purchases", description: "Generate purchase reports" },
     { code: "reports_profit_loss", name: "Reports - Profit & Loss", description: "Generate P&L reports" },
     { code: "reports_suppliers", name: "Reports - Suppliers", description: "Generate supplier reports" },
     { code: "reports_inventory", name: "Reports - Inventory", description: "Generate inventory reports" },
+    { code: "reports_trial_balance", name: "Reports - Trial Balance", description: "Generate trial balance reports" },
+    { code: "reports_balance_sheet", name: "Reports - Balance Sheet", description: "Generate balance sheet reports" },
   ];
 
   await Promise.all(
@@ -67,6 +82,11 @@ function expandPermissionCodes(codes: Set<string>, allCodes: string[]): Set<stri
     expanded.add("approve_quotation");
   }
   if (expanded.has("manage_expenses")) addByPrefix("expenses_");
+  if (expanded.has("manage_journals")) {
+    addByPrefix("gl_journals_");
+    expanded.add("gl_accounts_read");
+  }
+  if (expanded.has("manage_banking")) addByPrefix("bank_");
   if (expanded.has("manage_users")) {
     expanded.add("settings_users_manage");
     expanded.add("settings_users_read");
@@ -88,6 +108,8 @@ function expandPermissionCodes(codes: Set<string>, allCodes: string[]): Set<stri
     expanded.add("reports_profit_loss");
     expanded.add("reports_suppliers");
     expanded.add("reports_inventory");
+    expanded.add("reports_trial_balance");
+    expanded.add("reports_balance_sheet");
   }
 
   return expanded;

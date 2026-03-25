@@ -7,6 +7,9 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { uploadDocument } from "@/app/(dashboard)/documents/actions";
+import { postExpenseToGl, reverseGlForReference } from "@/lib/gl-posting";
+import { getDefaultCurrencyCodeForOrg } from "@/lib/currency";
+import { convertAmountToCurrency } from "@/lib/fx";
 
 // -----------------------------------------------------------------------------
 // Expense Categories
@@ -311,6 +314,19 @@ export async function createExpense(formData: FormData) {
     metadata: { amount: Number(expense.amount), categoryId: expense.categoryId },
   });
 
+  // Phase 1 GL posting: post on expense creation.
+  const defaultCurrencyCode = await getDefaultCurrencyCodeForOrg(orgId);
+  const fromCurrency = expense.currencyCode ?? defaultCurrencyCode;
+  const amountBase = await convertAmountToCurrency(Number(expense.amount), fromCurrency, defaultCurrencyCode);
+  await postExpenseToGl({
+    organizationId: orgId,
+    expenseId: expense.id,
+    entryDate: expense.expenseDate,
+    memo: `Expense ${expense.id}`,
+    amount: amountBase,
+    createdById: userId,
+  });
+
   const file = formData.get("attachment") as File | null;
   if (file && file.size > 0) {
     const fd = new FormData();
@@ -383,6 +399,19 @@ export async function updateExpense(id: string, formData: FormData) {
     metadata: { amount: parsed.data.amount },
   });
 
+  // Phase 1 GL posting: re-post based on updated expense values.
+  const defaultCurrencyCode = await getDefaultCurrencyCodeForOrg(orgId);
+  const fromCurrency = parsed.data.currencyCode ?? defaultCurrencyCode;
+  const amountBase = await convertAmountToCurrency(parsed.data.amount, fromCurrency, defaultCurrencyCode);
+  await postExpenseToGl({
+    organizationId: orgId,
+    expenseId: id,
+    entryDate: new Date(parsed.data.expenseDate),
+    memo: `Expense ${id}`,
+    amount: amountBase,
+    createdById: userId,
+  });
+
   revalidatePath("/expenses");
   revalidatePath(`/expenses/${id}/edit`);
   redirect("/expenses");
@@ -400,6 +429,14 @@ export async function deleteExpense(id: string) {
   if (!existing) {
     return { error: "Expense not found" };
   }
+
+  // Phase 1 GL posting is on creation: deletion must reverse.
+  await reverseGlForReference({
+    organizationId: orgId,
+    referenceType: "Expense",
+    referenceId: id,
+    reversedById: currentUserId,
+  });
 
   await prisma.expense.update({
     where: { id },

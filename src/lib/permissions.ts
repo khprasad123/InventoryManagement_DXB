@@ -33,6 +33,21 @@ export const PERMISSIONS = {
   MANAGE_PURCHASES: "manage_purchases",
   MANAGE_SALES: "manage_sales",
   MANAGE_EXPENSES: "manage_expenses",
+  // Accounting core (General Journal + GL)
+  MANAGE_JOURNALS: "manage_journals",
+  GL_JOURNALS_READ: "gl_journals_read",
+  GL_JOURNALS_CREATE: "gl_journals_create",
+  GL_JOURNALS_DELETE: "gl_journals_delete",
+  GL_ACCOUNTS_READ: "gl_accounts_read",
+  // Banking (Bank accounts + statements + reconciliation)
+  MANAGE_BANKING: "manage_banking",
+  BANK_ACCOUNTS_READ: "bank_accounts_read",
+  BANK_ACCOUNTS_CREATE: "bank_accounts_create",
+  BANK_ACCOUNTS_UPDATE: "bank_accounts_update",
+  BANK_ACCOUNTS_DELETE: "bank_accounts_delete",
+  BANK_STATEMENTS_IMPORT: "bank_statements_import",
+  BANK_RECONCILIATIONS_READ: "bank_reconciliations_read",
+  BANK_RECONCILIATIONS_MATCH: "bank_reconciliations_match",
   VIEW_REPORTS: "view_reports",
   REPORTS_OVERVIEW: "reports_overview",
   REPORTS_SALES: "reports_sales",
@@ -40,6 +55,8 @@ export const PERMISSIONS = {
   REPORTS_PROFIT_LOSS: "reports_profit_loss",
   REPORTS_SUPPLIERS: "reports_suppliers",
   REPORTS_INVENTORY: "reports_inventory",
+  REPORTS_TRIAL_BALANCE: "reports_trial_balance",
+  REPORTS_BALANCE_SHEET: "reports_balance_sheet",
   VIEW_AUDIT: "view_audit",
   // Menu + action (granular): menu_action
   INVENTORY_CREATE: "inventory_create",
@@ -101,6 +118,19 @@ const permissionRoleMap: Record<PermissionCode, AppRole[]> = {
   manage_purchases: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
   manage_sales: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
   manage_expenses: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
+  manage_journals: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
+  gl_journals_read: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
+  gl_journals_create: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
+  gl_journals_delete: [APP_ROLES.OWNER, APP_ROLES.MANAGER],
+  gl_accounts_read: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
+  manage_banking: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
+  bank_accounts_read: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
+  bank_accounts_create: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
+  bank_accounts_update: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
+  bank_accounts_delete: [APP_ROLES.OWNER, APP_ROLES.MANAGER],
+  bank_statements_import: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
+  bank_reconciliations_read: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
+  bank_reconciliations_match: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
   view_reports: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
   reports_overview: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
   reports_sales: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
@@ -108,6 +138,8 @@ const permissionRoleMap: Record<PermissionCode, AppRole[]> = {
   reports_profit_loss: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
   reports_suppliers: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
   reports_inventory: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
+  reports_trial_balance: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
+  reports_balance_sheet: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
   view_audit: [APP_ROLES.OWNER, APP_ROLES.MANAGER],
   inventory_create: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
   inventory_read: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
@@ -189,9 +221,22 @@ export function hasPermission(user: SessionUser, code: string): boolean {
     reports_profit_loss: "view_reports",
     reports_suppliers: "view_reports",
     reports_inventory: "view_reports",
+    reports_trial_balance: "view_reports",
+    reports_balance_sheet: "view_reports",
   };
   const reportFallback = reportTypeMap[code];
   if (reportFallback && user.permissions!.includes(reportFallback)) return true;
+
+  // manage_journals implies all GL journal access
+  if (user.permissions.includes("manage_journals")) {
+    if (code.startsWith("gl_journals_")) return true;
+    if (code === "gl_accounts_read") return true;
+  }
+
+  // manage_banking implies all banking access
+  if (user.permissions.includes("manage_banking")) {
+    if (code.startsWith("bank_")) return true;
+  }
 
   // manage_X implies all actions for that menu (backward compat)
   const menuMap: Record<string, string> = {
@@ -317,7 +362,9 @@ export type ReportType =
   | "purchases"
   | "profit_loss"
   | "suppliers"
-  | "inventory";
+  | "inventory"
+  | "trial_balance"
+  | "balance_sheet";
 
 const REPORT_TYPE_PERMISSIONS: Record<ReportType, PermissionCode> = {
   overview: PERMISSIONS.REPORTS_OVERVIEW,
@@ -326,6 +373,8 @@ const REPORT_TYPE_PERMISSIONS: Record<ReportType, PermissionCode> = {
   profit_loss: PERMISSIONS.REPORTS_PROFIT_LOSS,
   suppliers: PERMISSIONS.REPORTS_SUPPLIERS,
   inventory: PERMISSIONS.REPORTS_INVENTORY,
+  trial_balance: PERMISSIONS.REPORTS_TRIAL_BALANCE,
+  balance_sheet: PERMISSIONS.REPORTS_BALANCE_SHEET,
 };
 
 /** Can generate a specific report type. view_reports grants all; otherwise requires reports_X. */
@@ -336,7 +385,7 @@ export function canGenerateReportType(user: SessionUser, type: ReportType): bool
 
 /** Report types the user is allowed to generate. */
 export function getAllowedReportTypes(user: SessionUser): ReportType[] {
-  const all: ReportType[] = ["overview", "sales", "purchases", "profit_loss", "suppliers", "inventory"];
+  const all: ReportType[] = ["overview", "sales", "purchases", "profit_loss", "suppliers", "inventory", "trial_balance", "balance_sheet"];
   if (!user) return [];
   if (canUser(user, PERMISSIONS.VIEW_REPORTS)) return all;
   return all.filter((t) => canUser(user, REPORT_TYPE_PERMISSIONS[t]));

@@ -2,8 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth-utils";
-import { canManageUsers, canManageRoles, hasPermission, isSuperAdmin } from "@/lib/permissions";
-import { Users, Coins, ClipboardList, Shield, Building2, KeyRound } from "lucide-react";
+import { canManageUsers, canManageRoles, hasPermission, isSuperAdmin, canUser, PERMISSIONS } from "@/lib/permissions";
+import { Users, Coins, ClipboardList, Shield, Building2, KeyRound, Wallet } from "lucide-react";
 
 export default async function SettingsPage() {
   const user = await getCurrentUser();
@@ -12,6 +12,10 @@ export default async function SettingsPage() {
   const showAuditLink = hasPermission(user, "view_audit");
   const showOrgLink = isSuperAdmin(user);
   const showCurrenciesLink = canManageUsers(user);
+  const showAccountingLink =
+    canUser(user, PERMISSIONS.GL_JOURNALS_READ) ||
+    canUser(user, PERMISSIONS.BANK_ACCOUNTS_READ) ||
+    canUser(user, PERMISSIONS.BANK_RECONCILIATIONS_READ);
 
   return (
     <div className="space-y-6">
@@ -96,6 +100,14 @@ export default async function SettingsPage() {
                 <Link href="/settings/org">
                   <Building2 className="mr-2 h-4 w-4" />
                   Org management
+                </Link>
+              </Button>
+            )}
+            {showAccountingLink && (
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/settings/accounting">
+                  <Wallet className="mr-2 h-4 w-4" />
+                  Accounting
                 </Link>
               </Button>
             )}

@@ -10,6 +10,9 @@ import { revalidatePath } from "next/cache";
 import { calculateDueDate } from "@/lib/date-utils";
 import { uploadDocument } from "@/app/(dashboard)/documents/actions";
 import { createAuditLog } from "@/lib/audit";
+import { postSalesInvoiceToGl, postClientPaymentToGl } from "@/lib/gl-posting";
+import { getDefaultCurrencyCodeForOrg } from "@/lib/currency";
+import { convertAmountToCurrency } from "@/lib/fx";
 
 const quotationItemSchema = z.object({
   itemId: z.string().min(1),
@@ -974,14 +977,72 @@ export async function approveSalesInvoice(id: string, remarks?: string) {
   const user = await getCurrentUser();
   const userId = (user as { id?: string } | null)?.id ?? null;
 
-  await prisma.salesInvoice.update({
-    where: { id },
-    data: {
-      status: "APPROVED",
-      approvedById: userId ?? undefined,
-      approvedAt: new Date(),
-      approvalRemarks: remarks?.trim() || null,
-    },
+  await prisma.$transaction(async (tx) => {
+    await tx.salesInvoice.update({
+      where: { id },
+      data: {
+        status: "APPROVED",
+        approvedById: userId ?? undefined,
+        approvedAt: new Date(),
+        approvalRemarks: remarks?.trim() || null,
+      },
+    });
+
+    // Move stock on approval (real-world: inventory is only affected when finalized).
+    const lines = await tx.salesInvoiceItem.findMany({
+      where: { salesInvoiceId: id },
+      select: { itemId: true, quantity: true },
+    });
+
+    for (const line of lines) {
+      const item = await tx.item.findFirst({
+        where: { id: line.itemId, organizationId: orgId, deletedAt: null },
+        select: { stockQty: true },
+      });
+      if (!item) throw new Error(`Item not found: ${line.itemId}`);
+      if (item.stockQty < line.quantity) {
+        throw new Error(
+          `Insufficient stock for item ${line.itemId}. Available: ${item.stockQty}, required: ${line.quantity}`
+        );
+      }
+
+      await tx.stockMovement.create({
+        data: {
+          organizationId: orgId,
+          itemId: line.itemId,
+          type: "OUT",
+          quantity: line.quantity,
+          referenceType: "SalesInvoice",
+          referenceId: id,
+          notes: `Sales Invoice ${inv.invoiceNo}`,
+        },
+      });
+
+      await tx.item.update({
+        where: { id: line.itemId },
+        data: { stockQty: item.stockQty - line.quantity },
+      });
+    }
+  });
+
+  // Phase 1 GL posting is done on approval.
+  const defaultCurrencyCode = await getDefaultCurrencyCodeForOrg(orgId);
+  const fromCurrency = inv.currencyCode ?? defaultCurrencyCode;
+  const subtotalBase = await convertAmountToCurrency(Number(inv.subtotal ?? 0), fromCurrency, defaultCurrencyCode);
+  const taxAmountBase = await convertAmountToCurrency(Number(inv.taxAmount ?? 0), fromCurrency, defaultCurrencyCode);
+  const totalAmountBase = subtotalBase + taxAmountBase;
+  const paidAmountBase = await convertAmountToCurrency(Number(inv.paidAmount ?? 0), fromCurrency, defaultCurrencyCode);
+
+  await postSalesInvoiceToGl({
+    organizationId: orgId,
+    salesInvoiceId: id,
+    entryDate: inv.invoiceDate,
+    memo: `Sales Invoice ${inv.invoiceNo}`,
+    subtotal: subtotalBase,
+    taxAmount: taxAmountBase,
+    totalAmount: totalAmountBase,
+    paidAmount: paidAmountBase,
+    createdById: userId,
   });
 
   revalidatePath("/sales");
@@ -1235,22 +1296,25 @@ export async function createSalesInvoice(formData: FormData) {
         },
       });
 
-      await tx.stockMovement.create({
-        data: {
-          organizationId: orgId,
-          itemId: it.itemId,
-          type: "OUT",
-          quantity: it.quantity,
-          referenceType: "SalesInvoice",
-          referenceId: invoice.id,
-          notes: `Sales Invoice ${invoiceNo}`,
-        },
-      });
+      // Only move stock when the invoice is immediately approved.
+      if (!sendForApproval) {
+        await tx.stockMovement.create({
+          data: {
+            organizationId: orgId,
+            itemId: it.itemId,
+            type: "OUT",
+            quantity: it.quantity,
+            referenceType: "SalesInvoice",
+            referenceId: invoice.id,
+            notes: `Sales Invoice ${invoiceNo}`,
+          },
+        });
 
-      await tx.item.update({
-        where: { id: it.itemId },
-        data: { stockQty: item.stockQty - it.quantity },
-      });
+        await tx.item.update({
+          where: { id: it.itemId },
+          data: { stockQty: item.stockQty - it.quantity },
+        });
+      }
     }
   });
 
@@ -1265,6 +1329,27 @@ export async function createSalesInvoice(formData: FormData) {
       entityId: created.id,
       metadata: { invoiceNo },
     });
+
+    // Phase 1 GL posting is done only when the invoice is APPROVED.
+    if (!sendForApproval) {
+      const defaultCurrencyCode = await getDefaultCurrencyCodeForOrg(orgId);
+      const fromCurrency = currencyCode ?? defaultCurrencyCode;
+      const subtotalBase = await convertAmountToCurrency(Number(subtotal), fromCurrency, defaultCurrencyCode);
+      const taxAmountBase = await convertAmountToCurrency(Number(taxAmount), fromCurrency, defaultCurrencyCode);
+      const totalAmountBase = subtotalBase + taxAmountBase;
+      const paidAmountBase = await convertAmountToCurrency(Number(paidAmount ?? 0), fromCurrency, defaultCurrencyCode);
+      await postSalesInvoiceToGl({
+        organizationId: orgId,
+        salesInvoiceId: created.id,
+        entryDate: invDate,
+        memo: `Sales Invoice ${invoiceNo}`,
+        subtotal: subtotalBase,
+        taxAmount: taxAmountBase,
+        totalAmount: totalAmountBase,
+        paidAmount: paidAmountBase,
+        createdById: userId,
+      });
+    }
   }
 
   const file = formData.get("attachment") as File | null;
@@ -1377,6 +1462,7 @@ export async function deleteSalesInvoice(id: string) {
     return { error: "Cannot delete: invoice is fully paid (job finished)." };
   }
 
+  // GL/stock posting happens only after APPROVAL; draft invoices have nothing to reverse.
   await prisma.salesInvoice.update({
     where: { id },
     data: { deletedAt: new Date(), deletedById: currentUserId ?? undefined },
@@ -1407,6 +1493,7 @@ export async function recordClientPayment(formData: FormData) {
   if (!orgId) redirect("/login");
 
   const user = await getCurrentUser();
+  const userId = (user as { id?: string } | null)?.id ?? null;
   if (!canRecordPayments(user)) {
     return { error: { _form: ["Only Finance can record payments."] } };
   }
@@ -1435,6 +1522,10 @@ export async function recordClientPayment(formData: FormData) {
     return { error: { _form: ["Invoice not found"] } };
   }
 
+  if (invoice.status !== "APPROVED") {
+    return { error: { _form: ["You can record payments only for approved invoices."] } };
+  }
+
   const total = Number(invoice.totalAmount);
   const alreadyPaid = Number(invoice.paidAmount);
   const outstanding = total - alreadyPaid;
@@ -1451,8 +1542,9 @@ export async function recordClientPayment(formData: FormData) {
 
   const payDate = new Date(paymentDate);
 
+  let clientPaymentId: string | null = null;
   await prisma.$transaction(async (tx) => {
-    await tx.clientPayment.create({
+    const payment = await tx.clientPayment.create({
       data: {
         organizationId: orgId,
         salesInvoiceId: invoice.id,
@@ -1463,6 +1555,7 @@ export async function recordClientPayment(formData: FormData) {
         notes: notes || null,
       },
     });
+    clientPaymentId = payment.id;
 
     const newPaid = alreadyPaid + amount;
     const newStatus =
@@ -1476,6 +1569,20 @@ export async function recordClientPayment(formData: FormData) {
       },
     });
   });
+
+  if (clientPaymentId) {
+    const defaultCurrencyCode = await getDefaultCurrencyCodeForOrg(orgId);
+    const fromCurrency = invoice.currencyCode ?? defaultCurrencyCode;
+    const amountBase = await convertAmountToCurrency(amount, fromCurrency, defaultCurrencyCode);
+    await postClientPaymentToGl({
+      organizationId: orgId,
+      clientPaymentId,
+      entryDate: payDate,
+      memo: `Client payment`,
+      amount: amountBase,
+      createdById: userId,
+    });
+  }
 
   revalidatePath("/sales");
   revalidatePath(`/sales/${parsed.data.invoiceId}`);

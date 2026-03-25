@@ -42,6 +42,8 @@ const ALL_REPORT_TYPES = [
   { value: "profit_loss", label: "Profit & Loss" },
   { value: "suppliers", label: "Supplier" },
   { value: "inventory", label: "Inventory" },
+  { value: "trial_balance", label: "Trial Balance" },
+  { value: "balance_sheet", label: "Balance Sheet" },
 ] as const;
 
 export function ReportsWorkspace({

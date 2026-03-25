@@ -91,6 +91,12 @@ model Organization {
   documents         Document[]
   reportExports     ReportExport[]
   dashboardPreferences UserDashboardPreference[]
+  glAccounts        GlAccount[]
+  journalEntries    JournalEntry[]
+  bankAccounts      BankAccount[]
+  bankStatements    BankStatement[]
+  bankTransactions   BankTransaction[]
+  bankReconciliations BankReconciliation[]
   auditLogs         AuditLog[]
 
   @@index([slug])
@@ -957,6 +963,240 @@ model ReportExport {
   @@index([organizationId, expiresAt])
   @@index([documentId])
   @@map("report_exports")
+}
+
+// =============================================================================
+// ACCOUNTING CORE (CHART OF ACCOUNTS + JOURNALS)
+// =============================================================================
+
+enum GlAccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+enum GlNormalSide {
+  DEBIT
+  CREDIT
+}
+
+enum JournalEntryStatus {
+  POSTED
+  REVERSED
+}
+
+model GlAccount {
+  id             String         @id @default(cuid())
+  organizationId String         @map("organization_id")
+  code           String         @map("code")
+  name           String         @map("name")
+  type           GlAccountType @map("account_type")
+  normalSide     GlNormalSide  @map("normal_side")
+  isTaxAccount   Boolean        @default(false) @map("is_tax_account")
+
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  deletedAt      DateTime?      @map("deleted_at")
+  deletedById    String?       @map("deleted_by_id")
+
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  journalLines   JournalLine[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@index([deletedAt])
+  @@map("gl_accounts")
+}
+
+model JournalEntry {
+  id             String              @id @default(cuid())
+  organizationId String              @map("organization_id")
+  entryNo        String              @map("entry_no")
+  entryDate      DateTime           @map("entry_date")
+  memo           String?
+  status         JournalEntryStatus @default(POSTED)
+
+  referenceType  String?            @map("reference_type") // e.g. SalesInvoice, PurchaseInvoice, Expense
+  referenceId    String?            @map("reference_id")
+
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+  deletedAt      DateTime?         @map("deleted_at")
+  deletedById    String?          @map("deleted_by_id")
+
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lines          JournalLine[]
+
+  @@unique([organizationId, entryNo])
+  @@index([organizationId, entryDate])
+  @@index([referenceType, referenceId])
+  @@index([deletedAt])
+  @@map("journal_entries")
+}
+
+model JournalLine {
+  id             String       @id @default(cuid())
+  journalEntryId String       @map("journal_entry_id")
+  accountId      String       @map("account_id")
+  description    String?
+
+  debitAmount    Decimal      @default(0) @map("debit_amount") @db.Decimal(18, 2)
+  creditAmount   Decimal      @default(0) @map("credit_amount") @db.Decimal(18, 2)
+
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  deletedAt      DateTime?    @map("deleted_at")
+  deletedById    String?      @map("deleted_by_id")
+
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account        GlAccount    @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@index([journalEntryId])
+  @@index([accountId])
+  @@index([deletedAt])
+  @@map("journal_lines")
+}
+
+// =============================================================================
+// BANKING (BANK ACCOUNTS + STATEMENTS + RECONCILIATION)
+// =============================================================================
+
+enum BankReconciliationStatus {
+  OPEN
+  MATCHED
+  CLOSED
+}
+
+model BankAccount {
+  id                   String   @id @default(cuid())
+  organizationId       String   @map("organization_id")
+  name                 String   @map("name")
+  bankName             String?  @map("bank_name")
+  accountNumberMasked String?   @map("account_number_masked")
+  currencyCode         String   @default("AED") @map("currency_code")
+
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+  deletedById  String?   @map("deleted_by_id")
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  statements   BankStatement[]
+  transactions BankTransaction[]
+  reconciliations BankReconciliation[]
+
+  @@index([organizationId])
+  @@index([deletedAt])
+  @@map("bank_accounts")
+}
+
+model BankStatement {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  bankAccountId  String   @map("bank_account_id")
+
+  statementDate DateTime @map("statement_date")
+  sourceFileUrl String? @map("source_file_url")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+  deletedById String?   @map("deleted_by_id")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  bankAccount  BankAccount  @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+
+  transactions    BankTransaction[]
+  reconciliations BankReconciliation[]
+
+  @@index([organizationId])
+  @@index([bankAccountId])
+  @@index([statementDate])
+  @@index([deletedAt])
+  @@map("bank_statements")
+}
+
+model BankTransaction {
+  id               String   @id @default(cuid())
+  organizationId   String   @map("organization_id")
+  bankStatementId String   @map("bank_statement_id")
+  bankAccountId    String   @map("bank_account_id")
+
+  transactionDate DateTime @map("transaction_date")
+  reference       String?  @map("reference")
+  description     String?  @map("description")
+  amount          Decimal  @db.Decimal(12, 2)
+  currencyCode    String   @default("AED") @map("currency_code")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+  deletedById String?   @map("deleted_by_id")
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  bankStatement BankStatement  @relation(fields: [bankStatementId], references: [id], onDelete: Cascade)
+  bankAccount   BankAccount    @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+
+  reconciliationItems BankReconciliationItem[]
+
+  @@index([organizationId])
+  @@index([bankStatementId])
+  @@index([bankAccountId])
+  @@index([transactionDate])
+  @@index([deletedAt])
+  @@map("bank_transactions")
+}
+
+model BankReconciliation {
+  id               String   @id @default(cuid())
+  organizationId   String   @map("organization_id")
+  bankStatementId String   @map("bank_statement_id")
+  bankAccountId    String   @map("bank_account_id")
+
+  status     BankReconciliationStatus @default(OPEN) @map("status")
+
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  deletedAt  DateTime? @map("deleted_at")
+  deletedById String? @map("deleted_by_id")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  bankStatement BankStatement @relation(fields: [bankStatementId], references: [id], onDelete: Cascade)
+  bankAccount BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+
+  items BankReconciliationItem[]
+
+  @@unique([organizationId, bankStatementId])
+  @@index([organizationId])
+  @@index([bankAccountId])
+  @@index([deletedAt])
+  @@map("bank_reconciliations")
+}
+
+model BankReconciliationItem {
+  id                 String   @id @default(cuid())
+  bankReconciliationId String @map("bank_reconciliation_id")
+  bankTransactionId String   @unique @map("bank_transaction_id")
+
+  // Store payment reference without hard FKs (keeps reconciliation flexible across modules)
+  paymentType String @map("payment_type") // "ClientPayment" | "SupplierPayment"
+  paymentId   String @map("payment_id")
+  matchedAmount Decimal @db.Decimal(12, 2) @map("matched_amount")
+  notes       String? @map("notes")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+  deletedById String? @map("deleted_by_id")
+
+  bankReconciliation BankReconciliation @relation(fields: [bankReconciliationId], references: [id], onDelete: Cascade)
+  bankTransaction    BankTransaction    @relation(fields: [bankTransactionId], references: [id], onDelete: Restrict)
+
+  @@index([bankReconciliationId])
+  @@index([deletedAt])
+  @@map("bank_reconciliation_items")
 }
 
 // =============================================================================

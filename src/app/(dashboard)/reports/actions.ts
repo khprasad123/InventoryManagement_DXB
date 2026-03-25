@@ -524,20 +524,241 @@ export async function getInventoryReportData(params: { asOf?: string }) {
 }
 
 export async function getProfitLossReportData(params: { from?: string; to?: string }) {
-  const sales = await getSalesReportData(params);
-  const purchases = await getPurchasesReportData(params);
-  const revenue = sales.summary.totalBase;
-  const cogs = purchases.summary.totalBase;
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const now = new Date();
+  const defaultFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+  const from = toStartOfDay(parseDateOrDefault(params.from, defaultFrom));
+  const to = toEndOfDay(parseDateOrDefault(params.to, now));
+  const defaultCurrencyCode = await getDefaultCurrencyCodeForOrg(orgId);
+
+  // Phase 1 GL-based P&L:
+  // - Revenue = net balance of REVENUE accounts
+  // - COGS = net balance of code `5000` (Purchases / COGS)
+  // - Gross Profit = Revenue - COGS
+  const [revenueRow, cogsRow] = await Promise.all([
+    prisma.$queryRaw<Array<{ net: number | null }>>`
+      SELECT
+        SUM(
+          CASE
+            WHEN ga.normal_side = 'DEBIT' THEN (jl.debit_amount - jl.credit_amount)
+            ELSE (jl.credit_amount - jl.debit_amount)
+          END
+        ) AS net
+      FROM journal_entries je
+      JOIN journal_lines jl ON jl.journal_entry_id = je.id AND jl.deleted_at IS NULL
+      JOIN gl_accounts ga ON ga.id = jl.account_id AND ga.deleted_at IS NULL
+      WHERE je.organization_id = ${orgId}
+        AND je.deleted_at IS NULL
+        AND je.entry_date >= ${from}
+        AND je.entry_date <= ${to}
+        AND ga.account_type = 'REVENUE'
+    `,
+    prisma.$queryRaw<Array<{ net: number | null }>>`
+      SELECT
+        SUM(
+          CASE
+            WHEN ga.normal_side = 'DEBIT' THEN (jl.debit_amount - jl.credit_amount)
+            ELSE (jl.credit_amount - jl.debit_amount)
+          END
+        ) AS net
+      FROM journal_entries je
+      JOIN journal_lines jl ON jl.journal_entry_id = je.id AND jl.deleted_at IS NULL
+      JOIN gl_accounts ga ON ga.id = jl.account_id AND ga.deleted_at IS NULL
+      WHERE je.organization_id = ${orgId}
+        AND je.deleted_at IS NULL
+        AND je.entry_date >= ${from}
+        AND je.entry_date <= ${to}
+        AND ga.code = '5000'
+    `,
+  ]);
+
+  const revenue = revenueRow?.[0]?.net ? Number(revenueRow[0].net) : 0;
+  const cogs = cogsRow?.[0]?.net ? Number(cogsRow[0].net) : 0;
   const grossProfit = revenue - cogs;
 
   return {
-    filters: sales.filters,
-    currencyCode: sales.currencyCode,
+    filters: { from: toYmd(from), to: toYmd(to) },
+    currencyCode: defaultCurrencyCode,
     rows: [
       { metric: "Revenue", value: revenue },
       { metric: "Cost of Goods Sold", value: cogs },
       { metric: "Gross Profit", value: grossProfit },
     ],
+  };
+}
+
+export async function getTrialBalanceReportData(params: { from?: string; to?: string }) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const now = new Date();
+  const defaultTo = now;
+  const to = toEndOfDay(parseDateOrDefault(params.to, defaultTo));
+
+  const accountRows = await prisma.$queryRaw<
+    Array<{
+      code: string;
+      name: string;
+      account_type: string;
+      normal_side: string;
+      eff_balance: number | null;
+    }>
+  >`
+    SELECT
+      ga.code AS code,
+      ga.name AS name,
+      ga.account_type AS account_type,
+      ga.normal_side AS normal_side,
+      SUM(
+        CASE
+          WHEN ga.normal_side = 'DEBIT' THEN (jl.debit_amount - jl.credit_amount)
+          ELSE (jl.credit_amount - jl.debit_amount)
+        END
+      ) AS eff_balance
+    FROM journal_entries je
+    JOIN journal_lines jl ON jl.journal_entry_id = je.id AND jl.deleted_at IS NULL
+    JOIN gl_accounts ga ON ga.id = jl.account_id AND ga.deleted_at IS NULL
+    WHERE je.organization_id = ${orgId}
+      AND je.deleted_at IS NULL
+      AND je.entry_date <= ${to}
+    GROUP BY ga.id, ga.code, ga.name, ga.account_type, ga.normal_side
+    HAVING
+      SUM(
+        CASE
+          WHEN ga.normal_side = 'DEBIT' THEN (jl.debit_amount - jl.credit_amount)
+          ELSE (jl.credit_amount - jl.debit_amount)
+        END
+      ) <> 0
+    ORDER BY ga.code ASC
+  `;
+
+  const rows = accountRows.map((r) => {
+    const eff = r.eff_balance ? Number(r.eff_balance) : 0;
+    const debit =
+      eff >= 0
+        ? r.normal_side === "DEBIT"
+          ? eff
+          : 0
+        : r.normal_side === "CREDIT"
+          ? -eff
+          : 0;
+    const credit =
+      eff >= 0
+        ? r.normal_side === "CREDIT"
+          ? eff
+          : 0
+        : r.normal_side === "DEBIT"
+          ? -eff
+          : 0;
+    return {
+      code: r.code,
+      name: r.name,
+      debit,
+      credit,
+    };
+  });
+
+  const totals = rows.reduce(
+    (acc, r) => {
+      acc.debit += r.debit;
+      acc.credit += r.credit;
+      return acc;
+    },
+    { debit: 0, credit: 0 }
+  );
+
+  return {
+    filters: { to: toYmd(to) },
+    totals,
+    rows,
+  };
+}
+
+export async function getBalanceSheetReportData(params: { from?: string; to?: string }) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const now = new Date();
+  const defaultTo = now;
+  const to = toEndOfDay(parseDateOrDefault(params.to, defaultTo));
+
+  const accountRows = await prisma.$queryRaw<
+    Array<{
+      code: string;
+      name: string;
+      account_type: string;
+      normal_side: string;
+      eff_balance: number | null;
+    }>
+  >`
+    SELECT
+      ga.code AS code,
+      ga.name AS name,
+      ga.account_type AS account_type,
+      ga.normal_side AS normal_side,
+      SUM(
+        CASE
+          WHEN ga.normal_side = 'DEBIT' THEN (jl.debit_amount - jl.credit_amount)
+          ELSE (jl.credit_amount - jl.debit_amount)
+        END
+      ) AS eff_balance
+    FROM journal_entries je
+    JOIN journal_lines jl ON jl.journal_entry_id = je.id AND jl.deleted_at IS NULL
+    JOIN gl_accounts ga ON ga.id = jl.account_id AND ga.deleted_at IS NULL
+    WHERE je.organization_id = ${orgId}
+      AND je.deleted_at IS NULL
+      AND je.entry_date <= ${to}
+    GROUP BY ga.id, ga.code, ga.name, ga.account_type, ga.normal_side
+    HAVING
+      SUM(
+        CASE
+          WHEN ga.normal_side = 'DEBIT' THEN (jl.debit_amount - jl.credit_amount)
+          ELSE (jl.credit_amount - jl.debit_amount)
+        END
+      ) <> 0
+    ORDER BY ga.account_type ASC, ga.code ASC
+  `;
+
+  const rows = accountRows.map((r) => {
+    const eff = r.eff_balance ? Number(r.eff_balance) : 0;
+    const debit =
+      eff >= 0
+        ? r.normal_side === "DEBIT"
+          ? eff
+          : 0
+        : r.normal_side === "CREDIT"
+          ? -eff
+          : 0;
+    const credit =
+      eff >= 0
+        ? r.normal_side === "CREDIT"
+          ? eff
+          : 0
+        : r.normal_side === "DEBIT"
+          ? -eff
+          : 0;
+    return {
+      accountType: r.account_type,
+      code: r.code,
+      name: r.name,
+      debit,
+      credit,
+    };
+  });
+
+  const totalsByType: Record<string, { net: number }> = {};
+  for (const r of rows) {
+    const net = r.debit - r.credit;
+    totalsByType[r.accountType] = totalsByType[r.accountType] ?? { net: 0 };
+    totalsByType[r.accountType].net += net;
+  }
+
+  return {
+    filters: { to: toYmd(to) },
+    totalsByType,
+    rows,
   };
 }
 
@@ -673,6 +894,60 @@ export async function generateAndStoreReportFile(
         r.cost.toFixed(2),
         r.stockValue.toFixed(2),
       ])
+    );
+    metadata = {
+      reportType: type,
+      filters: data.filters,
+      rowCount: data.rows.length,
+      generatedAt: now.toISOString(),
+      retentionDays: REPORT_RETENTION_DAYS,
+    };
+  } else if (type === "trial_balance") {
+    const data = await getTrialBalanceReportData(params);
+    fileName = `trial-balance-asof-${data.filters.to}-${stamp}.xlsx`;
+    workbook = buildWorkbook(
+      "TrialBalance",
+      ["Account Code", "Account Name", "Debit", "Credit"],
+      data.rows.map((r) => [r.code, r.name, r.debit.toFixed(2), r.credit.toFixed(2)])
+    );
+    metadata = {
+      reportType: type,
+      filters: data.filters,
+      rowCount: data.rows.length,
+      generatedAt: now.toISOString(),
+      retentionDays: REPORT_RETENTION_DAYS,
+    };
+  } else if (type === "balance_sheet") {
+    const data = await getBalanceSheetReportData(params);
+    fileName = `balance-sheet-asof-${data.filters.to}-${stamp}.xlsx`;
+    const totalsRows: Array<[string, string, string, string, string]> = [];
+    const sumForType = (t: string) => {
+      const subset = data.rows.filter((r) => r.accountType === t);
+      const debit = subset.reduce((s, r) => s + r.debit, 0);
+      const credit = subset.reduce((s, r) => s + r.credit, 0);
+      return { debit, credit };
+    };
+    const asset = sumForType("ASSET");
+    const liability = sumForType("LIABILITY");
+    const equity = sumForType("EQUITY");
+    totalsRows.push(["ASSET TOTAL", "", "", asset.debit.toFixed(2), asset.credit.toFixed(2)]);
+    totalsRows.push([
+      "LIABILITY TOTAL",
+      "",
+      "",
+      liability.debit.toFixed(2),
+      liability.credit.toFixed(2),
+    ]);
+    totalsRows.push(["EQUITY TOTAL", "", "", equity.debit.toFixed(2), equity.credit.toFixed(2)]);
+
+    workbook = buildWorkbook(
+      "BalanceSheet",
+      ["Account Type", "Account Code", "Account Name", "Debit", "Credit"],
+      [
+        ...data.rows.map((r) => [r.accountType, r.code, r.name, r.debit.toFixed(2), r.credit.toFixed(2)]),
+        ["", "", "", "", ""],
+        ...totalsRows,
+      ]
     );
     metadata = {
       reportType: type,

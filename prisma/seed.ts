@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type GlAccountType, type GlNormalSide } from "@prisma/client";
 import { hash } from "bcryptjs";
 
 const prisma = new PrismaClient();
@@ -35,6 +35,9 @@ async function clearAllDataIfDev() {
   await prisma.item.deleteMany({});
   await prisma.currency.deleteMany({});
   await prisma.expenseCategory.deleteMany({});
+  await prisma.journalLine.deleteMany({});
+  await prisma.journalEntry.deleteMany({});
+  await prisma.glAccount.deleteMany({});
   await prisma.role.deleteMany({});
   await prisma.permission.deleteMany({});
   await prisma.user.deleteMany({});
@@ -102,6 +105,42 @@ async function main() {
     }),
   ]);
 
+  // Create default Chart of Accounts (GL) for the org
+  const glAccounts: Array<{
+    code: string;
+    name: string;
+    type: GlAccountType;
+    normalSide: GlNormalSide;
+    isTaxAccount?: boolean;
+  }> = [
+    { code: "1000", name: "Cash / Bank", type: "ASSET", normalSide: "DEBIT" },
+    { code: "1100", name: "Accounts Receivable", type: "ASSET", normalSide: "DEBIT" },
+    { code: "1200", name: "Tax Recoverable", type: "ASSET", normalSide: "DEBIT", isTaxAccount: true },
+    { code: "2000", name: "Accounts Payable", type: "LIABILITY", normalSide: "CREDIT" },
+    { code: "2100", name: "Tax Payable", type: "LIABILITY", normalSide: "CREDIT", isTaxAccount: true },
+    { code: "3000", name: "Equity", type: "EQUITY", normalSide: "CREDIT" },
+    { code: "4000", name: "Sales Revenue", type: "REVENUE", normalSide: "CREDIT" },
+    { code: "5000", name: "Purchases / COGS", type: "EXPENSE", normalSide: "DEBIT" },
+    { code: "6000", name: "Operating Expenses", type: "EXPENSE", normalSide: "DEBIT" },
+  ];
+
+  await Promise.all(
+    glAccounts.map((a) =>
+      prisma.glAccount.upsert({
+        where: { organizationId_code: { organizationId: org.id, code: a.code } },
+        update: {},
+        create: {
+          organizationId: org.id,
+          code: a.code,
+          name: a.name,
+          type: a.type,
+          normalSide: a.normalSide,
+          isTaxAccount: a.isTaxAccount ?? false,
+        },
+      })
+    )
+  );
+
   // Permissions (global codes; roles get assigned these)
   // Menu-based CRUD: inventory_create, inventory_read, inventory_update, inventory_delete, etc.
   const permissionData = [
@@ -118,6 +157,19 @@ async function main() {
     { code: "settings_roles_update", name: "Settings - Roles Update", description: "Update roles in settings" },
     { code: "settings_roles_delete", name: "Settings - Roles Delete", description: "Delete roles in settings" },
     { code: "record_payments", name: "Record payments", description: "Record supplier/client payments" },
+    { code: "manage_journals", name: "Accounting - Manage Journals", description: "Access General Journal (all journal actions)" },
+    { code: "gl_journals_read", name: "Journals - Read", description: "View journal entries" },
+    { code: "gl_journals_create", name: "Journals - Create", description: "Create manual journal entries" },
+    { code: "gl_journals_delete", name: "Journals - Delete/Reversal", description: "Reverse/undo posted journal entries" },
+    { code: "gl_accounts_read", name: "GL Accounts - Read", description: "View GL chart of accounts for journal entry" },
+    { code: "manage_banking", name: "Banking - Manage Accounts", description: "Access bank accounts, statements, and reconciliation matching" },
+    { code: "bank_accounts_read", name: "Bank Accounts - Read", description: "View bank accounts" },
+    { code: "bank_accounts_create", name: "Bank Accounts - Create", description: "Create bank accounts" },
+    { code: "bank_accounts_update", name: "Bank Accounts - Update", description: "Update bank accounts" },
+    { code: "bank_accounts_delete", name: "Bank Accounts - Delete", description: "Delete bank accounts" },
+    { code: "bank_statements_import", name: "Bank Statements - Import", description: "Import bank statements / transactions (CSV)" },
+    { code: "bank_reconciliations_read", name: "Bank Reconciliations - Read", description: "View reconciliation matches" },
+    { code: "bank_reconciliations_match", name: "Bank Reconciliations - Match", description: "Create/update reconciliation matches" },
     { code: "adjust_stock", name: "Adjust stock", description: "Create stock adjustments" },
     { code: "manage_inventory", name: "Manage inventory", description: "Items, stock, GRN (all actions)" },
     { code: "inventory_create", name: "Inventory - Create", description: "Create items, stock entries" },
@@ -158,6 +210,8 @@ async function main() {
     { code: "reports_profit_loss", name: "Reports - Profit & Loss", description: "Generate P&L reports" },
     { code: "reports_suppliers", name: "Reports - Suppliers", description: "Generate supplier reports" },
     { code: "reports_inventory", name: "Reports - Inventory", description: "Generate inventory reports" },
+    { code: "reports_trial_balance", name: "Reports - Trial Balance", description: "Generate trial balance reports" },
+    { code: "reports_balance_sheet", name: "Reports - Balance Sheet", description: "Generate balance sheet reports" },
     { code: "view_audit", name: "View audit log", description: "Access audit log" },
   ];
   const permissions: { id: string; code: string }[] = [];
@@ -219,6 +273,8 @@ async function main() {
     .map((permissionId) => ({ roleId: inventoryRole.id, permissionId: permissionId! }));
   const financePerms = [
     permByCode.record_payments,
+    permByCode.manage_journals,
+    permByCode.manage_banking,
     permByCode.manage_expenses,
     permByCode.manage_purchases,
     permByCode.view_reports,

@@ -9,6 +9,51 @@ import { DASHBOARD_WIDGETS, getAllowedWidgets, type DashboardWidgetId } from "./
 import { canUser, PERMISSIONS } from "@/lib/permissions";
 import { revalidatePath } from "next/cache";
 
+const GL_CODES = {
+  REVENUE: "4000",
+  COGS: "5000",
+  OPERATING_EXPENSES: "6000",
+  AR: "1100",
+  AP: "2000",
+} as const;
+
+async function isGlAvailable(orgId: string) {
+  try {
+    const count = await prisma.glAccount.count({
+      where: { organizationId: orgId, deletedAt: null },
+    });
+    return count > 0;
+  } catch {
+    return false;
+  }
+}
+
+async function getGlNetAmountByAccountCode(
+  orgId: string,
+  accountCode: string,
+  start: Date,
+  end: Date
+): Promise<number> {
+  const rows = await prisma.$queryRaw<Array<{ net: number | null }>>`
+    SELECT
+      SUM(
+        CASE
+          WHEN ga.normal_side = 'DEBIT' THEN (jl.debit_amount - jl.credit_amount)
+          ELSE (jl.credit_amount - jl.debit_amount)
+        END
+      ) AS net
+    FROM journal_entries je
+    JOIN journal_lines jl ON jl.journal_entry_id = je.id AND jl.deleted_at IS NULL
+    JOIN gl_accounts ga ON ga.id = jl.account_id AND ga.deleted_at IS NULL
+    WHERE je.organization_id = ${orgId}
+      AND je.deleted_at IS NULL
+      AND je.entry_date >= ${start}
+      AND je.entry_date <= ${end}
+      AND ga.code = ${accountCode}
+  `;
+  return rows?.[0]?.net ? Number(rows[0].net) : 0;
+}
+
 function getMonthStartEnd(monthOffset: number = 0) {
   const d = new Date();
   d.setMonth(d.getMonth() + monthOffset);
@@ -152,33 +197,40 @@ export async function getDashboardData(user: SessionUser) {
   let monthlySalesTotal = 0;
   let monthlyCogs = 0;
   let topSellingItems: Array<{ itemId: string; name: string; sku: string; totalRevenue: number; lineCount: number }> = [];
+  const glAvailable = await isGlAvailable(orgId);
   if (has("kpi_monthly_sales") || has("kpi_net_profit") || has("profit_breakdown") || has("top_selling_items") || has("monthly_progress")) {
-    const salesInvoices = await prisma.salesInvoice.findMany({
-      where: {
-        organizationId: orgId,
-        deletedAt: null,
-        invoiceDate: { gte: currentMonth.start, lte: currentMonth.end },
-      },
-      include: {
-        items: { include: { item: { select: { defaultPurchaseCost: true } } } },
-      },
-    });
+    if (glAvailable && (has("kpi_monthly_sales") || has("kpi_net_profit") || has("profit_breakdown") || has("monthly_progress"))) {
+      // GL-based totals (already in org default currency from our posting logic).
+      monthlySalesTotal = await getGlNetAmountByAccountCode(orgId, GL_CODES.REVENUE, currentMonth.start, currentMonth.end);
+      monthlyCogs = await getGlNetAmountByAccountCode(orgId, GL_CODES.COGS, currentMonth.start, currentMonth.end);
+    } else {
+      const salesInvoices = await prisma.salesInvoice.findMany({
+        where: {
+          organizationId: orgId,
+          deletedAt: null,
+          invoiceDate: { gte: currentMonth.start, lte: currentMonth.end },
+        },
+        include: {
+          items: { include: { item: { select: { defaultPurchaseCost: true } } } },
+        },
+      });
 
-    const salesByCurrency = new Map<string, number>();
-    for (const inv of salesInvoices) {
-      const code = inv.currencyCode ?? defaultCurrencyCode;
-      const current = salesByCurrency.get(code) ?? 0;
-      salesByCurrency.set(code, current + Number(inv.totalAmount));
-    }
-    await Promise.all(
-      Array.from(salesByCurrency.entries()).map(async ([code, sum]) => {
-        const converted = await convertAmountToCurrency(sum, code, defaultCurrencyCode);
-        monthlySalesTotal += converted;
-      })
-    );
-    for (const inv of salesInvoices) {
-      for (const line of inv.items) {
-        monthlyCogs += line.quantity * Number(line.item.defaultPurchaseCost);
+      const salesByCurrency = new Map<string, number>();
+      for (const inv of salesInvoices) {
+        const code = inv.currencyCode ?? defaultCurrencyCode;
+        const current = salesByCurrency.get(code) ?? 0;
+        salesByCurrency.set(code, current + Number(inv.totalAmount));
+      }
+      await Promise.all(
+        Array.from(salesByCurrency.entries()).map(async ([code, sum]) => {
+          const converted = await convertAmountToCurrency(sum, code, defaultCurrencyCode);
+          monthlySalesTotal += converted;
+        })
+      );
+      for (const inv of salesInvoices) {
+        for (const line of inv.items) {
+          monthlyCogs += line.quantity * Number(line.item.defaultPurchaseCost);
+        }
       }
     }
 
@@ -216,26 +268,35 @@ export async function getDashboardData(user: SessionUser) {
 
   let monthlyExpensesTotal = 0;
   if (has("kpi_monthly_expenses") || has("kpi_net_profit") || has("profit_breakdown") || has("monthly_progress")) {
-    const expenses = await prisma.expense.findMany({
-      where: {
-        organizationId: orgId,
-        deletedAt: null,
-        expenseDate: { gte: currentMonth.start, lte: currentMonth.end },
-      },
-      select: { amount: true, currencyCode: true },
-    });
-    const expensesByCurrency = new Map<string, number>();
-    for (const e of expenses) {
-      const code = e.currencyCode ?? defaultCurrencyCode;
-      const current = expensesByCurrency.get(code) ?? 0;
-      expensesByCurrency.set(code, current + Number(e.amount));
+    if (glAvailable) {
+      monthlyExpensesTotal = await getGlNetAmountByAccountCode(
+        orgId,
+        GL_CODES.OPERATING_EXPENSES,
+        currentMonth.start,
+        currentMonth.end
+      );
+    } else {
+      const expenses = await prisma.expense.findMany({
+        where: {
+          organizationId: orgId,
+          deletedAt: null,
+          expenseDate: { gte: currentMonth.start, lte: currentMonth.end },
+        },
+        select: { amount: true, currencyCode: true },
+      });
+      const expensesByCurrency = new Map<string, number>();
+      for (const e of expenses) {
+        const code = e.currencyCode ?? defaultCurrencyCode;
+        const current = expensesByCurrency.get(code) ?? 0;
+        expensesByCurrency.set(code, current + Number(e.amount));
+      }
+      await Promise.all(
+        Array.from(expensesByCurrency.entries()).map(async ([code, sum]) => {
+          const converted = await convertAmountToCurrency(sum, code, defaultCurrencyCode);
+          monthlyExpensesTotal += converted;
+        })
+      );
     }
-    await Promise.all(
-      Array.from(expensesByCurrency.entries()).map(async ([code, sum]) => {
-        const converted = await convertAmountToCurrency(sum, code, defaultCurrencyCode);
-        monthlyExpensesTotal += converted;
-      })
-    );
   }
 
   const monthlyRevenue = monthlySalesTotal;
@@ -245,6 +306,26 @@ export async function getDashboardData(user: SessionUser) {
   if (has("revenue_expense_chart") || has("monthly_progress")) {
     for (let i = 5; i >= 0; i--) {
       const { start, end, year, month } = getMonthStartEnd(-i);
+
+      if (glAvailable) {
+        const [revenue, expenses] = await Promise.all([
+          getGlNetAmountByAccountCode(orgId, GL_CODES.REVENUE, start, end),
+          getGlNetAmountByAccountCode(orgId, GL_CODES.OPERATING_EXPENSES, start, end),
+        ]);
+
+        const monthLabel = new Date(year, month - 1, 1).toLocaleDateString("en-US", {
+          month: "short",
+          year: "2-digit",
+        });
+
+        revenueExpenseByMonth.push({
+          month: monthLabel,
+          revenue: Math.round(revenue * 100) / 100,
+          expenses: Math.round(expenses * 100) / 100,
+        });
+        continue;
+      }
+
       const [monthSales, monthExpenses] = await Promise.all([
         prisma.salesInvoice.findMany({
           where: {
@@ -292,10 +373,12 @@ export async function getDashboardData(user: SessionUser) {
           expenseSum += converted;
         })
       );
+
       const monthLabel = new Date(year, month - 1, 1).toLocaleDateString("en-US", {
         month: "short",
         year: "2-digit",
       });
+
       revenueExpenseByMonth.push({
         month: monthLabel,
         revenue: Math.round(salesSum * 100) / 100,
@@ -307,52 +390,62 @@ export async function getDashboardData(user: SessionUser) {
   let outstandingReceivablesCorrect = 0;
   let outstandingPayables = 0;
   if (has("outstanding_summary") || has("due_soon_receivables") || has("due_soon_payables")) {
-    const [salesUnpaid, purchasesUnpaid] = await Promise.all([
-      prisma.salesInvoice.findMany({
-        where: {
-          organizationId: orgId,
-          deletedAt: null,
-          paymentStatus: { not: "PAID" },
-        },
-        select: { totalAmount: true, paidAmount: true, currencyCode: true },
-      }),
-      prisma.purchaseInvoice.findMany({
-        where: {
-          organizationId: orgId,
-          deletedAt: null,
-          paymentStatus: { not: "PAID" },
-        },
-        select: { totalAmount: true, paidAmount: true, currencyCode: true },
-      }),
-    ]);
+    if (glAvailable) {
+      // GL-based totals for Receivables (AR) and Payables (AP), already in org default currency.
+      const veryOld = new Date(0);
+      const now = new Date();
+      [outstandingReceivablesCorrect, outstandingPayables] = await Promise.all([
+        getGlNetAmountByAccountCode(orgId, GL_CODES.AR, veryOld, now),
+        getGlNetAmountByAccountCode(orgId, GL_CODES.AP, veryOld, now),
+      ]);
+    } else {
+      const [salesUnpaid, purchasesUnpaid] = await Promise.all([
+        prisma.salesInvoice.findMany({
+          where: {
+            organizationId: orgId,
+            deletedAt: null,
+            paymentStatus: { not: "PAID" },
+          },
+          select: { totalAmount: true, paidAmount: true, currencyCode: true },
+        }),
+        prisma.purchaseInvoice.findMany({
+          where: {
+            organizationId: orgId,
+            deletedAt: null,
+            paymentStatus: { not: "PAID" },
+          },
+          select: { totalAmount: true, paidAmount: true, currencyCode: true },
+        }),
+      ]);
 
-    const receivablesByCurrency = new Map<string, number>();
-    for (const inv of salesUnpaid) {
-      const code = inv.currencyCode ?? defaultCurrencyCode;
-      const outstanding = Math.max(0, Number(inv.totalAmount) - Number(inv.paidAmount));
-      const current = receivablesByCurrency.get(code) ?? 0;
-      receivablesByCurrency.set(code, current + outstanding);
-    }
-    await Promise.all(
-      Array.from(receivablesByCurrency.entries()).map(async ([code, sum]) => {
-        const converted = await convertAmountToCurrency(sum, code, defaultCurrencyCode);
-        outstandingReceivablesCorrect += converted;
-      })
-    );
+      const receivablesByCurrency = new Map<string, number>();
+      for (const inv of salesUnpaid) {
+        const code = inv.currencyCode ?? defaultCurrencyCode;
+        const outstanding = Math.max(0, Number(inv.totalAmount) - Number(inv.paidAmount));
+        const current = receivablesByCurrency.get(code) ?? 0;
+        receivablesByCurrency.set(code, current + outstanding);
+      }
+      await Promise.all(
+        Array.from(receivablesByCurrency.entries()).map(async ([code, sum]) => {
+          const converted = await convertAmountToCurrency(sum, code, defaultCurrencyCode);
+          outstandingReceivablesCorrect += converted;
+        })
+      );
 
-    const payablesByCurrency = new Map<string, number>();
-    for (const inv of purchasesUnpaid) {
-      const code = inv.currencyCode ?? defaultCurrencyCode;
-      const outstanding = Math.max(0, Number(inv.totalAmount) - Number(inv.paidAmount));
-      const current = payablesByCurrency.get(code) ?? 0;
-      payablesByCurrency.set(code, current + outstanding);
+      const payablesByCurrency = new Map<string, number>();
+      for (const inv of purchasesUnpaid) {
+        const code = inv.currencyCode ?? defaultCurrencyCode;
+        const outstanding = Math.max(0, Number(inv.totalAmount) - Number(inv.paidAmount));
+        const current = payablesByCurrency.get(code) ?? 0;
+        payablesByCurrency.set(code, current + outstanding);
+      }
+      await Promise.all(
+        Array.from(payablesByCurrency.entries()).map(async ([code, sum]) => {
+          const converted = await convertAmountToCurrency(sum, code, defaultCurrencyCode);
+          outstandingPayables += converted;
+        })
+      );
     }
-    await Promise.all(
-      Array.from(payablesByCurrency.entries()).map(async ([code, sum]) => {
-        const converted = await convertAmountToCurrency(sum, code, defaultCurrencyCode);
-        outstandingPayables += converted;
-      })
-    );
   }
 
   // Invoices due soon (next 7 days, not fully paid)

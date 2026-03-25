@@ -14,6 +14,9 @@ import { revalidatePath } from "next/cache";
 import { calculateDueDate } from "@/lib/date-utils";
 import { uploadDocument } from "@/app/(dashboard)/documents/actions";
 import { createAuditLog } from "@/lib/audit";
+import { postPurchaseInvoiceToGl, postSupplierPaymentToGl, reverseGlForReference } from "@/lib/gl-posting";
+import { getDefaultCurrencyCodeForOrg } from "@/lib/currency";
+import { convertAmountToCurrency } from "@/lib/fx";
 
 const grnItemSchema = z.object({
   itemId: z.string().min(1),
@@ -459,6 +462,25 @@ export async function createPurchaseInvoice(formData: FormData) {
     metadata: { invoiceNo: invoice.invoiceNo },
   });
 
+  // Phase 1 GL posting: post on creation (even for unpaid/draft-style states).
+  const defaultCurrencyCode = await getDefaultCurrencyCodeForOrg(orgId);
+  const fromCurrency = currencyCode ?? defaultCurrencyCode;
+  const subtotalBase = await convertAmountToCurrency(subtotal, fromCurrency, defaultCurrencyCode);
+  const taxAmountBase = await convertAmountToCurrency(taxAmount, fromCurrency, defaultCurrencyCode);
+  const totalAmountBase = subtotalBase + taxAmountBase;
+  const paidAmountBase = await convertAmountToCurrency(paidAmount ?? 0, fromCurrency, defaultCurrencyCode);
+  await postPurchaseInvoiceToGl({
+    organizationId: orgId,
+    purchaseInvoiceId: invoice.id,
+    entryDate: invDate,
+    memo: `Purchase Invoice ${invoice.invoiceNo}`,
+    subtotal: subtotalBase,
+    taxAmount: taxAmountBase,
+    totalAmount: totalAmountBase,
+    paidAmount: paidAmountBase,
+    createdById: userId,
+  });
+
   const file = formData.get("attachment") as File | null;
   if (file && file.size > 0) {
     const fd = new FormData();
@@ -477,6 +499,9 @@ export async function updatePurchaseInvoice(id: string, formData: FormData) {
   await requirePermission(PERMISSIONS.PURCHASES_UPDATE);
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
+
+  const currentUser = await getCurrentUser();
+  const currentUserId = (currentUser as { id?: string } | null)?.id ?? null;
 
   const existing = await prisma.purchaseInvoice.findFirst({
     where: { id, organizationId: orgId, deletedAt: null },
@@ -532,6 +557,25 @@ export async function updatePurchaseInvoice(id: string, formData: FormData) {
     },
   });
 
+  // Phase 1 GL posting: re-post based on updated invoice values.
+  const defaultCurrencyCode = await getDefaultCurrencyCodeForOrg(orgId);
+  const fromCurrency = currencyCode ?? defaultCurrencyCode;
+  const subtotalBase = await convertAmountToCurrency(subtotal, fromCurrency, defaultCurrencyCode);
+  const taxAmountBase = await convertAmountToCurrency(taxAmount, fromCurrency, defaultCurrencyCode);
+  const totalAmountBase = subtotalBase + taxAmountBase;
+  const paidAmountBase = await convertAmountToCurrency(paidAmount, fromCurrency, defaultCurrencyCode);
+  await postPurchaseInvoiceToGl({
+    organizationId: orgId,
+    purchaseInvoiceId: id,
+    entryDate: invDate,
+    memo: `Purchase Invoice ${existing.invoiceNo}`,
+    subtotal: subtotalBase,
+    taxAmount: taxAmountBase,
+    totalAmount: totalAmountBase,
+    paidAmount: paidAmountBase,
+    createdById: currentUserId,
+  });
+
   revalidatePath("/purchases");
   revalidatePath("/dashboard");
   revalidatePath(`/purchases/${id}`);
@@ -542,6 +586,7 @@ export async function deletePurchaseInvoice(id: string) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
   const currentUser = await getCurrentUser();
+  const currentUserId = (currentUser as { id?: string } | null)?.id ?? null;
   if (!isSuperAdmin(currentUser)) {
     return { error: "Only super admin can delete purchase invoices." };
   }
@@ -551,11 +596,33 @@ export async function deletePurchaseInvoice(id: string) {
   });
   if (!inv) return { error: "Invoice not found" };
 
+  // Phase 1 GL posting is on creation: deletion must reverse.
+  // If payments were recorded against a draft invoice, reverse those payment journals too.
+  const payments = await prisma.supplierPayment.findMany({
+    where: { organizationId: orgId, purchaseInvoiceId: id, deletedAt: null },
+    select: { id: true },
+  });
+  for (const p of payments) {
+    await reverseGlForReference({
+      organizationId: orgId,
+      referenceType: "SupplierPayment",
+      referenceId: p.id,
+      reversedById: currentUserId,
+    });
+  }
+
+  await reverseGlForReference({
+    organizationId: orgId,
+    referenceType: "PurchaseInvoice",
+    referenceId: id,
+    reversedById: currentUserId,
+  });
+
   await prisma.purchaseInvoice.update({
     where: { id },
     data: {
       deletedAt: new Date(),
-      deletedById: (currentUser as { id?: string }).id ?? undefined,
+      deletedById: currentUserId ?? undefined,
     },
   });
 
@@ -584,6 +651,7 @@ export async function recordSupplierPayment(formData: FormData) {
   if (!orgId) redirect("/login");
 
   const user = await getCurrentUser();
+  const userId = (user as { id?: string } | null)?.id ?? null;
   if (!canRecordPayments(user)) {
     return { error: { _form: ["Only Finance can record payments."] } };
   }
@@ -628,8 +696,9 @@ export async function recordSupplierPayment(formData: FormData) {
 
   const payDate = new Date(paymentDate);
 
+  let supplierPaymentId: string | null = null;
   await prisma.$transaction(async (tx) => {
-    await tx.supplierPayment.create({
+    const payment = await tx.supplierPayment.create({
       data: {
         organizationId: orgId,
         purchaseInvoiceId: invoice.id,
@@ -640,6 +709,7 @@ export async function recordSupplierPayment(formData: FormData) {
         notes: notes || null,
       },
     });
+    supplierPaymentId = payment.id;
 
     const newPaid = alreadyPaid + amount;
     const newStatus =
@@ -653,6 +723,20 @@ export async function recordSupplierPayment(formData: FormData) {
       },
     });
   });
+
+  if (supplierPaymentId) {
+    const defaultCurrencyCode = await getDefaultCurrencyCodeForOrg(orgId);
+    const fromCurrency = invoice.currencyCode ?? defaultCurrencyCode;
+    const amountBase = await convertAmountToCurrency(amount, fromCurrency, defaultCurrencyCode);
+    await postSupplierPaymentToGl({
+      organizationId: orgId,
+      supplierPaymentId: supplierPaymentId,
+      entryDate: payDate,
+      memo: `Supplier payment`,
+      amount: amountBase,
+      createdById: userId,
+    });
+  }
 
   revalidatePath("/purchases");
   revalidatePath(`/purchases/${parsed.data.invoiceId}`);

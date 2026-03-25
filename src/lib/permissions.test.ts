@@ -62,3 +62,8 @@ test("legacy manage_users/manage_roles grant settings visibility", () => {
   assert.equal(canUser(adminLikeUser, PERMISSIONS.SETTINGS_USERS_MANAGE), true);
   assert.equal(canUser(adminLikeUser, PERMISSIONS.SETTINGS_ROLES_MANAGE), true);
 });
+
+test("viewer can access trial balance & balance sheet reports", () => {
+  assert.equal(can(APP_ROLES.VIEWER, PERMISSIONS.REPORTS_TRIAL_BALANCE), true);
+  assert.equal(can(APP_ROLES.VIEWER, PERMISSIONS.REPORTS_BALANCE_SHEET), true);
+});
