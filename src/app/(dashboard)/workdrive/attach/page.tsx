@@ -4,7 +4,11 @@ import Link from "next/link";
 import { SearchInput } from "@/components/ui/search-input";
 import { getCurrentUser, getOrgTimezone } from "@/lib/auth-utils";
 import { canUser, PERMISSIONS } from "@/lib/permissions";
-import { listWorkDriveRootContents, listWorkDriveFolderContents } from "../actions";
+import {
+  listWorkDriveRootContents,
+  listWorkDriveFolderContents,
+  getWorkDriveFolderBreadcrumbs,
+} from "../actions";
 import { attachWorkDriveFileToDocumentable } from "../../documents/actions";
 import { formatDateTimeInTimezone } from "@/lib/date-utils";
 import { FileText, FolderOpen, ArrowLeft } from "lucide-react";
@@ -88,11 +92,14 @@ export default async function WorkDriveAttachPage({
 
   if (!documentableType || !documentableId) return null;
 
+  const documentableTypeSafe: DocumentableType = documentableType;
+  const documentableIdSafe: string = documentableId;
+
   const canAttach = canUser(user, getDocumentableAttachPermission(documentableType));
   const canWorkdriveRead = canUser(user, PERMISSIONS.WORKDRIVE_READ);
   if (!canWorkdriveRead) return null;
 
-  const targetRoute = getDocumentableRoute(documentableType, documentableId);
+  const targetRoute = getDocumentableRoute(documentableTypeSafe, documentableIdSafe);
 
   const data = folderId
     ? await listWorkDriveFolderContents({ folderId, search })
@@ -101,12 +108,42 @@ export default async function WorkDriveAttachPage({
   const folders = folderId ? data.subFolders : data.subFolders;
   const files = data.files;
 
+  const breadcrumbs = folderId ? (await getWorkDriveFolderBreadcrumbs({ folderId })).breadcrumbs : null;
+
+  function buildAttachUrl(nextFolderId?: string) {
+    const base = `/workdrive/attach?documentableType=${encodeURIComponent(
+      documentableTypeSafe
+    )}&documentableId=${encodeURIComponent(documentableIdSafe)}`;
+    const withFolder = nextFolderId ? `${base}&folderId=${encodeURIComponent(nextFolderId)}` : base;
+    return search ? `${withFolder}&search=${encodeURIComponent(search)}` : withFolder;
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Attach from WorkDrive</h1>
           <p className="text-muted-foreground">Attach an accessible file as a Document.</p>
+          {breadcrumbs && (
+            <p className="text-muted-foreground text-sm flex items-center gap-2 flex-wrap mt-1">
+              {breadcrumbs.map((b: any, idx: number) => (
+                <span key={b.id} className="inline-flex items-center gap-2">
+                  {idx > 0 && <span className="text-muted-foreground">/</span>}
+                  {idx < breadcrumbs.length - 1 ? (
+                    b.canRead ? (
+                      <Link href={buildAttachUrl(b.id)} className="text-primary hover:underline">
+                        {b.name}
+                      </Link>
+                    ) : (
+                      <span>{b.name}</span>
+                    )
+                  ) : (
+                    <span className="font-medium text-foreground">{b.name}</span>
+                  )}
+                </span>
+              ))}
+            </p>
+          )}
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -127,7 +164,7 @@ export default async function WorkDriveAttachPage({
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FolderOpen className="h-4 w-4" />
-              {folderId ? (data as any).folder?.name : (data as any).rootFolder?.name}
+              {breadcrumbs ? breadcrumbs[breadcrumbs.length - 1]?.name : "Root"}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
