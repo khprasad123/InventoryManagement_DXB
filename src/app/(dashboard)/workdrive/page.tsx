@@ -22,6 +22,7 @@ export default async function WorkDriveRootPage({
   if (!canRead) return null;
 
   const params = await searchParams;
+  const globalSearchQuery = (params.search ?? "").trim();
   const data = await listWorkDriveRootContents({ search: params.search ?? "" });
 
   const canManageFolders = canUser(user, PERMISSIONS.WORKDRIVE_MANAGE_FOLDERS) && data.canWrite;
@@ -39,6 +40,17 @@ export default async function WorkDriveRootPage({
           <div className="w-full sm:w-[240px]">
             <SearchInput value={params.search ?? ""} placeholder="Search folders/files..." />
           </div>
+          <Button variant="outline" asChild>
+            <Link
+              href={
+                globalSearchQuery
+                  ? `/workdrive/search?q=${encodeURIComponent(globalSearchQuery)}`
+                  : "/workdrive/search"
+              }
+            >
+              Global Search
+            </Link>
+          </Button>
         </div>
       </div>
 
