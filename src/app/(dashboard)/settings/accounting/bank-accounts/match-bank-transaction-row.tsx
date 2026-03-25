@@ -59,9 +59,12 @@ export function MatchBankTransactionRow({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [notes, setNotes] = useState<string>(match?.notes ?? "");
 
   const amountNumber = useMemo(() => Number(amount), [amount]);
+  const [notes, setNotes] = useState<string>(match?.notes ?? "");
+  const [matchedAmount, setMatchedAmount] = useState<string>(
+    match?.matchedAmount != null ? String(Number(match.matchedAmount)) : Math.abs(amountNumber).toFixed(2)
+  );
   const defaultType: "ClientPayment" | "SupplierPayment" = amountNumber >= 0 ? "ClientPayment" : "SupplierPayment";
 
   const [paymentType, setPaymentType] = useState<"ClientPayment" | "SupplierPayment">(match?.paymentType ?? defaultType);
@@ -73,6 +76,9 @@ export function MatchBankTransactionRow({
     setNotes(match?.notes ?? "");
     setPaymentType(match?.paymentType ?? defaultType);
     setPaymentId(match?.paymentId ?? "");
+    setMatchedAmount(
+      match?.matchedAmount != null ? String(Number(match.matchedAmount)) : Math.abs(Number(amount)).toFixed(2)
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bankTransactionId]);
 
@@ -81,7 +87,8 @@ export function MatchBankTransactionRow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paymentType, candidates.length]);
 
-  const canSave = canMatch && paymentId;
+  const matchedAmountNumber = useMemo(() => Number(matchedAmount), [matchedAmount]);
+  const canSave = canMatch && paymentId && Number.isFinite(matchedAmountNumber) && matchedAmountNumber > 0;
 
   async function handleSave() {
     if (!canSave) return;
@@ -92,6 +99,7 @@ export function MatchBankTransactionRow({
         paymentType,
         paymentId,
         notes: notes || undefined,
+        matchedAmount: matchedAmountNumber,
       });
       if (result?.error) return;
       router.refresh();
@@ -127,6 +135,9 @@ export function MatchBankTransactionRow({
           <div className="text-sm font-medium">Matched</div>
           <div className="text-xs text-muted-foreground">
             {match.paymentType} | {matchedPayment.reference ?? matchedPayment.id} | {Number(matchedPayment.amount).toFixed(2)}
+          </div>
+          <div className="text-xs mt-1 text-muted-foreground">
+            Matched amount: {Number(match.matchedAmount).toFixed(2)}
           </div>
           {match.notes ? <div className="text-xs mt-1">{match.notes}</div> : null}
           {canMatch && (
@@ -182,6 +193,18 @@ export function MatchBankTransactionRow({
           <div className="space-y-2">
             <Label htmlFor="notes">Match Notes</Label>
             <Input id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional notes" />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="matchedAmount">Matched Amount *</Label>
+            <Input
+              id="matchedAmount"
+              value={matchedAmount}
+              onChange={(e) => setMatchedAmount(e.target.value)}
+              type="number"
+              step="0.01"
+              min="0"
+            />
           </div>
 
           <Button type="button" onClick={handleSave} disabled={!paymentId || isPending}>

@@ -245,9 +245,7 @@ export async function getBankStatementMatchingData(bankStatementId: string) {
             where: {
               organizationId: orgId,
               deletedAt: null,
-              amount: abs,
               paymentDate: { gte: windowStart, lte: windowEnd },
-              ...(matchedClientPaymentIds.length ? { id: { notIn: matchedClientPaymentIds } } : {}),
             },
             select: { id: true, amount: true, paymentDate: true, reference: true, paymentType: true },
             take: MAX_MATCH_CANDIDATES,
@@ -261,9 +259,7 @@ export async function getBankStatementMatchingData(bankStatementId: string) {
             where: {
               organizationId: orgId,
               deletedAt: null,
-              amount: abs,
               paymentDate: { gte: windowStart, lte: windowEnd },
-              ...(matchedSupplierPaymentIds.length ? { id: { notIn: matchedSupplierPaymentIds } } : {}),
             },
             select: { id: true, amount: true, paymentDate: true, reference: true, method: true },
             take: MAX_MATCH_CANDIDATES,
@@ -306,12 +302,14 @@ export async function matchBankTransaction({
   paymentType,
   paymentId,
   notes,
+  matchedAmount,
 }: {
   bankStatementId: string;
   bankTransactionId: string;
   paymentType: "ClientPayment" | "SupplierPayment";
   paymentId: string;
   notes?: string;
+  matchedAmount?: number;
 }) {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");
@@ -353,7 +351,32 @@ export async function matchBankTransaction({
   }
 
   if (paymentAmount === null) return { error: "Invalid payment" };
-  if (Math.abs(paymentAmount - abs) > 0.01) return { error: "Payment amount must match transaction amount" };
+  const desiredMatchedAmount = matchedAmount !== undefined ? Number(matchedAmount) : abs;
+  if (!Number.isFinite(desiredMatchedAmount) || desiredMatchedAmount <= 0) {
+    return { error: "Invalid matched amount" };
+  }
+  if (desiredMatchedAmount - abs > 0.01) {
+    return { error: "Matched amount cannot exceed bank transaction amount" };
+  }
+
+  // Partial/split validation:
+  // - A payment can be used multiple times (split) as long as total matched_amount across this statement
+  //   does not exceed the payment.amount.
+  const usedAgg = await prisma.bankReconciliationItem.aggregate({
+    where: {
+      deletedAt: null,
+      paymentType,
+      paymentId,
+      bankReconciliation: { organizationId: orgId, bankStatementId },
+      bankTransactionId: { not: bankTransactionId },
+    },
+    _sum: { matchedAmount: true },
+  });
+  const usedBefore = Number(usedAgg._sum.matchedAmount ?? 0);
+  const remaining = paymentAmount - usedBefore;
+  if (desiredMatchedAmount - remaining > 0.01) {
+    return { error: "Insufficient remaining payment amount for this match" };
+  }
 
   const reconciliation = await prisma.bankReconciliation.upsert({
     where: { organizationId_bankStatementId: { organizationId: orgId, bankStatementId } },
@@ -381,7 +404,7 @@ export async function matchBankTransaction({
     update: {
       paymentType,
       paymentId,
-      matchedAmount: abs,
+      matchedAmount: desiredMatchedAmount,
       notes: notes ?? null,
       deletedAt: null,
       deletedById: null,
@@ -391,25 +414,39 @@ export async function matchBankTransaction({
       bankTransactionId,
       paymentType,
       paymentId,
-      matchedAmount: abs,
+      matchedAmount: desiredMatchedAmount,
       notes: notes ?? null,
     },
   });
 
-  const [totalTxCount, matchedCount] = await Promise.all([
-    prisma.bankTransaction.count({
+  const [txs, items] = await Promise.all([
+    prisma.bankTransaction.findMany({
       where: { bankStatementId, organizationId: orgId, deletedAt: null },
+      select: { id: true, amount: true },
     }),
-    prisma.bankReconciliationItem.count({
+    prisma.bankReconciliationItem.findMany({
       where: {
         deletedAt: null,
         bankReconciliation: { organizationId: orgId, bankStatementId },
       },
+      select: { bankTransactionId: true, matchedAmount: true },
     }),
   ]);
 
-  const nextStatus: "OPEN" | "MATCHED" =
-    totalTxCount > 0 && matchedCount >= totalTxCount ? "MATCHED" : "OPEN";
+  const matchedByTxId = new Map<string, number>(
+    items.map((it: any) => [it.bankTransactionId, Number(it.matchedAmount ?? 0)])
+  );
+
+  const fullyMatched =
+    txs.length > 0 &&
+    txs.every((t) => {
+      const itemMatched = matchedByTxId.get(t.id);
+      if (itemMatched === undefined) return false;
+      const txAbs = Math.abs(Number(t.amount));
+      return Math.abs(Math.abs(itemMatched) - txAbs) <= 0.01;
+    });
+
+  const nextStatus: "OPEN" | "MATCHED" = fullyMatched ? "MATCHED" : "OPEN";
 
   await prisma.bankReconciliation.update({
     where: { organizationId_bankStatementId: { organizationId: orgId, bankStatementId } },
@@ -462,20 +499,34 @@ export async function unmatchBankTransaction({
     data: { deletedAt: now, deletedById: userId ?? undefined },
   });
 
-  const [totalTxCount, matchedCount] = await Promise.all([
-    prisma.bankTransaction.count({
+  const [txs, items] = await Promise.all([
+    prisma.bankTransaction.findMany({
       where: { bankStatementId, organizationId: orgId, deletedAt: null },
+      select: { id: true, amount: true },
     }),
-    prisma.bankReconciliationItem.count({
+    prisma.bankReconciliationItem.findMany({
       where: {
         deletedAt: null,
         bankReconciliation: { organizationId: orgId, bankStatementId },
       },
+      select: { bankTransactionId: true, matchedAmount: true },
     }),
   ]);
 
-  const nextStatus: "OPEN" | "MATCHED" =
-    totalTxCount > 0 && matchedCount >= totalTxCount ? "MATCHED" : "OPEN";
+  const matchedByTxId = new Map<string, number>(
+    items.map((it: any) => [it.bankTransactionId, Number(it.matchedAmount ?? 0)])
+  );
+
+  const fullyMatched =
+    txs.length > 0 &&
+    txs.every((t) => {
+      const itemMatched = matchedByTxId.get(t.id);
+      if (itemMatched === undefined) return false;
+      const txAbs = Math.abs(Number(t.amount));
+      return Math.abs(Math.abs(itemMatched) - txAbs) <= 0.01;
+    });
+
+  const nextStatus: "OPEN" | "MATCHED" = fullyMatched ? "MATCHED" : "OPEN";
 
   await prisma.bankReconciliation.update({
     where: { organizationId_bankStatementId: { organizationId: orgId, bankStatementId } },
