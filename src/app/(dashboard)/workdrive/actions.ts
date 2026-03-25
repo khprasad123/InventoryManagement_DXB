@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requirePermission, PERMISSIONS } from "@/lib/permissions";
 import { z } from "zod";
+import { createAuditLog } from "@/lib/audit";
 
 const MAX_UPLOAD_SIZE_BYTES = 25 * 1024 * 1024; // 25MB
 
@@ -288,6 +289,13 @@ export async function createWorkDriveFolder(formData: FormData) {
     })),
   });
 
+  await createAuditLog({
+    action: "WORKDRIVE_CREATE_FOLDER",
+    entityType: "DriveFolder",
+    entityId: folder.id,
+    metadata: { name, parentFolderId },
+  });
+
   revalidatePath(`/workdrive/folders/${parentFolderId}`);
   revalidatePath(`/workdrive/folders/${folder.id}`);
   redirect(`/workdrive/folders/${folder.id}`);
@@ -390,7 +398,418 @@ export async function uploadWorkDriveFile(formData: FormData) {
     },
   });
 
+  await createAuditLog({
+    action: "WORKDRIVE_UPLOAD_FILE",
+    entityType: "DriveFile",
+    entityId: driveFile.id,
+    metadata: { fileName, folderId, versionNo: nextVersionNo, documentId: doc.id },
+  });
+
   revalidatePath(`/workdrive/folders/${folderId}`);
   redirect(`/workdrive/folders/${folderId}`);
+}
+
+async function getRolesForOrg(orgId: string) {
+  return prisma.role.findMany({
+    where: { organizationId: orgId, deletedAt: null },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+}
+
+async function getDriveFolderEffectivePerm(roleId: string, folderId: string) {
+  return getFolderPermissionOrNull(roleId, folderId);
+}
+
+async function getDriveFileEffectivePerm(roleId: string, fileId: string) {
+  const driveFile = await prisma.driveFile.findFirst({
+    where: { id: fileId, deletedAt: null },
+    select: { id: true, folderId: true, organizationId: true },
+  });
+  if (!driveFile) return null;
+
+  const filePerm = await prisma.driveFilePermission.findFirst({
+    where: { roleId, driveFileId: fileId, deletedAt: null },
+    select: { canRead: true, canWrite: true, canDelete: true, canShare: true },
+  });
+  if (filePerm) return filePerm;
+
+  const folderPerm = await prisma.driveFolderPermission.findFirst({
+    where: { roleId, driveFolderId: driveFile.folderId, deletedAt: null },
+    select: { canRead: true, canWrite: true, canDelete: true, canShare: true },
+  });
+
+  return folderPerm ?? null;
+}
+
+export async function getWorkDriveFolderShareSettings(params: { folderId: string }) {
+  await requirePermission(PERMISSIONS.WORKDRIVE_SHARE_MANAGE);
+
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const roleId = await getUserRoleId(orgId);
+  if (!roleId) redirect("/dashboard");
+
+  const folderPerm = await getDriveFolderEffectivePerm(roleId, params.folderId);
+  if (!folderPerm?.canRead) redirect("/dashboard");
+
+  const roles = await getRolesForOrg(orgId);
+  const perms = await prisma.driveFolderPermission.findMany({
+    where: { roleId: { in: roles.map((r) => r.id) }, driveFolderId: params.folderId, deletedAt: null },
+    select: { roleId: true, canRead: true, canWrite: true, canDelete: true, canShare: true },
+  });
+  const permByRoleId = new Map(perms.map((p) => [p.roleId, p]));
+
+  return {
+    folderId: params.folderId,
+    roles: roles.map((r) => ({
+      roleId: r.id,
+      roleName: r.name,
+      canRead: permByRoleId.get(r.id)?.canRead ?? false,
+      canWrite: permByRoleId.get(r.id)?.canWrite ?? false,
+      canDelete: permByRoleId.get(r.id)?.canDelete ?? false,
+      canShare: permByRoleId.get(r.id)?.canShare ?? false,
+    })),
+  };
+}
+
+export async function updateWorkDriveFolderShareSettings(formData: FormData) {
+  await requirePermission(PERMISSIONS.WORKDRIVE_SHARE_MANAGE);
+
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const roleId = await getUserRoleId(orgId);
+  if (!roleId) redirect("/dashboard");
+
+  const folderId = String(formData.get("folderId") ?? "").trim();
+  if (!folderId) redirect("/workdrive");
+
+  const folderPerm = await getDriveFolderEffectivePerm(roleId, folderId);
+  if (!folderPerm?.canRead) redirect("/workdrive");
+
+  const canReadRoleIds = (formData.getAll("canReadRoleIds").map(String) ?? []).filter(Boolean);
+  const canWriteRoleIds = (formData.getAll("canWriteRoleIds").map(String) ?? []).filter(Boolean);
+  const canDeleteRoleIds = (formData.getAll("canDeleteRoleIds").map(String) ?? []).filter(Boolean);
+  const canShareRoleIds = (formData.getAll("canShareRoleIds").map(String) ?? []).filter(Boolean);
+
+  const canReadSet = new Set(canReadRoleIds);
+  const canWriteSet = new Set(canWriteRoleIds);
+  const canDeleteSet = new Set(canDeleteRoleIds);
+  const canShareSet = new Set(canShareRoleIds);
+
+  const roles = await getRolesForOrg(orgId);
+
+  await Promise.all(
+    roles.map((r) =>
+      prisma.driveFolderPermission.upsert({
+        where: { roleId_driveFolderId: { roleId: r.id, driveFolderId: folderId } },
+        update: {
+          canRead: canReadSet.has(r.id),
+          canWrite: canWriteSet.has(r.id),
+          canDelete: canDeleteSet.has(r.id),
+          canShare: canShareSet.has(r.id),
+          deletedAt: null,
+          deletedById: null,
+        },
+        create: {
+          roleId: r.id,
+          driveFolderId: folderId,
+          canRead: canReadSet.has(r.id),
+          canWrite: canWriteSet.has(r.id),
+          canDelete: canDeleteSet.has(r.id),
+          canShare: canShareSet.has(r.id),
+        },
+      })
+    )
+  );
+
+  await createAuditLog({
+    action: "WORKDRIVE_UPDATE_FOLDER_PERMISSIONS",
+    entityType: "DriveFolder",
+    entityId: folderId,
+    metadata: { updatedAt: new Date().toISOString() },
+  });
+
+  revalidatePath(`/workdrive/folders/${folderId}`);
+  redirect(`/workdrive/folders/${folderId}`);
+}
+
+export async function getWorkDriveFileDetails(params: { fileId: string }) {
+  await requirePermission(PERMISSIONS.WORKDRIVE_READ);
+
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const roleId = await getUserRoleId(orgId);
+  if (!roleId) redirect("/dashboard");
+
+  const driveFile = await prisma.driveFile.findFirst({
+    where: { id: params.fileId, organizationId: orgId, deletedAt: null },
+    select: { id: true, fileName: true, folderId: true, sizeBytes: true, mimeType: true, folder: { select: { id: true, name: true } } },
+  });
+  if (!driveFile) redirect("/workdrive");
+
+  const effective = await getDriveFileEffectivePerm(roleId, params.fileId);
+  if (!effective?.canRead) redirect("/dashboard");
+
+  const versions = await prisma.driveFileVersion.findMany({
+    where: { driveFileId: params.fileId, deletedAt: null },
+    orderBy: { versionNo: "desc" },
+    select: { id: true, versionNo: true, memo: true, documentId: true, createdAt: true },
+  });
+
+  return {
+    file: {
+      id: driveFile.id,
+      fileName: driveFile.fileName,
+      folderId: driveFile.folderId,
+      folderName: driveFile.folder.name,
+      mimeType: driveFile.mimeType,
+      sizeBytes: driveFile.sizeBytes,
+    },
+    canWrite: effective.canWrite,
+    versions,
+  };
+}
+
+export async function getWorkDriveFileShareSettings(params: { fileId: string }) {
+  await requirePermission(PERMISSIONS.WORKDRIVE_SHARE_MANAGE);
+
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const roleId = await getUserRoleId(orgId);
+  if (!roleId) redirect("/dashboard");
+
+  const effective = await getDriveFileEffectivePerm(roleId, params.fileId);
+  if (!effective?.canRead) redirect("/dashboard");
+
+  const driveFile = await prisma.driveFile.findFirst({
+    where: { id: params.fileId, organizationId: orgId, deletedAt: null },
+    select: { id: true, folderId: true },
+  });
+  if (!driveFile) redirect("/workdrive");
+
+  const roles = await getRolesForOrg(orgId);
+  const roleIds = roles.map((r) => r.id);
+
+  const [filePerms, folderPerms] = await Promise.all([
+    prisma.driveFilePermission.findMany({
+      where: { roleId: { in: roleIds }, driveFileId: params.fileId, deletedAt: null },
+      select: { roleId: true, canRead: true, canWrite: true, canDelete: true, canShare: true },
+    }),
+    prisma.driveFolderPermission.findMany({
+      where: { roleId: { in: roleIds }, driveFolderId: driveFile.folderId, deletedAt: null },
+      select: { roleId: true, canRead: true, canWrite: true, canDelete: true, canShare: true },
+    }),
+  ]);
+
+  const filePermByRoleId = new Map(filePerms.map((p) => [p.roleId, p]));
+  const folderPermByRoleId = new Map(folderPerms.map((p) => [p.roleId, p]));
+
+  return {
+    fileId: params.fileId,
+    roles: roles.map((r) => ({
+      roleId: r.id,
+      roleName: r.name,
+      // If no explicit file-permission exists, default to folder permission (inherit).
+      canRead: filePermByRoleId.get(r.id)?.canRead ?? folderPermByRoleId.get(r.id)?.canRead ?? false,
+      canWrite: filePermByRoleId.get(r.id)?.canWrite ?? folderPermByRoleId.get(r.id)?.canWrite ?? false,
+      canDelete: filePermByRoleId.get(r.id)?.canDelete ?? folderPermByRoleId.get(r.id)?.canDelete ?? false,
+      canShare: filePermByRoleId.get(r.id)?.canShare ?? folderPermByRoleId.get(r.id)?.canShare ?? false,
+    })),
+  };
+}
+
+export async function updateWorkDriveFileShareSettings(formData: FormData) {
+  await requirePermission(PERMISSIONS.WORKDRIVE_SHARE_MANAGE);
+
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const roleId = await getUserRoleId(orgId);
+  if (!roleId) redirect("/dashboard");
+
+  const fileId = String(formData.get("fileId") ?? "").trim();
+  if (!fileId) redirect("/workdrive");
+
+  const effective = await getDriveFileEffectivePerm(roleId, fileId);
+  if (!effective?.canRead) redirect("/workdrive");
+
+  const canReadRoleIds = (formData.getAll("canReadRoleIds").map(String) ?? []).filter(Boolean);
+  const canWriteRoleIds = (formData.getAll("canWriteRoleIds").map(String) ?? []).filter(Boolean);
+  const canDeleteRoleIds = (formData.getAll("canDeleteRoleIds").map(String) ?? []).filter(Boolean);
+  const canShareRoleIds = (formData.getAll("canShareRoleIds").map(String) ?? []).filter(Boolean);
+
+  const canReadSet = new Set(canReadRoleIds);
+  const canWriteSet = new Set(canWriteRoleIds);
+  const canDeleteSet = new Set(canDeleteRoleIds);
+  const canShareSet = new Set(canShareRoleIds);
+
+  const roles = await getRolesForOrg(orgId);
+
+  await Promise.all(
+    roles.map((r) =>
+      prisma.driveFilePermission.upsert({
+        where: { roleId_driveFileId: { roleId: r.id, driveFileId: fileId } },
+        update: {
+          canRead: canReadSet.has(r.id),
+          canWrite: canWriteSet.has(r.id),
+          canDelete: canDeleteSet.has(r.id),
+          canShare: canShareSet.has(r.id),
+          deletedAt: null,
+          deletedById: null,
+        },
+        create: {
+          roleId: r.id,
+          driveFileId: fileId,
+          canRead: canReadSet.has(r.id),
+          canWrite: canWriteSet.has(r.id),
+          canDelete: canDeleteSet.has(r.id),
+          canShare: canShareSet.has(r.id),
+        },
+      })
+    )
+  );
+
+  await createAuditLog({
+    action: "WORKDRIVE_UPDATE_FILE_PERMISSIONS",
+    entityType: "DriveFile",
+    entityId: fileId,
+    metadata: { updatedAt: new Date().toISOString() },
+  });
+
+  revalidatePath(`/workdrive/files/${fileId}`);
+  redirect(`/workdrive/files/${fileId}`);
+}
+
+export async function getWorkDriveActivity(params: { limit?: number } = {}) {
+  await requirePermission(PERMISSIONS.WORKDRIVE_READ);
+
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const limit = Math.max(1, Math.min(params.limit ?? 20, 50));
+
+  return prisma.auditLog.findMany({
+    where: {
+      organizationId: orgId,
+      action: { startsWith: "WORKDRIVE_" },
+    },
+    include: { user: { select: { id: true, email: true, name: true } } },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+}
+
+export async function searchWorkDriveItems(params: { query: string }) {
+  await requirePermission(PERMISSIONS.WORKDRIVE_READ);
+
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+  const roleId = await getUserRoleId(orgId);
+  if (!roleId) redirect("/dashboard");
+  const roleIdSafe = roleId;
+
+  const query = (params.query ?? "").trim();
+  if (!query) return { folders: [], files: [] };
+
+  const { rootFolderId } = await ensureDriveRootFolder(orgId);
+
+  type FolderHit = { id: string; name: string; depth: number };
+  type FileHit = { id: string; fileName: string; folderId: string; folderName: string };
+
+  const folders: FolderHit[] = [];
+  const files: FileHit[] = [];
+
+  const maxDepth = 3;
+  const maxResults = 40;
+
+  const seenFolders = new Set<string>();
+  const queue: Array<{ id: string; depth: number }> = [{ id: rootFolderId, depth: 0 }];
+  seenFolders.add(rootFolderId);
+
+  // Cache folder read permissions to avoid repeated queries.
+  const folderReadCache = new Map<string, boolean>();
+
+  async function folderCanRead(fid: string) {
+    if (folderReadCache.has(fid)) return folderReadCache.get(fid)!;
+    const perm = await getFolderPermissionOrNull(roleIdSafe, fid);
+    const canRead = Boolean(perm?.canRead);
+    folderReadCache.set(fid, canRead);
+    return canRead;
+  }
+
+  while (queue.length && (folders.length + files.length) < maxResults) {
+    const current = queue.shift()!;
+    if (current.depth >= maxDepth) continue;
+
+    // Subfolders
+    const subfolders = await prisma.driveFolder.findMany({
+      where: { organizationId: orgId, parentId: current.id, deletedAt: null },
+      select: { id: true, name: true },
+      take: 200,
+    });
+
+    const subfolderIds = subfolders.map((f) => f.id);
+    const subfolderPerms = subfolderIds.length
+      ? await prisma.driveFolderPermission.findMany({
+          where: { roleId: roleIdSafe, driveFolderId: { in: subfolderIds }, deletedAt: null },
+          select: { driveFolderId: true, canRead: true },
+        })
+      : [];
+    const permByFolderId = new Map(subfolderPerms.map((p) => [p.driveFolderId, p.canRead]));
+
+    for (const f of subfolders) {
+      const canRead = permByFolderId.get(f.id) ?? false;
+      folderReadCache.set(f.id, canRead);
+      if (!canRead) continue;
+
+      if (f.name.toLowerCase().includes(query.toLowerCase())) {
+        folders.push({ id: f.id, name: f.name, depth: current.depth + 1 });
+        if (folders.length + files.length >= maxResults) break;
+      }
+
+      if (!seenFolders.has(f.id)) {
+        seenFolders.add(f.id);
+        queue.push({ id: f.id, depth: current.depth + 1 });
+      }
+    }
+
+    // Files
+    if ((folders.length + files.length) < maxResults) {
+      const folderFiles = await prisma.driveFile.findMany({
+        where: {
+          organizationId: orgId,
+          folderId: current.id,
+          deletedAt: null,
+          fileName: { contains: query, mode: "insensitive" },
+        },
+        select: { id: true, fileName: true, folderId: true, folder: { select: { name: true } } },
+        take: 50,
+      });
+
+      const fileIds = folderFiles.map((f) => f.id);
+      const filePerms = fileIds.length
+        ? await prisma.driveFilePermission.findMany({
+            where: { roleId: roleIdSafe, driveFileId: { in: fileIds }, deletedAt: null },
+            select: { driveFileId: true, canRead: true },
+          })
+        : [];
+      const permByFileId = new Map(filePerms.map((p) => [p.driveFileId, p.canRead]));
+
+      const folderCanReadValue = await folderCanRead(current.id);
+      for (const f of folderFiles) {
+        const canRead = permByFileId.get(f.id) ?? folderCanReadValue;
+        if (!canRead) continue;
+        files.push({ id: f.id, fileName: f.fileName, folderId: f.folderId, folderName: f.folder.name });
+        if (folders.length + files.length >= maxResults) break;
+      }
+    }
+  }
+
+  return { folders, files };
 }
 

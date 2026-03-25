@@ -35,7 +35,12 @@ export type AuditAction =
   | "DELETE_Grn"
   | "CREATE_StockMovement"
   | "CREATE_SupplierPayment"
-  | "CREATE_ClientPayment";
+  | "CREATE_ClientPayment"
+  // WorkDrive
+  | "WORKDRIVE_CREATE_FOLDER"
+  | "WORKDRIVE_UPLOAD_FILE"
+  | "WORKDRIVE_UPDATE_FOLDER_PERMISSIONS"
+  | "WORKDRIVE_UPDATE_FILE_PERMISSIONS";
 
 /**
  * Record an audit log entry. Safe to call from server actions; no-op if not authenticated.

@@ -4,7 +4,13 @@ import Link from "next/link";
 import { SearchInput } from "@/components/ui/search-input";
 import { getCurrentUser } from "@/lib/auth-utils";
 import { canUser, PERMISSIONS } from "@/lib/permissions";
-import { listWorkDriveFolderContents, createWorkDriveFolder, uploadWorkDriveFile } from "../../actions";
+import {
+  listWorkDriveFolderContents,
+  createWorkDriveFolder,
+  uploadWorkDriveFile,
+  getWorkDriveFolderShareSettings,
+  updateWorkDriveFolderShareSettings,
+} from "../../actions";
 import { WorkDriveFolderForm } from "../../workdrive-folder-form";
 import { WorkDriveUploadForm } from "../../workdrive-upload-form";
 import { FileText, FolderOpen, Download, ArrowLeft } from "lucide-react";
@@ -25,6 +31,10 @@ export default async function WorkDriveFolderPage({
 
   const canManageFolders = canUser(user, PERMISSIONS.WORKDRIVE_MANAGE_FOLDERS) && data.canWrite;
   const canUpload = canUser(user, PERMISSIONS.WORKDRIVE_UPLOAD) && data.canWrite;
+  const canShareManage = canUser(user, PERMISSIONS.WORKDRIVE_SHARE_MANAGE);
+  const shareSettings = canShareManage
+    ? await getWorkDriveFolderShareSettings({ folderId: params.folderId })
+    : null;
 
   return (
     <div className="space-y-6">
@@ -83,7 +93,12 @@ export default async function WorkDriveFolderPage({
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <FileText className="h-4 w-4 text-muted-foreground" />
-                          <span className="truncate">{file.fileName}</span>
+                          <Link
+                            href={`/workdrive/files/${file.id}`}
+                            className="truncate text-primary hover:underline"
+                          >
+                            {file.fileName}
+                          </Link>
                         </div>
                         <div className="text-xs text-muted-foreground">
                           v{file.latestVersionNo} • {Math.round((file.sizeBytes ?? 0) / 1024)} KB
@@ -126,6 +141,58 @@ export default async function WorkDriveFolderPage({
             {!canManageFolders && !canUpload && <p className="text-sm text-muted-foreground">You don’t have write access.</p>}
           </CardContent>
         </Card>
+
+        {canShareManage && shareSettings && (
+          <Card className="lg:col-span-3">
+            <CardHeader>
+              <CardTitle>Manage Sharing</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form action={updateWorkDriveFolderShareSettings} className="space-y-4">
+                <input type="hidden" name="folderId" value={shareSettings.folderId} />
+                <div className="rounded-md border overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-2 px-3 font-medium text-muted-foreground">Role</th>
+                        <th className="text-left py-2 px-3 font-medium text-muted-foreground">Read</th>
+                        <th className="text-left py-2 px-3 font-medium text-muted-foreground">Write</th>
+                        <th className="text-left py-2 px-3 font-medium text-muted-foreground">Delete</th>
+                        <th className="text-left py-2 px-3 font-medium text-muted-foreground">Share</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {shareSettings.roles.map((r: any) => (
+                        <tr key={r.roleId} className="border-b last:border-b-0">
+                          <td className="py-2 px-3 font-medium">{r.roleName}</td>
+                          <td className="py-2 px-3">
+                            <input type="checkbox" name="canReadRoleIds" value={r.roleId} defaultChecked={r.canRead} />
+                          </td>
+                          <td className="py-2 px-3">
+                            <input type="checkbox" name="canWriteRoleIds" value={r.roleId} defaultChecked={r.canWrite} />
+                          </td>
+                          <td className="py-2 px-3">
+                            <input type="checkbox" name="canDeleteRoleIds" value={r.roleId} defaultChecked={r.canDelete} />
+                          </td>
+                          <td className="py-2 px-3">
+                            <input type="checkbox" name="canShareRoleIds" value={r.roleId} defaultChecked={r.canShare} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button type="submit">Save Sharing</Button>
+                  <Button asChild variant="outline">
+                    <Link href="/workdrive">Cancel</Link>
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

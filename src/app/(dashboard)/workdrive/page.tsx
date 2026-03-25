@@ -2,13 +2,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { SearchInput } from "@/components/ui/search-input";
-import { getCurrentUser } from "@/lib/auth-utils";
+import { getCurrentUser, getOrgTimezone } from "@/lib/auth-utils";
 import { canUser, PERMISSIONS } from "@/lib/permissions";
-import { listWorkDriveRootContents } from "./actions";
+import { listWorkDriveRootContents, getWorkDriveActivity } from "./actions";
 import { WorkDriveFolderForm } from "./workdrive-folder-form";
 import { WorkDriveUploadForm } from "./workdrive-upload-form";
 import { createWorkDriveFolder, uploadWorkDriveFile } from "./actions";
 import { FileText, FolderOpen, Download } from "lucide-react";
+import { formatDateTimeInTimezone } from "@/lib/date-utils";
 
 export default async function WorkDriveRootPage({
   searchParams,
@@ -16,6 +17,7 @@ export default async function WorkDriveRootPage({
   searchParams: Promise<{ search?: string }>;
 }) {
   const user = await getCurrentUser();
+  const tz = await getOrgTimezone();
   const canRead = canUser(user, PERMISSIONS.WORKDRIVE_READ);
   if (!canRead) return null;
 
@@ -24,6 +26,7 @@ export default async function WorkDriveRootPage({
 
   const canManageFolders = canUser(user, PERMISSIONS.WORKDRIVE_MANAGE_FOLDERS) && data.canWrite;
   const canUpload = canUser(user, PERMISSIONS.WORKDRIVE_UPLOAD) && data.canWrite;
+  const activity = await getWorkDriveActivity({ limit: 10 });
 
   return (
     <div className="space-y-6">
@@ -76,7 +79,12 @@ export default async function WorkDriveRootPage({
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <FileText className="h-4 w-4 text-muted-foreground" />
-                          <span className="truncate">{file.fileName}</span>
+                          <Link
+                            href={`/workdrive/files/${file.id}`}
+                            className="truncate text-primary hover:underline"
+                          >
+                            {file.fileName}
+                          </Link>
                         </div>
                         <div className="text-xs text-muted-foreground">
                           v{file.latestVersionNo} • {Math.round((file.sizeBytes ?? 0) / 1024)} KB
@@ -122,6 +130,36 @@ export default async function WorkDriveRootPage({
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Activity (WorkDrive)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {activity.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No WorkDrive activity yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {activity.map((a: any) => (
+                <div key={a.id} className="flex items-start justify-between gap-4 rounded-md border px-3 py-2">
+                  <div className="min-w-0">
+                    <div className="font-medium truncate">{a.action}</div>
+                    <div className="text-xs text-muted-foreground truncate">
+                      {a.entityType ?? "-"} • {a.entityId ?? "-"}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {a.user?.name ?? a.user?.email ?? "—"}
+                    </div>
+                  </div>
+                  <div className="text-xs text-muted-foreground whitespace-nowrap">
+                    {formatDateTimeInTimezone(a.createdAt, tz ?? "UTC")}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
