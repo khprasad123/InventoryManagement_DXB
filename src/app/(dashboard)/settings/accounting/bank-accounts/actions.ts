@@ -1,9 +1,10 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { getOrganizationId } from "@/lib/auth-utils";
+import { getCurrentUser, getOrganizationId } from "@/lib/auth-utils";
 import { requirePermission, PERMISSIONS } from "@/lib/permissions";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { parseCsvToRows, normalizeHeaderKey, toNumberOrNull } from "@/lib/csv-import-utils";
 
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
@@ -182,7 +183,7 @@ export async function getBankStatementMatchingData(bankStatementId: string) {
 
   const reconciliation = await prisma.bankReconciliation.findFirst({
     where: { bankStatementId, organizationId: orgId, deletedAt: null },
-    select: { id: true },
+    select: { id: true, status: true },
   });
 
   const matchedItems = reconciliation
@@ -294,6 +295,7 @@ export async function getBankStatementMatchingData(bankStatementId: string) {
   return {
     statement,
     reconciled: Boolean(reconciliation),
+    reconciliationStatus: reconciliation?.status ?? null,
     items: enriched,
   };
 }
@@ -365,6 +367,15 @@ export async function matchBankTransaction({
     select: { id: true },
   });
 
+  // If session is closed, block modifications.
+  const existingReconciliation = await prisma.bankReconciliation.findFirst({
+    where: { organizationId: orgId, bankStatementId, deletedAt: null },
+    select: { id: true, status: true },
+  });
+  if (existingReconciliation?.status === "CLOSED") {
+    return { error: "Reconciliation session is CLOSED" };
+  }
+
   await prisma.bankReconciliationItem.upsert({
     where: { bankTransactionId },
     update: {
@@ -385,6 +396,144 @@ export async function matchBankTransaction({
     },
   });
 
+  const [totalTxCount, matchedCount] = await Promise.all([
+    prisma.bankTransaction.count({
+      where: { bankStatementId, organizationId: orgId, deletedAt: null },
+    }),
+    prisma.bankReconciliationItem.count({
+      where: {
+        deletedAt: null,
+        bankReconciliation: { organizationId: orgId, bankStatementId },
+      },
+    }),
+  ]);
+
+  const nextStatus: "OPEN" | "MATCHED" =
+    totalTxCount > 0 && matchedCount >= totalTxCount ? "MATCHED" : "OPEN";
+
+  await prisma.bankReconciliation.update({
+    where: { organizationId_bankStatementId: { organizationId: orgId, bankStatementId } },
+    data: { status: nextStatus },
+  });
+
   return;
+}
+
+export async function unmatchBankTransaction({
+  bankStatementId,
+  bankTransactionId,
+}: {
+  bankStatementId: string;
+  bankTransactionId: string;
+}) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  await requirePermission(PERMISSIONS.BANK_RECONCILIATIONS_MATCH);
+
+  const user = await getCurrentUser();
+  const userId = (user as { id?: string } | null)?.id ?? null;
+
+  const tx = await prisma.bankTransaction.findFirst({
+    where: { id: bankTransactionId, organizationId: orgId, deletedAt: null },
+    select: { id: true, bankStatementId: true },
+  });
+  if (!tx) return { error: "Bank transaction not found" };
+  if (tx.bankStatementId !== bankStatementId) return { error: "Transaction not in this statement" };
+
+  const reconciliation = await prisma.bankReconciliation.findFirst({
+    where: { organizationId: orgId, bankStatementId, deletedAt: null },
+    select: { id: true, status: true },
+  });
+  if (reconciliation?.status === "CLOSED") {
+    return { error: "Reconciliation session is CLOSED" };
+  }
+  if (!reconciliation) return { error: "Reconciliation session not started" };
+
+  const item = await prisma.bankReconciliationItem.findFirst({
+    where: { bankTransactionId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!item) return { error: "Transaction is not matched" };
+
+  const now = new Date();
+  await prisma.bankReconciliationItem.update({
+    where: { bankTransactionId },
+    data: { deletedAt: now, deletedById: userId ?? undefined },
+  });
+
+  const [totalTxCount, matchedCount] = await Promise.all([
+    prisma.bankTransaction.count({
+      where: { bankStatementId, organizationId: orgId, deletedAt: null },
+    }),
+    prisma.bankReconciliationItem.count({
+      where: {
+        deletedAt: null,
+        bankReconciliation: { organizationId: orgId, bankStatementId },
+      },
+    }),
+  ]);
+
+  const nextStatus: "OPEN" | "MATCHED" =
+    totalTxCount > 0 && matchedCount >= totalTxCount ? "MATCHED" : "OPEN";
+
+  await prisma.bankReconciliation.update({
+    where: { organizationId_bankStatementId: { organizationId: orgId, bankStatementId } },
+    data: { status: nextStatus },
+  });
+
+  return;
+}
+
+export async function closeBankReconciliationSession(bankStatementId: string) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+  await requirePermission(PERMISSIONS.BANK_RECONCILIATIONS_MATCH);
+
+  const statement = await prisma.bankStatement.findFirst({
+    where: { id: bankStatementId, organizationId: orgId, deletedAt: null },
+    select: { id: true, bankAccountId: true },
+  });
+  if (!statement) return { error: "Bank statement not found" };
+
+  await prisma.bankReconciliation.upsert({
+    where: { organizationId_bankStatementId: { organizationId: orgId, bankStatementId } },
+    update: { status: "CLOSED" },
+    create: {
+      organizationId: orgId,
+      bankStatementId,
+      bankAccountId: statement.bankAccountId,
+      status: "CLOSED",
+    },
+  });
+
+  revalidatePath(`/settings/accounting/bank-accounts/${statement.bankAccountId}/statements/${bankStatementId}`);
+  revalidatePath(`/settings/accounting/bank-accounts/${statement.bankAccountId}/statements`);
+}
+
+export async function reopenBankReconciliationSession(bankStatementId: string) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+  await requirePermission(PERMISSIONS.BANK_RECONCILIATIONS_MATCH);
+
+  const statement = await prisma.bankStatement.findFirst({
+    where: { id: bankStatementId, organizationId: orgId, deletedAt: null },
+    select: { id: true, bankAccountId: true },
+  });
+  if (!statement) return { error: "Bank statement not found" };
+
+  await prisma.bankReconciliation.upsert({
+    where: { organizationId_bankStatementId: { organizationId: orgId, bankStatementId } },
+    update: { status: "OPEN" },
+    create: {
+      organizationId: orgId,
+      bankStatementId,
+      bankAccountId: statement.bankAccountId,
+      status: "OPEN",
+    },
+  });
+
+  revalidatePath(`/settings/accounting/bank-accounts/${statement.bankAccountId}/statements/${bankStatementId}`);
+  revalidatePath(`/settings/accounting/bank-accounts/${statement.bankAccountId}/statements`);
 }
 

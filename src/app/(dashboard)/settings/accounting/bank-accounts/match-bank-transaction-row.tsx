@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { matchBankTransaction } from "./actions";
+import { matchBankTransaction, unmatchBankTransaction } from "./actions";
 import { useRouter } from "next/navigation";
 
 type PaymentSummary = {
@@ -98,6 +98,18 @@ export function MatchBankTransactionRow({
     });
   }
 
+  async function handleUnmatch() {
+    if (!match) return;
+    startTransition(async () => {
+      const result = await unmatchBankTransaction({
+        bankStatementId,
+        bankTransactionId,
+      });
+      if (result?.error) return;
+      router.refresh();
+    });
+  }
+
   const transactionAmount = Math.abs(amountNumber).toFixed(2);
   const entryLabel = reference ?? description ?? "—";
 
@@ -117,6 +129,13 @@ export function MatchBankTransactionRow({
             {match.paymentType} | {matchedPayment.reference ?? matchedPayment.id} | {Number(matchedPayment.amount).toFixed(2)}
           </div>
           {match.notes ? <div className="text-xs mt-1">{match.notes}</div> : null}
+          {canMatch && (
+            <div className="mt-3">
+              <Button variant="outline" size="sm" type="button" onClick={handleUnmatch} disabled={isPending}>
+                Unmatch
+              </Button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="rounded-md border px-3 py-2 text-sm text-muted-foreground">Not matched yet</div>

@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/auth-utils";
 import { canUser, PERMISSIONS } from "@/lib/permissions";
 import { getBankStatementMatchingData } from "../../../actions";
 import { MatchBankTransactionRow } from "../../../match-bank-transaction-row";
+import { ReconciliationSessionControls } from "../../../reconciliation-session-controls";
 
 export default async function StatementTransactionsPage({
   params,
@@ -21,6 +22,7 @@ export default async function StatementTransactionsPage({
   if (!data) redirect("/settings/accounting/bank-accounts");
 
   const statementDate = data.statement.statementDate ? new Date(data.statement.statementDate).toISOString().slice(0, 10) : "—";
+  const canInteract = canMatch && data.reconciliationStatus !== "CLOSED";
 
   return (
     <div className="space-y-6">
@@ -28,8 +30,15 @@ export default async function StatementTransactionsPage({
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Transactions</h1>
           <p className="text-muted-foreground">
-            Bank statement date: {statementDate} (reconciliation {data.reconciled ? "started" : "not started"})
+            Bank statement date: {statementDate}
           </p>
+          <div className="mt-2">
+            <ReconciliationSessionControls
+              bankStatementId={params.statementId}
+              status={data.reconciliationStatus}
+              canInteract={canInteract}
+            />
+          </div>
         </div>
         <Button variant="outline" asChild>
           <Link href={`/settings/accounting/bank-accounts/${params.bankAccountId}/statements`}>Back to statements</Link>
@@ -58,7 +67,7 @@ export default async function StatementTransactionsPage({
                   matchedPayment={it.matchedPayment}
                   clientCandidates={it.clientCandidates}
                   supplierCandidates={it.supplierCandidates}
-                  canMatch={canMatch}
+                  canMatch={canInteract}
                 />
               </CardContent>
             </Card>
