@@ -119,18 +119,18 @@ export async function listWorkDriveRootContents(params: { search?: string } = {}
   const folderPerms = folderIds.length
     ? await prisma.driveFolderPermission.findMany({
         where: { roleId, driveFolderId: { in: folderIds }, deletedAt: null },
-        select: { driveFolderId: true, canRead: true },
+        select: { driveFolderId: true, canRead: true, canDelete: true },
       })
     : [];
-  const folderPermById = new Map(folderPerms.map((p) => [p.driveFolderId, p.canRead]));
+  const folderPermById = new Map(folderPerms.map((p) => [p.driveFolderId, { canRead: p.canRead, canDelete: p.canDelete }]));
 
   const filePerms = fileIds.length
     ? await prisma.driveFilePermission.findMany({
         where: { roleId, driveFileId: { in: fileIds }, deletedAt: null },
-        select: { driveFileId: true, canRead: true },
+        select: { driveFileId: true, canRead: true, canDelete: true },
       })
     : [];
-  const filePermById = new Map(filePerms.map((p) => [p.driveFileId, p.canRead]));
+  const filePermById = new Map(filePerms.map((p) => [p.driveFileId, { canRead: p.canRead, canDelete: p.canDelete }]));
 
   // Latest version per file (MVP: keep it simple with N queries).
   const filesWithLatest = await Promise.all(
@@ -147,8 +147,19 @@ export async function listWorkDriveRootContents(params: { search?: string } = {}
   return {
     rootFolder: { id: rootFolderId, name: "Root" },
     canWrite: rootPerm.canWrite,
-    subFolders: folders.filter((folder) => folderPermById.get(folder.id) ?? rootPerm.canRead),
-    files: filesWithLatest.filter((file) => filePermById.get(file.id) ?? rootPerm.canRead),
+    canDelete: rootPerm.canDelete,
+    subFolders: folders
+      .filter((folder) => folderPermById.get(folder.id)?.canRead ?? rootPerm.canRead)
+      .map((folder) => ({
+        ...folder,
+        canDelete: folderPermById.get(folder.id)?.canDelete ?? rootPerm.canDelete,
+      })),
+    files: filesWithLatest
+      .filter((file) => filePermById.get(file.id)?.canRead ?? rootPerm.canRead)
+      .map((file) => ({
+        ...file,
+        canDelete: filePermById.get(file.id)?.canDelete ?? rootPerm.canDelete,
+      })),
   };
 }
 
@@ -197,18 +208,22 @@ export async function listWorkDriveFolderContents(params: { folderId: string; se
   const folderPerms = folderIds.length
     ? await prisma.driveFolderPermission.findMany({
         where: { roleId, driveFolderId: { in: folderIds }, deletedAt: null },
-        select: { driveFolderId: true, canRead: true },
+        select: { driveFolderId: true, canRead: true, canDelete: true },
       })
     : [];
-  const folderPermById = new Map(folderPerms.map((p) => [p.driveFolderId, p.canRead]));
+  const folderPermById = new Map(
+    folderPerms.map((p) => [p.driveFolderId, { canRead: p.canRead, canDelete: p.canDelete }])
+  );
 
   const filePerms = fileIds.length
     ? await prisma.driveFilePermission.findMany({
         where: { roleId, driveFileId: { in: fileIds }, deletedAt: null },
-        select: { driveFileId: true, canRead: true },
+        select: { driveFileId: true, canRead: true, canDelete: true },
       })
     : [];
-  const filePermById = new Map(filePerms.map((p) => [p.driveFileId, p.canRead]));
+  const filePermById = new Map(
+    filePerms.map((p) => [p.driveFileId, { canRead: p.canRead, canDelete: p.canDelete }])
+  );
 
   const filesWithLatest = await Promise.all(
     files.map(async (f) => {
@@ -230,8 +245,19 @@ export async function listWorkDriveFolderContents(params: { folderId: string; se
   return {
     folder,
     canWrite: folderPerm.canWrite,
-    subFolders: folders.filter((folder) => folderPermById.get(folder.id) ?? folderPerm.canRead),
-    files: filesWithLatest.filter((file) => filePermById.get(file.id) ?? folderPerm.canRead),
+    canDelete: folderPerm.canDelete,
+    subFolders: folders
+      .filter((folder) => folderPermById.get(folder.id)?.canRead ?? folderPerm.canRead)
+      .map((folder) => ({
+        ...folder,
+        canDelete: folderPermById.get(folder.id)?.canDelete ?? folderPerm.canDelete,
+      })),
+    files: filesWithLatest
+      .filter((file) => filePermById.get(file.id)?.canRead ?? folderPerm.canRead)
+      .map((file) => ({
+        ...file,
+        canDelete: filePermById.get(file.id)?.canDelete ?? folderPerm.canDelete,
+      })),
   };
 }
 
@@ -409,6 +435,172 @@ export async function uploadWorkDriveFile(formData: FormData) {
   redirect(`/workdrive/folders/${folderId}`);
 }
 
+async function getDriveFolderDescendants(orgId: string, folderId: string) {
+  const allIds = new Set<string>();
+  const queue: string[] = [folderId];
+  allIds.add(folderId);
+
+  while (queue.length) {
+    const batch = queue.splice(0, 100);
+    const children = await prisma.driveFolder.findMany({
+      where: { organizationId: orgId, parentId: { in: batch }, deletedAt: null },
+      select: { id: true },
+      take: 2000,
+    });
+
+    for (const child of children) {
+      if (allIds.has(child.id)) continue;
+      allIds.add(child.id);
+      queue.push(child.id);
+    }
+  }
+
+  return Array.from(allIds);
+}
+
+async function softDeleteDriveFiles(params: {
+  orgId: string;
+  driveFileIds: string[];
+  userId: string;
+}) {
+  const { orgId, driveFileIds, userId } = params;
+  if (driveFileIds.length === 0) return;
+
+  const now = new Date();
+
+  // Soft-delete all versions (and their Documents) first.
+  const docIds = (
+    await prisma.driveFileVersion.findMany({
+      where: { driveFileId: { in: driveFileIds }, deletedAt: null },
+      select: { documentId: true },
+    })
+  ).map((r) => r.documentId);
+
+  if (docIds.length) {
+    await prisma.document.updateMany({
+      where: { id: { in: docIds }, organizationId: orgId, deletedAt: null },
+      data: { deletedAt: now, deletedById: userId },
+    });
+  }
+
+  await prisma.driveFileVersion.updateMany({
+    where: { driveFileId: { in: driveFileIds }, deletedAt: null },
+    data: { deletedAt: now, deletedById: userId },
+  });
+
+  // Permissions + the file record itself.
+  await prisma.driveFilePermission.updateMany({
+    where: { driveFileId: { in: driveFileIds }, deletedAt: null },
+    data: { deletedAt: now, deletedById: userId },
+  });
+
+  await prisma.driveFile.updateMany({
+    where: { id: { in: driveFileIds }, deletedAt: null, organizationId: orgId },
+    data: { deletedAt: now, deletedById: userId },
+  });
+}
+
+export async function deleteWorkDriveFile(formData: FormData) {
+  await requirePermission(PERMISSIONS.WORKDRIVE_MANAGE_FILES);
+
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const roleId = await getUserRoleId(orgId);
+  const user = await getCurrentUser();
+  const userId = (user as { id?: string } | null)?.id ?? null;
+  if (!roleId || !userId) redirect("/dashboard");
+
+  const driveFileId = String(formData.get("driveFileId") ?? "").trim();
+  if (!driveFileId) redirect("/workdrive");
+
+  const driveFile = await prisma.driveFile.findFirst({
+    where: { id: driveFileId, organizationId: orgId, deletedAt: null },
+    select: { id: true, fileName: true, folderId: true },
+  });
+  if (!driveFile) redirect("/workdrive");
+
+  const effective = await getDriveFileEffectivePerm(roleId, driveFileId);
+  if (!effective?.canDelete) redirect(`/workdrive/folders/${driveFile.folderId}`);
+
+  await softDeleteDriveFiles({ orgId, driveFileIds: [driveFileId], userId });
+
+  await createAuditLog({
+    action: "WORKDRIVE_DELETE_FILE",
+    entityType: "DriveFile",
+    entityId: driveFileId,
+    metadata: { fileName: driveFile.fileName, folderId: driveFile.folderId },
+  });
+
+  revalidatePath(`/workdrive`);
+  revalidatePath(`/workdrive/folders/${driveFile.folderId}`);
+  redirect(`/workdrive/folders/${driveFile.folderId}`);
+}
+
+export async function deleteWorkDriveFolder(formData: FormData) {
+  await requirePermission(PERMISSIONS.WORKDRIVE_MANAGE_FOLDERS);
+
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const roleId = await getUserRoleId(orgId);
+  const user = await getCurrentUser();
+  const userId = (user as { id?: string } | null)?.id ?? null;
+  if (!roleId || !userId) redirect("/dashboard");
+
+  const folderId = String(formData.get("folderId") ?? "").trim();
+  if (!folderId) redirect("/workdrive");
+
+  const folder = await prisma.driveFolder.findFirst({
+    where: { id: folderId, organizationId: orgId, deletedAt: null },
+    select: { id: true, name: true, parentId: true },
+  });
+  if (!folder) redirect("/workdrive");
+
+  // Never allow deletion of the global root container.
+  if (folder.parentId === null && folder.name === "Root") redirect("/workdrive");
+
+  const folderPerm = await getFolderPermissionOrNull(roleId, folderId);
+  if (!folderPerm?.canDelete) redirect(folder.parentId ? `/workdrive/folders/${folder.parentId}` : "/workdrive");
+
+  const folderIds = await getDriveFolderDescendants(orgId, folderId);
+
+  // Delete all files under those folders first.
+  const fileIds = (
+    await prisma.driveFile.findMany({
+      where: { organizationId: orgId, folderId: { in: folderIds }, deletedAt: null },
+      select: { id: true },
+    })
+  ).map((r) => r.id);
+
+  await softDeleteDriveFiles({ orgId, driveFileIds: fileIds, userId });
+
+  const now = new Date();
+
+  // Soft-delete folder permissions + folders.
+  await prisma.driveFolderPermission.updateMany({
+    where: { driveFolderId: { in: folderIds }, deletedAt: null },
+    data: { deletedAt: now, deletedById: userId },
+  });
+
+  await prisma.driveFolder.updateMany({
+    where: { id: { in: folderIds }, deletedAt: null, organizationId: orgId },
+    data: { deletedAt: now, deletedById: userId },
+  });
+
+  await createAuditLog({
+    action: "WORKDRIVE_DELETE_FOLDER",
+    entityType: "DriveFolder",
+    entityId: folderId,
+    metadata: { name: folder.name, parentId: folder.parentId ?? null },
+  });
+
+  const redirectTo = folder.parentId ? `/workdrive/folders/${folder.parentId}` : "/workdrive";
+  revalidatePath(`/workdrive`);
+  revalidatePath(redirectTo);
+  redirect(redirectTo);
+}
+
 async function getRolesForOrg(orgId: string) {
   return prisma.role.findMany({
     where: { organizationId: orgId, deletedAt: null },
@@ -570,6 +762,7 @@ export async function getWorkDriveFileDetails(params: { fileId: string }) {
       sizeBytes: driveFile.sizeBytes,
     },
     canWrite: effective.canWrite,
+    canDelete: effective.canDelete,
     versions,
   };
 }

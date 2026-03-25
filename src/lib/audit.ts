@@ -40,7 +40,9 @@ export type AuditAction =
   | "WORKDRIVE_CREATE_FOLDER"
   | "WORKDRIVE_UPLOAD_FILE"
   | "WORKDRIVE_UPDATE_FOLDER_PERMISSIONS"
-  | "WORKDRIVE_UPDATE_FILE_PERMISSIONS";
+  | "WORKDRIVE_UPDATE_FILE_PERMISSIONS"
+  | "WORKDRIVE_DELETE_FOLDER"
+  | "WORKDRIVE_DELETE_FILE";
 
 /**
  * Record an audit log entry. Safe to call from server actions; no-op if not authenticated.

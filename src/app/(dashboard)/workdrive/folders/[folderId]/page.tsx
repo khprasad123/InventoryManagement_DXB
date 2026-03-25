@@ -10,6 +10,8 @@ import {
   uploadWorkDriveFile,
   getWorkDriveFolderShareSettings,
   updateWorkDriveFolderShareSettings,
+  deleteWorkDriveFile,
+  deleteWorkDriveFolder,
 } from "../../actions";
 import { WorkDriveFolderForm } from "../../workdrive-folder-form";
 import { WorkDriveUploadForm } from "../../workdrive-upload-form";
@@ -31,6 +33,8 @@ export default async function WorkDriveFolderPage({
 
   const canManageFolders = canUser(user, PERMISSIONS.WORKDRIVE_MANAGE_FOLDERS) && data.canWrite;
   const canUpload = canUser(user, PERMISSIONS.WORKDRIVE_UPLOAD) && data.canWrite;
+  const canManageFiles = canUser(user, PERMISSIONS.WORKDRIVE_MANAGE_FILES);
+  const canDeleteFolder = canUser(user, PERMISSIONS.WORKDRIVE_MANAGE_FOLDERS) && data.canDelete;
   const canShareManage = canUser(user, PERMISSIONS.WORKDRIVE_SHARE_MANAGE);
   const shareSettings = canShareManage
     ? await getWorkDriveFolderShareSettings({ folderId: params.folderId })
@@ -53,6 +57,16 @@ export default async function WorkDriveFolderPage({
               Back to Root
             </Link>
           </Button>
+          {canDeleteFolder && (
+            <form
+              action={deleteWorkDriveFolder}
+            >
+              <input type="hidden" name="folderId" value={data.folder.id} />
+              <Button type="submit" variant="destructive">
+                Delete Folder
+              </Button>
+            </form>
+          )}
         </div>
       </div>
 
@@ -76,6 +90,14 @@ export default async function WorkDriveFolderPage({
                       <Link href={`/workdrive/folders/${f.id}`} className="text-primary hover:underline truncate">
                         {f.name}
                       </Link>
+                      {canUser(user, PERMISSIONS.WORKDRIVE_MANAGE_FOLDERS) && f.canDelete && (
+                        <form action={deleteWorkDriveFolder}>
+                          <input type="hidden" name="folderId" value={f.id} />
+                          <Button type="submit" variant="ghost" size="sm">
+                            Delete
+                          </Button>
+                        </form>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -113,6 +135,14 @@ export default async function WorkDriveFolderPage({
                           Download
                         </Link>
                       </Button>
+                      {canManageFiles && file.canDelete && (
+                        <form action={deleteWorkDriveFile}>
+                          <input type="hidden" name="driveFileId" value={file.id} />
+                          <Button type="submit" variant="ghost" size="sm" className="text-destructive hover:text-destructive">
+                            Delete
+                          </Button>
+                        </form>
+                      )}
                     </div>
                   ))}
                 </div>
