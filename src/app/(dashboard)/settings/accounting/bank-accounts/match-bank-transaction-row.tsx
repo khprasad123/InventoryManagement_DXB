@@ -72,6 +72,18 @@ export function MatchBankTransactionRow({
 
   const [paymentId, setPaymentId] = useState<string>(match?.paymentId ?? "");
 
+  const selectedCandidate = useMemo(
+    () => candidates.find((c) => c.id === paymentId) ?? null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [paymentType, candidates, paymentId]
+  );
+
+  const selectedPaymentAmount = useMemo(() => {
+    if (!selectedCandidate) return null;
+    const n = Number(selectedCandidate.amount);
+    return Number.isFinite(n) ? n : null;
+  }, [selectedCandidate]);
+
   useEffect(() => {
     setNotes(match?.notes ?? "");
     setPaymentType(match?.paymentType ?? defaultType);
@@ -86,6 +98,15 @@ export function MatchBankTransactionRow({
     if (!paymentId && candidates.length) setPaymentId(candidates[0].id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paymentType, candidates.length]);
+
+  useEffect(() => {
+    if (selectedPaymentAmount == null) return;
+    const m = Number(matchedAmount);
+    if (!Number.isFinite(m)) return;
+    if (m > selectedPaymentAmount + 0.01) {
+      setMatchedAmount(selectedPaymentAmount.toFixed(2));
+    }
+  }, [selectedPaymentAmount, matchedAmount]);
 
   const matchedAmountNumber = useMemo(() => Number(matchedAmount), [matchedAmount]);
   const canSave = canMatch && paymentId && Number.isFinite(matchedAmountNumber) && matchedAmountNumber > 0;
