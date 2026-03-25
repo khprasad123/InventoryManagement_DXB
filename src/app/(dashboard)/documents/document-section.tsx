@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { getDocumentsFor, uploadDocument, deleteDocument } from "./actions";
 import { getCurrentUser, getOrgTimezone } from "@/lib/auth-utils";
-import { canManageUsers } from "@/lib/permissions";
+import { canManageUsers, canUser, PERMISSIONS } from "@/lib/permissions";
 import { formatDateTimeInTimezone } from "@/lib/date-utils";
 import { Upload } from "lucide-react";
 
@@ -34,6 +34,30 @@ export async function DocumentSection({
   ]);
   const isAdmin = canManageUsers(user);
   const tz = timezone ?? "UTC";
+
+  const attachPermission = (() => {
+    switch (documentableType) {
+      case "Supplier":
+        return PERMISSIONS.SUPPLIERS_UPDATE;
+      case "Client":
+        return PERMISSIONS.CLIENTS_UPDATE;
+      case "Item":
+        return PERMISSIONS.INVENTORY_UPDATE;
+      case "PurchaseInvoice":
+      case "Grn":
+        return PERMISSIONS.PURCHASES_UPDATE;
+      case "SalesInvoice":
+      case "SalesOrder":
+      case "Quotation":
+        return PERMISSIONS.SALES_UPDATE;
+      case "Expense":
+        return PERMISSIONS.EXPENSES_UPDATE;
+      default:
+        return PERMISSIONS.VIEW_REPORTS;
+    }
+  })();
+
+  const canAttachFromWorkDrive = canUser(user, attachPermission);
 
   async function uploadAction(formData: FormData) {
     "use server";
@@ -76,6 +100,20 @@ export async function DocumentSection({
                 Upload
               </Button>
             </form>
+
+            {canAttachFromWorkDrive && (
+              <div className="mt-3">
+                <Button asChild variant="outline" size="sm">
+                  <Link
+                    href={`/workdrive/attach?documentableType=${encodeURIComponent(
+                      documentableType
+                    )}&documentableId=${encodeURIComponent(documentableId)}`}
+                  >
+                    Attach from WorkDrive (Cloud)
+                  </Link>
+                </Button>
+              </div>
+            )}
           </div>
         </details>
 
