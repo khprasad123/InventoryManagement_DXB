@@ -261,6 +261,51 @@ export async function listWorkDriveFolderContents(params: { folderId: string; se
   };
 }
 
+export async function getWorkDriveFolderBreadcrumbs(params: { folderId: string }) {
+  await requirePermission(PERMISSIONS.WORKDRIVE_READ);
+
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const roleId = await getUserRoleId(orgId);
+  if (!roleId) redirect("/dashboard");
+
+  // Build ancestor chain (current -> parent -> ... -> Root).
+  const chain: Array<{ id: string; name: string; parentId: string | null }> = [];
+  let currentId: string | null = params.folderId;
+
+  while (currentId) {
+    const folder: { id: string; name: string; parentId: string | null } | null = await prisma.driveFolder.findFirst({
+      where: { id: currentId, organizationId: orgId, deletedAt: null },
+      select: { id: true, name: true, parentId: true },
+    });
+    if (!folder) break;
+    chain.push({ id: folder.id, name: folder.name, parentId: folder.parentId });
+    currentId = folder.parentId;
+  }
+
+  chain.reverse();
+  if (chain.length === 0) redirect("/workdrive");
+
+  // Compute effective canRead with inheritance:
+  // - Root: explicit permission (or default false)
+  // - Others: explicit permission if exists, else inherited from parent crumb.
+  const breadcrumbs: Array<{ id: string; name: string; canRead: boolean }> = [];
+  let inheritedCanRead = false;
+  for (let i = 0; i < chain.length; i++) {
+    const crumb = chain[i];
+    const perm = await getFolderPermissionOrNull(roleId, crumb.id);
+    const effectiveCanRead: boolean =
+      i === 0 ? Boolean(perm?.canRead) : Boolean(perm?.canRead ?? inheritedCanRead);
+    if (i === 0) inheritedCanRead = effectiveCanRead;
+    else inheritedCanRead = effectiveCanRead;
+
+    breadcrumbs.push({ id: crumb.id, name: crumb.name, canRead: effectiveCanRead });
+  }
+
+  return { breadcrumbs };
+}
+
 const createFolderSchema = z.object({
   parentFolderId: z.string().min(1),
   name: z.string().min(1).max(200),

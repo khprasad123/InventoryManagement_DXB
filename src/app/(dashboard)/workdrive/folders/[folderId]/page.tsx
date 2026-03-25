@@ -12,10 +12,12 @@ import {
   updateWorkDriveFolderShareSettings,
   deleteWorkDriveFile,
   deleteWorkDriveFolder,
+  getWorkDriveFolderBreadcrumbs,
 } from "../../actions";
 import { WorkDriveFolderForm } from "../../workdrive-folder-form";
 import { WorkDriveUploadForm } from "../../workdrive-upload-form";
 import { FileText, FolderOpen, Download, ArrowLeft } from "lucide-react";
+import { ConfirmSubmitDialogButton } from "@/components/workdrive/confirm-submit-dialog-button";
 
 export default async function WorkDriveFolderPage({
   params,
@@ -39,13 +41,29 @@ export default async function WorkDriveFolderPage({
   const shareSettings = canShareManage
     ? await getWorkDriveFolderShareSettings({ folderId: params.folderId })
     : null;
+  const breadcrumbData = await getWorkDriveFolderBreadcrumbs({ folderId: params.folderId });
+  const breadcrumbs = breadcrumbData.breadcrumbs;
+  const currentName = breadcrumbs[breadcrumbs.length - 1]?.name ?? data.folder.name;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">{data.folder.name}</h1>
-          <p className="text-muted-foreground">Folder contents with access control.</p>
+          <h1 className="text-3xl font-bold tracking-tight">{currentName}</h1>
+          <p className="text-muted-foreground text-sm flex items-center gap-2 flex-wrap">
+            {breadcrumbs.map((b: any, idx: number) => (
+              <span key={b.id} className="inline-flex items-center gap-2">
+                {idx > 0 && <span className="text-muted-foreground">/</span>}
+                {idx < breadcrumbs.length - 1 && b.canRead ? (
+                  <Link href={`/workdrive/folders/${b.id}`} className="text-primary hover:underline">
+                    {b.name}
+                  </Link>
+                ) : (
+                  <span>{b.name}</span>
+                )}
+              </span>
+            ))}
+          </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <div className="w-full sm:w-[240px]">
@@ -58,13 +76,13 @@ export default async function WorkDriveFolderPage({
             </Link>
           </Button>
           {canDeleteFolder && (
-            <form
-              action={deleteWorkDriveFolder}
-            >
+            <form action={deleteWorkDriveFolder} id={`wd-del-folder-${data.folder.id}`}>
               <input type="hidden" name="folderId" value={data.folder.id} />
-              <Button type="submit" variant="destructive">
-                Delete Folder
-              </Button>
+              <ConfirmSubmitDialogButton
+                formId={`wd-del-folder-${data.folder.id}`}
+                triggerLabel="Delete Folder"
+                triggerVariant="destructive"
+              />
             </form>
           )}
         </div>
@@ -91,11 +109,14 @@ export default async function WorkDriveFolderPage({
                         {f.name}
                       </Link>
                       {canUser(user, PERMISSIONS.WORKDRIVE_MANAGE_FOLDERS) && f.canDelete && (
-                        <form action={deleteWorkDriveFolder}>
+                        <form action={deleteWorkDriveFolder} id={`wd-del-folder-${f.id}`}>
                           <input type="hidden" name="folderId" value={f.id} />
-                          <Button type="submit" variant="ghost" size="sm">
-                            Delete
-                          </Button>
+                          <ConfirmSubmitDialogButton
+                            formId={`wd-del-folder-${f.id}`}
+                            triggerLabel="Delete"
+                            triggerVariant="ghost"
+                            triggerSize="sm"
+                          />
                         </form>
                       )}
                     </div>
@@ -136,11 +157,15 @@ export default async function WorkDriveFolderPage({
                         </Link>
                       </Button>
                       {canManageFiles && file.canDelete && (
-                        <form action={deleteWorkDriveFile}>
+                        <form action={deleteWorkDriveFile} id={`wd-del-file-${file.id}`}>
                           <input type="hidden" name="driveFileId" value={file.id} />
-                          <Button type="submit" variant="ghost" size="sm" className="text-destructive hover:text-destructive">
-                            Delete
-                          </Button>
+                          <ConfirmSubmitDialogButton
+                            formId={`wd-del-file-${file.id}`}
+                            triggerLabel="Delete"
+                            triggerVariant="ghost"
+                            triggerSize="sm"
+                            triggerClassName="text-destructive hover:text-destructive"
+                          />
                         </form>
                       )}
                     </div>
