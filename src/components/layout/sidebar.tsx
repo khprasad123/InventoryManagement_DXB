@@ -16,6 +16,7 @@ import {
   Settings,
   Menu,
   X,
+  FolderOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -56,6 +57,7 @@ export function Sidebar() {
     { href: "/sales", label: "Sales", icon: TrendingUp, visible: (u) => canUser(u ?? null, PERMISSIONS.SALES_READ) },
     { href: "/expenses", label: "Expenses", icon: CreditCard, visible: (u) => canUser(u ?? null, PERMISSIONS.EXPENSES_READ) },
     { href: "/reports", label: "Reports", icon: FileText, visible: (u) => canUser(u ?? null, PERMISSIONS.VIEW_REPORTS) },
+    { href: "/workdrive", label: "WorkDrive", icon: FolderOpen, visible: (u) => canUser(u ?? null, PERMISSIONS.WORKDRIVE_READ) },
     {
       href: "/settings",
       label: "Settings",

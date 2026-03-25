@@ -214,6 +214,13 @@ async function main() {
     { code: "reports_balance_sheet", name: "Reports - Balance Sheet", description: "Generate balance sheet reports" },
     { code: "reports_receivables_aging", name: "Reports - Receivables Aging", description: "Generate AR aging reports" },
     { code: "reports_payables_aging", name: "Reports - Payables Aging", description: "Generate AP aging reports" },
+    // WorkDrive (folders/files + sharing)
+    { code: "manage_workdrive", name: "WorkDrive - Manage", description: "Full access to WorkDrive folders/files/sharing" },
+    { code: "workdrive_read", name: "WorkDrive - Read", description: "View WorkDrive folders/files" },
+    { code: "workdrive_upload", name: "WorkDrive - Upload", description: "Upload files to folders (create versions)" },
+    { code: "workdrive_manage_folders", name: "WorkDrive - Manage Folders", description: "Create/update/delete folders" },
+    { code: "workdrive_manage_files", name: "WorkDrive - Manage Files", description: "Rename/delete/manage files" },
+    { code: "workdrive_share_manage", name: "WorkDrive - Manage Sharing", description: "Edit role-based WorkDrive sharing rules" },
     { code: "view_audit", name: "View audit log", description: "Access audit log" },
   ];
   const permissions: { id: string; code: string }[] = [];
@@ -270,6 +277,7 @@ async function main() {
     permByCode.approve_purchase_request,
     permByCode.view_reports,
     permByCode.view_audit,
+    permByCode.workdrive_read,
   ]
     .filter(Boolean)
     .map((permissionId) => ({ roleId: inventoryRole.id, permissionId: permissionId! }));
@@ -281,6 +289,11 @@ async function main() {
     permByCode.manage_purchases,
     permByCode.view_reports,
     permByCode.view_audit,
+    permByCode.workdrive_read,
+    permByCode.workdrive_upload,
+    permByCode.workdrive_manage_folders,
+    permByCode.workdrive_manage_files,
+    permByCode.workdrive_share_manage,
   ]
     .filter(Boolean)
     .map((permissionId) => ({ roleId: financeRole.id, permissionId: permissionId! }));
@@ -290,6 +303,7 @@ async function main() {
     permByCode.manage_inventory,
     permByCode.view_reports,
     permByCode.view_audit,
+    permByCode.workdrive_read,
   ]
     .filter(Boolean)
     .map((permissionId) => ({ roleId: salesRole.id, permissionId: permissionId! }));

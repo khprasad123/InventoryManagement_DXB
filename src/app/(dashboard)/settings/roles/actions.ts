@@ -46,6 +46,13 @@ async function ensureRoleManagementPermissionCatalog() {
     { code: "reports_balance_sheet", name: "Reports - Balance Sheet", description: "Generate balance sheet reports" },
     { code: "reports_receivables_aging", name: "Reports - Receivables Aging", description: "Generate AR aging reports" },
     { code: "reports_payables_aging", name: "Reports - Payables Aging", description: "Generate AP aging reports" },
+    // WorkDrive (folders/files + sharing)
+    { code: "manage_workdrive", name: "WorkDrive - Manage", description: "Full access to WorkDrive folders/files/sharing" },
+    { code: "workdrive_read", name: "WorkDrive - Read", description: "View folders/files" },
+    { code: "workdrive_upload", name: "WorkDrive - Upload", description: "Upload new files (create versions)" },
+    { code: "workdrive_manage_folders", name: "WorkDrive - Manage Folders", description: "Create/update/delete folders" },
+    { code: "workdrive_manage_files", name: "WorkDrive - Manage Files", description: "Rename/delete/manage files" },
+    { code: "workdrive_share_manage", name: "WorkDrive - Manage Sharing", description: "Edit role-based sharing permissions" },
   ];
 
   await Promise.all(
@@ -89,6 +96,7 @@ function expandPermissionCodes(codes: Set<string>, allCodes: string[]): Set<stri
     expanded.add("gl_accounts_read");
   }
   if (expanded.has("manage_banking")) addByPrefix("bank_");
+  if (expanded.has("manage_workdrive")) addByPrefix("workdrive_");
   if (expanded.has("manage_users")) {
     expanded.add("settings_users_manage");
     expanded.add("settings_users_read");

@@ -60,6 +60,13 @@ export const PERMISSIONS = {
   REPORTS_RECEIVABLES_AGING: "reports_receivables_aging",
   REPORTS_PAYABLES_AGING: "reports_payables_aging",
   VIEW_AUDIT: "view_audit",
+  // WorkDrive (Drive UI)
+  MANAGE_WORKDRIVE: "manage_workdrive",
+  WORKDRIVE_READ: "workdrive_read",
+  WORKDRIVE_UPLOAD: "workdrive_upload",
+  WORKDRIVE_MANAGE_FOLDERS: "workdrive_manage_folders",
+  WORKDRIVE_MANAGE_FILES: "workdrive_manage_files",
+  WORKDRIVE_SHARE_MANAGE: "workdrive_share_manage",
   // Menu + action (granular): menu_action
   INVENTORY_CREATE: "inventory_create",
   INVENTORY_READ: "inventory_read",
@@ -145,6 +152,12 @@ const permissionRoleMap: Record<PermissionCode, AppRole[]> = {
   reports_receivables_aging: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
   reports_payables_aging: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
   view_audit: [APP_ROLES.OWNER, APP_ROLES.MANAGER],
+  manage_workdrive: [APP_ROLES.OWNER, APP_ROLES.MANAGER],
+  workdrive_read: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
+  workdrive_upload: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
+  workdrive_manage_folders: [APP_ROLES.OWNER, APP_ROLES.MANAGER],
+  workdrive_manage_files: [APP_ROLES.OWNER, APP_ROLES.MANAGER],
+  workdrive_share_manage: [APP_ROLES.OWNER, APP_ROLES.MANAGER],
   inventory_create: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
   inventory_read: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
   inventory_update: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
@@ -242,6 +255,11 @@ export function hasPermission(user: SessionUser, code: string): boolean {
   // manage_banking implies all banking access
   if (user.permissions.includes("manage_banking")) {
     if (code.startsWith("bank_")) return true;
+  }
+
+  // manage_workdrive implies all drive access
+  if (user.permissions.includes("manage_workdrive")) {
+    if (code.startsWith("workdrive_")) return true;
   }
 
   // manage_X implies all actions for that menu (backward compat)

@@ -72,3 +72,8 @@ test("viewer can access receivables & payables aging reports", () => {
   assert.equal(can(APP_ROLES.VIEWER, PERMISSIONS.REPORTS_RECEIVABLES_AGING), true);
   assert.equal(can(APP_ROLES.VIEWER, PERMISSIONS.REPORTS_PAYABLES_AGING), true);
 });
+
+test("workdrive base access is readable by viewer, upload restricted", () => {
+  assert.equal(can(APP_ROLES.VIEWER, PERMISSIONS.WORKDRIVE_READ), true);
+  assert.equal(can(APP_ROLES.VIEWER, PERMISSIONS.WORKDRIVE_UPLOAD), false);
+});

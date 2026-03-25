@@ -105,6 +105,9 @@ model Organization {
   documents         Document[]
   reportExports     ReportExport[]
   dashboardPreferences UserDashboardPreference[]
+  driveFolders      DriveFolder[]
+  driveFiles        DriveFile[]
+  driveFileVersions DriveFileVersion[]
   glAccounts        GlAccount[]
   journalEntries    JournalEntry[]
   bankAccounts      BankAccount[]
@@ -186,6 +189,8 @@ model Role {
   organization      Organization?      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   userOrganizations UserOrganization[]
   permissions       RolePermission[]
+  driveFolderPermissions DriveFolderPermission[]
+  driveFilePermissions DriveFilePermission[]
 
   @@unique([name, organizationId])
   @@index([organizationId])
@@ -253,6 +258,7 @@ model User {
   createdDocuments         Document[]         @relation("DocumentCreatedBy")
   updatedDocuments         Document[]         @relation("DocumentUpdatedBy")
   generatedReportExports   ReportExport[]     @relation("ReportExportGeneratedBy")
+  createdDriveFileVersions DriveFileVersion[] @relation("DriveFileVersionCreatedBy")
   dashboardPreferences     UserDashboardPreference[]
 
   @@unique([email])
@@ -1009,6 +1015,7 @@ model Document {
   createdBy    User?         @relation("DocumentCreatedBy", fields: [createdById], references: [id])
   updatedBy    User?         @relation("DocumentUpdatedBy", fields: [updatedById], references: [id])
   reportExports ReportExport[]
+  driveFileVersions DriveFileVersion[]
 
   @@index([organizationId])
   @@index([documentableType, documentableId])
@@ -1035,6 +1042,135 @@ model ReportExport {
   @@index([organizationId, expiresAt])
   @@index([documentId])
   @@map("report_exports")
+}
+
+// =============================================================================
+// WORKDRIVE (Global folders/files + role-based sharing + version foundation)
+// =============================================================================
+
+model DriveFolder {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  name           String   @map("name")
+  parentId       String?  @map("parent_id")
+
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+  deletedById String?   @map("deleted_by_id")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  parent   DriveFolder? @relation("DriveFolderHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children DriveFolder[] @relation("DriveFolderHierarchy")
+
+  files              DriveFile[]
+  folderPermissions  DriveFolderPermission[]
+
+  @@unique([organizationId, parentId, name])
+  @@index([organizationId])
+  @@index([parentId])
+  @@index([deletedAt])
+  @@map("drive_folders")
+}
+
+model DriveFile {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  folderId       String   @map("folder_id")
+  fileName       String   @map("file_name")
+  mimeType       String?  @map("mime_type")
+  sizeBytes      Int?     @map("size_bytes")
+
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+  deletedById String?   @map("deleted_by_id")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  folder       DriveFolder  @relation(fields: [folderId], references: [id], onDelete: Cascade)
+
+  versions    DriveFileVersion[]
+  permissions DriveFilePermission[]
+
+  @@unique([organizationId, folderId, fileName])
+  @@index([organizationId])
+  @@index([folderId])
+  @@index([deletedAt])
+  @@map("drive_files")
+}
+
+model DriveFileVersion {
+  id           String   @id @default(cuid())
+  organizationId String @map("organization_id")
+  driveFileId  String  @map("drive_file_id")
+  versionNo    Int     @map("version_no")
+  documentId   String  @map("document_id")
+
+  memo         String? @map("memo")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  deletedById String? @map("deleted_by_id")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  driveFile   DriveFile    @relation(fields: [driveFileId], references: [id], onDelete: Cascade)
+  document    Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdById  String?      @map("created_by_id")
+  createdBy    User?        @relation("DriveFileVersionCreatedBy", fields: [createdById], references: [id])
+
+  @@unique([driveFileId, versionNo])
+  @@index([organizationId])
+  @@index([driveFileId])
+  @@index([deletedAt])
+  @@map("drive_file_versions")
+}
+
+model DriveFolderPermission {
+  roleId       String  @map("role_id")
+  driveFolderId String @map("drive_folder_id")
+
+  canRead   Boolean @default(true) @map("can_read")
+  canWrite  Boolean @default(false) @map("can_write")
+  canDelete Boolean @default(false) @map("can_delete")
+  canShare  Boolean @default(false) @map("can_share")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  deletedById String? @map("deleted_by_id")
+
+  role   Role        @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  folder DriveFolder @relation(fields: [driveFolderId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, driveFolderId])
+  @@index([driveFolderId])
+  @@index([deletedAt])
+  @@map("drive_folder_permissions")
+}
+
+model DriveFilePermission {
+  roleId     String  @map("role_id")
+  driveFileId String @map("drive_file_id")
+
+  canRead   Boolean @default(true) @map("can_read")
+  canWrite  Boolean @default(false) @map("can_write")
+  canDelete Boolean @default(false) @map("can_delete")
+  canShare  Boolean @default(false) @map("can_share")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  deletedById String? @map("deleted_by_id")
+
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  file DriveFile @relation(fields: [driveFileId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, driveFileId])
+  @@index([driveFileId])
+  @@index([deletedAt])
+  @@map("drive_file_permissions")
 }
 
 // =============================================================================
