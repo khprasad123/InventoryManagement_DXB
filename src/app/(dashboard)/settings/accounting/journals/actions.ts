@@ -97,6 +97,37 @@ export async function getJournalEntriesPaginated(page: number, search?: string):
   };
 }
 
+export async function getJournalEntryById(journalEntryId: string): Promise<
+  | (JournalEntry & {
+      lines: Array<JournalLine & { account: { code: string; name: string } }>;
+      totalDebit: number;
+      totalCredit: number;
+    })
+  | null
+> {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  await requirePermission(PERMISSIONS.GL_JOURNALS_READ);
+
+  const entry = await prisma.journalEntry.findFirst({
+    where: { id: journalEntryId, organizationId: orgId, deletedAt: null },
+    include: {
+      lines: {
+        where: { deletedAt: null },
+        include: { account: { select: { code: true, name: true } } },
+      },
+    },
+  });
+
+  if (!entry) return null;
+
+  const totalDebit = (entry.lines ?? []).reduce((sum, l) => sum + Number(l.debitAmount), 0);
+  const totalCredit = (entry.lines ?? []).reduce((sum, l) => sum + Number(l.creditAmount), 0);
+
+  return { ...(entry as any), totalDebit, totalCredit };
+}
+
 export async function createJournalEntry(formData: FormData): Promise<{ error?: Record<string, string[]> } | void> {
   const orgId = await getOrganizationId();
   if (!orgId) redirect("/login");

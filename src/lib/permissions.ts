@@ -57,6 +57,8 @@ export const PERMISSIONS = {
   REPORTS_INVENTORY: "reports_inventory",
   REPORTS_TRIAL_BALANCE: "reports_trial_balance",
   REPORTS_BALANCE_SHEET: "reports_balance_sheet",
+  REPORTS_RECEIVABLES_AGING: "reports_receivables_aging",
+  REPORTS_PAYABLES_AGING: "reports_payables_aging",
   VIEW_AUDIT: "view_audit",
   // Menu + action (granular): menu_action
   INVENTORY_CREATE: "inventory_create",
@@ -140,6 +142,8 @@ const permissionRoleMap: Record<PermissionCode, AppRole[]> = {
   reports_inventory: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
   reports_trial_balance: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
   reports_balance_sheet: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
+  reports_receivables_aging: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
+  reports_payables_aging: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
   view_audit: [APP_ROLES.OWNER, APP_ROLES.MANAGER],
   inventory_create: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR],
   inventory_read: [APP_ROLES.OWNER, APP_ROLES.MANAGER, APP_ROLES.OPERATOR, APP_ROLES.VIEWER],
@@ -223,6 +227,8 @@ export function hasPermission(user: SessionUser, code: string): boolean {
     reports_inventory: "view_reports",
     reports_trial_balance: "view_reports",
     reports_balance_sheet: "view_reports",
+    reports_receivables_aging: "view_reports",
+    reports_payables_aging: "view_reports",
   };
   const reportFallback = reportTypeMap[code];
   if (reportFallback && user.permissions!.includes(reportFallback)) return true;
@@ -364,7 +370,9 @@ export type ReportType =
   | "suppliers"
   | "inventory"
   | "trial_balance"
-  | "balance_sheet";
+  | "balance_sheet"
+  | "receivables_aging"
+  | "payables_aging";
 
 const REPORT_TYPE_PERMISSIONS: Record<ReportType, PermissionCode> = {
   overview: PERMISSIONS.REPORTS_OVERVIEW,
@@ -375,6 +383,8 @@ const REPORT_TYPE_PERMISSIONS: Record<ReportType, PermissionCode> = {
   inventory: PERMISSIONS.REPORTS_INVENTORY,
   trial_balance: PERMISSIONS.REPORTS_TRIAL_BALANCE,
   balance_sheet: PERMISSIONS.REPORTS_BALANCE_SHEET,
+  receivables_aging: PERMISSIONS.REPORTS_RECEIVABLES_AGING,
+  payables_aging: PERMISSIONS.REPORTS_PAYABLES_AGING,
 };
 
 /** Can generate a specific report type. view_reports grants all; otherwise requires reports_X. */
@@ -385,7 +395,7 @@ export function canGenerateReportType(user: SessionUser, type: ReportType): bool
 
 /** Report types the user is allowed to generate. */
 export function getAllowedReportTypes(user: SessionUser): ReportType[] {
-  const all: ReportType[] = ["overview", "sales", "purchases", "profit_loss", "suppliers", "inventory", "trial_balance", "balance_sheet"];
+  const all: ReportType[] = ["overview", "sales", "purchases", "profit_loss", "suppliers", "inventory", "trial_balance", "balance_sheet", "receivables_aging", "payables_aging"];
   if (!user) return [];
   if (canUser(user, PERMISSIONS.VIEW_REPORTS)) return all;
   return all.filter((t) => canUser(user, REPORT_TYPE_PERMISSIONS[t]));

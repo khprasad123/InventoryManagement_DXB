@@ -4,13 +4,14 @@ import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth-utils";
 import { canUser, PERMISSIONS } from "@/lib/permissions";
 import { redirect } from "next/navigation";
-import { Wallet, RotateCcw } from "lucide-react";
+import { Wallet, RotateCcw, BookOpenText } from "lucide-react";
 
 export default async function AccountingLandingPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
   const showJournals = canUser(user, PERMISSIONS.GL_JOURNALS_READ);
+  const showGlAccounts = canUser(user, PERMISSIONS.GL_ACCOUNTS_READ);
   const showBankAccounts = canUser(user, PERMISSIONS.BANK_ACCOUNTS_READ);
 
   return (
@@ -38,6 +39,23 @@ export default async function AccountingLandingPage() {
           </Card>
         )}
 
+        {showGlAccounts && (
+          <Card className="border-primary/30">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BookOpenText className="h-5 w-5" />
+                GL Accounts
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">Define the chart of accounts used for journal lines</p>
+              <Button asChild>
+                <Link href="/settings/accounting/gl-accounts">Open Chart of Accounts</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
         {showBankAccounts && (
           <Card className="border-primary/30">
             <CardHeader>
@@ -56,7 +74,7 @@ export default async function AccountingLandingPage() {
         )}
       </div>
 
-      {!showJournals && !showBankAccounts && (
+      {!showJournals && !showBankAccounts && !showGlAccounts && (
         <Card>
           <CardContent className="py-10 text-center">
             <p className="text-sm text-muted-foreground">You do not have access to Accounting modules.</p>

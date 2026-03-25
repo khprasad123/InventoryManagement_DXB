@@ -67,3 +67,8 @@ test("viewer can access trial balance & balance sheet reports", () => {
   assert.equal(can(APP_ROLES.VIEWER, PERMISSIONS.REPORTS_TRIAL_BALANCE), true);
   assert.equal(can(APP_ROLES.VIEWER, PERMISSIONS.REPORTS_BALANCE_SHEET), true);
 });
+
+test("viewer can access receivables & payables aging reports", () => {
+  assert.equal(can(APP_ROLES.VIEWER, PERMISSIONS.REPORTS_RECEIVABLES_AGING), true);
+  assert.equal(can(APP_ROLES.VIEWER, PERMISSIONS.REPORTS_PAYABLES_AGING), true);
+});

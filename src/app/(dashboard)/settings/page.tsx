@@ -14,6 +14,7 @@ export default async function SettingsPage() {
   const showCurrenciesLink = canManageUsers(user);
   const showAccountingLink =
     canUser(user, PERMISSIONS.GL_JOURNALS_READ) ||
+    canUser(user, PERMISSIONS.GL_ACCOUNTS_READ) ||
     canUser(user, PERMISSIONS.BANK_ACCOUNTS_READ) ||
     canUser(user, PERMISSIONS.BANK_RECONCILIATIONS_READ);
 

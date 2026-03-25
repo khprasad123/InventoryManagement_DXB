@@ -212,6 +212,8 @@ async function main() {
     { code: "reports_inventory", name: "Reports - Inventory", description: "Generate inventory reports" },
     { code: "reports_trial_balance", name: "Reports - Trial Balance", description: "Generate trial balance reports" },
     { code: "reports_balance_sheet", name: "Reports - Balance Sheet", description: "Generate balance sheet reports" },
+    { code: "reports_receivables_aging", name: "Reports - Receivables Aging", description: "Generate AR aging reports" },
+    { code: "reports_payables_aging", name: "Reports - Payables Aging", description: "Generate AP aging reports" },
     { code: "view_audit", name: "View audit log", description: "Access audit log" },
   ];
   const permissions: { id: string; code: string }[] = [];

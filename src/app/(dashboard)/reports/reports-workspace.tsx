@@ -44,6 +44,8 @@ const ALL_REPORT_TYPES = [
   { value: "inventory", label: "Inventory" },
   { value: "trial_balance", label: "Trial Balance" },
   { value: "balance_sheet", label: "Balance Sheet" },
+  { value: "receivables_aging", label: "Receivables Aging (AR)" },
+  { value: "payables_aging", label: "Payables Aging (AP)" },
 ] as const;
 
 export function ReportsWorkspace({

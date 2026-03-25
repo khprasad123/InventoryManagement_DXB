@@ -4,7 +4,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth-utils";
 import { canUser, PERMISSIONS } from "@/lib/permissions";
-import { Plus } from "lucide-react";
+import { Eye, Plus } from "lucide-react";
 import { SearchInput } from "@/components/ui/search-input";
 import { PaginationLinks } from "@/components/ui/pagination-links";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -100,6 +100,12 @@ export default async function JournalsPage({
                               label={`${e.entryNo} on ${entryDate}`}
                             />
                           )}
+                          <Button variant="ghost" size="sm" asChild>
+                            <Link href={`/settings/accounting/journals/${e.id}`}>
+                              <Eye className="mr-2 h-4 w-4" />
+                              View
+                            </Link>
+                          </Button>
                         </TableCell>
                       </TableRow>
                     );

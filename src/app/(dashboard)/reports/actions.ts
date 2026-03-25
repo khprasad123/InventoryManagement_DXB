@@ -58,6 +58,222 @@ function roundBuckets(b: AgingBuckets): AgingBuckets {
   };
 }
 
+// Simplified AR/AP ageing (invoice-date based, due-date ageing later).
+type InvoiceDateAgingBuckets = {
+  current_0_30: number;
+  "31_60": number;
+  "61_90": number;
+  over_90: number;
+};
+
+function emptyInvoiceDateBuckets(): InvoiceDateAgingBuckets {
+  return {
+    current_0_30: 0,
+    "31_60": 0,
+    "61_90": 0,
+    over_90: 0,
+  };
+}
+
+function addToInvoiceDateBucket(buckets: InvoiceDateAgingBuckets, daysAge: number, amount: number) {
+  // Invoice-age buckets:
+  // - Current: 0-30 days
+  // - 31-60: 31-60 days
+  // - 61-90: 61-90 days
+  // - Over 90: > 90 days
+  if (daysAge <= 30) buckets.current_0_30 += amount;
+  else if (daysAge <= 60) buckets["31_60"] += amount;
+  else if (daysAge <= 90) buckets["61_90"] += amount;
+  else buckets.over_90 += amount;
+}
+
+function roundInvoiceDateBuckets(b: InvoiceDateAgingBuckets): InvoiceDateAgingBuckets {
+  return {
+    current_0_30: Math.round(b.current_0_30 * 100) / 100,
+    "31_60": Math.round(b["31_60"] * 100) / 100,
+    "61_90": Math.round(b["61_90"] * 100) / 100,
+    over_90: Math.round(b.over_90 * 100) / 100,
+  };
+}
+
+export async function getReceivablesAgingReportData(params: { asOf?: string }) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const now = new Date();
+  const asOf = toStartOfDay(parseDateOrDefault(params.asOf, now));
+  const defaultCurrencyCode = await getDefaultCurrencyCodeForOrg(orgId);
+
+  const salesInvoices = await prisma.salesInvoice.findMany({
+    where: { organizationId: orgId, deletedAt: null, paymentStatus: { not: "PAID" } },
+    select: {
+      id: true,
+      clientId: true,
+      invoiceDate: true,
+      totalAmount: true,
+      paidAmount: true,
+      currencyCode: true,
+      client: { select: { name: true } },
+    },
+    orderBy: { invoiceDate: "asc" },
+  });
+
+  const byClient = new Map<
+    string,
+    {
+      clientName: string;
+      buckets: InvoiceDateAgingBuckets;
+      outstanding: number;
+    }
+  >();
+
+  const msPerDay = 1000 * 60 * 60 * 24;
+
+  for (const inv of salesInvoices) {
+    const balance = Math.max(0, Number(inv.totalAmount) - Number(inv.paidAmount ?? 0));
+    if (balance <= 0) continue;
+
+    const invoiceDate = inv.invoiceDate ? toStartOfDay(new Date(inv.invoiceDate)) : asOf;
+    const daysAge = Math.floor((asOf.getTime() - invoiceDate.getTime()) / msPerDay);
+
+    const fromCurrencyCode = inv.currencyCode ?? defaultCurrencyCode;
+    const converted = await convertAmountToCurrency(balance, fromCurrencyCode, defaultCurrencyCode);
+
+    const key = inv.clientId;
+    const row = byClient.get(key) ?? {
+      clientName: inv.client?.name ?? "Unknown",
+      buckets: emptyInvoiceDateBuckets(),
+      outstanding: 0,
+    };
+    addToInvoiceDateBucket(row.buckets, daysAge, converted);
+    row.outstanding += converted;
+    byClient.set(key, row);
+  }
+
+  const rows = Array.from(byClient.entries())
+    .map(([clientId, row]) => ({
+      clientId,
+      clientName: row.clientName,
+      ...roundInvoiceDateBuckets(row.buckets),
+      outstanding: Math.round(row.outstanding * 100) / 100,
+    }))
+    .sort((a, b) => a.clientName.localeCompare(b.clientName));
+
+  const totals = rows.reduce(
+    (acc, r) => {
+      acc.current_0_30 += r.current_0_30;
+      acc["31_60"] += r["31_60"];
+      acc["61_90"] += r["61_90"];
+      acc.over_90 += r.over_90;
+      acc.outstanding += r.outstanding;
+      return acc;
+    },
+    {
+      current_0_30: 0,
+      "31_60": 0,
+      "61_90": 0,
+      over_90: 0,
+      outstanding: 0,
+    }
+  );
+
+  return {
+    filters: { asOf: toYmd(asOf) },
+    currencyCode: defaultCurrencyCode,
+    rows,
+    totals,
+  };
+}
+
+export async function getPayablesAgingReportData(params: { asOf?: string }) {
+  const orgId = await getOrganizationId();
+  if (!orgId) redirect("/login");
+
+  const now = new Date();
+  const asOf = toStartOfDay(parseDateOrDefault(params.asOf, now));
+  const defaultCurrencyCode = await getDefaultCurrencyCodeForOrg(orgId);
+
+  const purchaseInvoices = await prisma.purchaseInvoice.findMany({
+    where: { organizationId: orgId, deletedAt: null, paymentStatus: { not: "PAID" } },
+    select: {
+      id: true,
+      supplierId: true,
+      invoiceDate: true,
+      totalAmount: true,
+      paidAmount: true,
+      currencyCode: true,
+      supplier: { select: { name: true } },
+    },
+    orderBy: { invoiceDate: "asc" },
+  });
+
+  const bySupplier = new Map<
+    string,
+    {
+      supplierName: string;
+      buckets: InvoiceDateAgingBuckets;
+      outstanding: number;
+    }
+  >();
+
+  const msPerDay = 1000 * 60 * 60 * 24;
+
+  for (const inv of purchaseInvoices) {
+    const balance = Math.max(0, Number(inv.totalAmount) - Number(inv.paidAmount ?? 0));
+    if (balance <= 0) continue;
+
+    const invoiceDate = inv.invoiceDate ? toStartOfDay(new Date(inv.invoiceDate)) : asOf;
+    const daysAge = Math.floor((asOf.getTime() - invoiceDate.getTime()) / msPerDay);
+
+    const fromCurrencyCode = inv.currencyCode ?? defaultCurrencyCode;
+    const converted = await convertAmountToCurrency(balance, fromCurrencyCode, defaultCurrencyCode);
+
+    const key = inv.supplierId;
+    const row = bySupplier.get(key) ?? {
+      supplierName: inv.supplier?.name ?? "Unknown",
+      buckets: emptyInvoiceDateBuckets(),
+      outstanding: 0,
+    };
+    addToInvoiceDateBucket(row.buckets, daysAge, converted);
+    row.outstanding += converted;
+    bySupplier.set(key, row);
+  }
+
+  const rows = Array.from(bySupplier.entries())
+    .map(([supplierId, row]) => ({
+      supplierId,
+      supplierName: row.supplierName,
+      ...roundInvoiceDateBuckets(row.buckets),
+      outstanding: Math.round(row.outstanding * 100) / 100,
+    }))
+    .sort((a, b) => a.supplierName.localeCompare(b.supplierName));
+
+  const totals = rows.reduce(
+    (acc, r) => {
+      acc.current_0_30 += r.current_0_30;
+      acc["31_60"] += r["31_60"];
+      acc["61_90"] += r["61_90"];
+      acc.over_90 += r.over_90;
+      acc.outstanding += r.outstanding;
+      return acc;
+    },
+    {
+      current_0_30: 0,
+      "31_60": 0,
+      "61_90": 0,
+      over_90: 0,
+      outstanding: 0,
+    }
+  );
+
+  return {
+    filters: { asOf: toYmd(asOf) },
+    currencyCode: defaultCurrencyCode,
+    rows,
+    totals,
+  };
+}
+
 const REPORT_RETENTION_DAYS = 90;
 
 async function purgeExpiredReportExports(orgId: string) {
@@ -953,6 +1169,52 @@ export async function generateAndStoreReportFile(
       reportType: type,
       filters: data.filters,
       rowCount: data.rows.length,
+      generatedAt: now.toISOString(),
+      retentionDays: REPORT_RETENTION_DAYS,
+    };
+  } else if (type === "receivables_aging") {
+    const data = await getReceivablesAgingReportData({ asOf: params.asOf ?? params.to });
+    fileName = `receivables-aging-asof-${data.filters.asOf}-${stamp}.xlsx`;
+    workbook = buildWorkbook(
+      "ReceivablesAging",
+      ["Customer", "Current (0-30 days)", "31-60 days", "61-90 days", "Over 90 days", `Outstanding (${data.currencyCode})`],
+      data.rows.map((r: any) => [
+        r.clientName,
+        r.current_0_30.toFixed(2),
+        r["31_60"].toFixed(2),
+        r["61_90"].toFixed(2),
+        r.over_90.toFixed(2),
+        r.outstanding.toFixed(2),
+      ])
+    );
+    metadata = {
+      reportType: type,
+      filters: data.filters,
+      rowCount: data.rows.length,
+      currencyCode: data.currencyCode,
+      generatedAt: now.toISOString(),
+      retentionDays: REPORT_RETENTION_DAYS,
+    };
+  } else if (type === "payables_aging") {
+    const data = await getPayablesAgingReportData({ asOf: params.asOf ?? params.to });
+    fileName = `payables-aging-asof-${data.filters.asOf}-${stamp}.xlsx`;
+    workbook = buildWorkbook(
+      "PayablesAging",
+      ["Supplier", "Current (0-30 days)", "31-60 days", "61-90 days", "Over 90 days", `Outstanding (${data.currencyCode})`],
+      data.rows.map((r: any) => [
+        r.supplierName,
+        r.current_0_30.toFixed(2),
+        r["31_60"].toFixed(2),
+        r["61_90"].toFixed(2),
+        r.over_90.toFixed(2),
+        r.outstanding.toFixed(2),
+      ])
+    );
+    metadata = {
+      reportType: type,
+      filters: data.filters,
+      rowCount: data.rows.length,
+      currencyCode: data.currencyCode,
       generatedAt: now.toISOString(),
       retentionDays: REPORT_RETENTION_DAYS,
     };
